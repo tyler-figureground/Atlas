@@ -276,6 +276,7 @@ Compile all sections into a single `.md` file organized by division number.
 - If no project name: `epd-specs-draft.md`
 - If no client context: `./deliverables/`
 - Ask the user if they want a different path
+- First line of the body is the `<!-- architecture-studio:report -->` marker (see `rules/output-formatting.md`)
 
 **File structure:**
 

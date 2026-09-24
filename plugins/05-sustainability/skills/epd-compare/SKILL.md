@@ -181,6 +181,7 @@ Save the comparison report as markdown:
 - If the user says it's final: `./deliverables/`
 - If no client context: `./deliverables/`
 - Ask the user if they want a different path
+- First line of the body is the `<!-- architecture-studio:report -->` marker (see `rules/output-formatting.md`)
 
 After saving:
 

@@ -34,6 +34,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `0.1.1`) and the drive's `New-Project.ps1` / `Conform-Project.ps1`, so every
   writer stays in byte parity.
 
+### Fixed
+
+- **`08-dispatcher` (`1.2.0`) - the metadata hook stamps only reports that ask for it.** `post-output-metadata` used to prepend front matter to every `.md` written in any repo, which put 372 stamped blocks into 315 files of another project in two weeks: blocks spliced mid-file, stacked in appended files, and opening 71 GitHub issue bodies drafted in `.md` files. It is now marker-driven, like the disclaimer check: it stamps only files carrying `<!-- architecture-studio:report -->`, only when they do not already start with `---`, and leaves every other Markdown file byte-identical. It still never blocks a Write. `plugins/08-dispatcher/hooks/tests/check_post_output_metadata.py` covers the contract against temp files, and `scripts/lint.sh` runs it. (#63)
+- **Report-writing skills emit the report marker.** `rules/output-formatting.md` now asks for `<!-- architecture-studio:report -->` as the first line of every Markdown report body, and the skills and agents that write one carry it: `00-due-diligence` (`1.1.1`) `/nyc-property-report`; `01-site-planning` (`1.1.1`) `/demographics-analysis`, `/environmental-analysis`, `/history`, `/mobility-analysis` and the Site Planner agent; `02-zoning-analysis` (`1.2.1`) `/zoning-analysis-nyc` and the NYC Zoning Expert agent; `03-programming` (`1.1.1`) `/occupancy-calculator`, `/workplace-programmer`; `04-specifications` (`1.1.1`) `/spec-writer`; `05-sustainability` (`1.1.1`) `/epd-compare`, `/epd-to-spec`; `10-norma` (`1.3.1`) `/code-analysis`, `/drawing-analysis`.
+
 ## [1.7.0] - 2026-07-25
 
 ### Added

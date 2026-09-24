@@ -7,7 +7,7 @@ Hooks are event-driven automations that run automatically during Claude Code ses
 | Hook | Event | What it does |
 |------|-------|-------------|
 | [post-write-disclaimer-check](./post-write-disclaimer-check.sh) | After Write | Warns if a regulatory output (zoning, occupancy, code analysis) is missing the professional disclaimer |
-| [post-output-metadata](./post-output-metadata.sh) | After Write | Stamps markdown reports with YAML front matter (title, date, skill name) if missing |
+| [post-output-metadata](./post-output-metadata.sh) | After Write | Stamps YAML front matter (title, date) onto marked plugin reports that lack it; leaves all other Markdown alone |
 | [pre-commit-spec-lint](./pre-commit-spec-lint.sh) | Before git commit | Scans staged markdown files for malformed CSI section numbers |
 
 ## Installation
@@ -32,7 +32,11 @@ Checks written `.md` files for the `<!-- architecture-studio:requires-disclaimer
 
 ### post-output-metadata
 
-Prepends YAML front matter to new markdown reports that don't already have it. Skips README.md, SKILL.md, CLAUDE.md, AGENTS.md, and files inside rules/, hooks/, or .claude-plugin/ directories.
+Marker-driven, like the disclaimer check. Report-writing skills emit `<!-- architecture-studio:report -->` as the first line of the report body (see [`rules/output-formatting.md`](../../../rules/output-formatting.md)); the hook prepends a YAML front matter block (`title` from the first `# ` heading, else the file name; `date`; `generated_by`) only to `.md` files that carry that marker and do not already start with `---`. A stamped file starts with `---`, so a second write adds no second block.
+
+Any Markdown without the marker is left byte-identical, in any repo. Before `1.2.0` the hook stamped every `.md` it saw, which spliced front matter into notes, issue drafts and machine-read files in unrelated repos (Pyvoid#1842, this repo's #63). Files named README.md, SKILL.md, CLAUDE.md or AGENTS.md, and files under rules/, hooks/ or .claude-plugin/, are skipped even when marked. Never blocks a Write - every path exits 0.
+
+Verified by [`tests/check_post_output_metadata.py`](./tests/check_post_output_metadata.py) (stdlib only, temp files only), which `scripts/lint.sh` runs.
 
 ### pre-commit-spec-lint
 
