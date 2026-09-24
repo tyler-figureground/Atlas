@@ -12,6 +12,8 @@ no CSS at all, which is the whole reason the token layer owns them.
 
 from __future__ import annotations
 
+import threading
+
 from rich.cells import cell_len
 from rich.text import Text
 from textual import work
@@ -20,8 +22,11 @@ from textual.widgets.tree import TreeNode as TreeNodeWidget
 
 from ..core.conform import parent_key
 from ..core.scan import READ, UNREADABLE
-from ..core.tree import ProjectTree, TreeNode
+from ..core.tree import CONCURRENCY_CAP, LOADING_DELAY, ProjectTree, TreeNode
 from . import tokens
+
+# Node loads in flight at once, shared by every tree view (ticket 12).
+LOAD_SLOTS = threading.BoundedSemaphore(CONCURRENCY_CAP)
 
 
 ELLIPSIS = "…"
@@ -209,8 +214,12 @@ class ProjectTreeView(Tree):
         # The root level is a displayed node like any other, so it is read the
         # same way: off the UI thread. On the studio drive one enumeration is
         # 91 ms at p99, which is a visible stall to spend on a cursor move.
-        self.loading = source is not None
+        # The loading state waits LOADING_DELAY (120 ms, ticket 12): above the
+        # cold p99, so a warm read never flickers it on and off.
+        self._cancel_loading_timer()
+        self.loading = False
         if source is not None:
+            self._loading_timer = self.set_timer(LOADING_DELAY, self._show_loading)
             self._load("")
 
     def set_narrow(self, narrow: bool) -> None:
@@ -220,6 +229,16 @@ class ProjectTreeView(Tree):
         self.narrow = narrow
         # Row widths are cached by the Tree; they depend on the words chosen.
         self._invalidate()
+
+    def _show_loading(self) -> None:
+        self._loading_timer = None
+        self.loading = True
+
+    def _cancel_loading_timer(self) -> None:
+        timer = getattr(self, "_loading_timer", None)
+        if timer is not None:
+            timer.stop()
+        self._loading_timer = None
 
     def reload(self, *, narrow: bool | None = None) -> None:
         """Rebuild from the seam, keeping what was open and where the cursor was.
@@ -414,7 +433,10 @@ class ProjectTreeView(Tree):
         source = self.source
         if source is None:
             return
-        source.children(key)
+        # Not exclusive, but not unbounded either: ticket 12's cap on loads in
+        # flight against the Drive redirector (#46).
+        with LOAD_SLOTS:
+            source.children(key)
         self.app.call_from_thread(self._loaded, key, source)
 
     def _loaded(self, key: str, source: ProjectTree | None = None) -> None:
@@ -424,6 +446,7 @@ class ProjectTreeView(Tree):
         if source is not None and source is not self.source:
             return
         if not key:
+            self._cancel_loading_timer()
             self.loading = False
         node = self._by_key.get(key)
         if node is not None:

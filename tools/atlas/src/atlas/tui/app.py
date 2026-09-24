@@ -40,6 +40,7 @@ from textual.widgets import (
 from ..core.conform import (
     CONFLICT,
     DONE,
+    FAILED,
     RELOCATE,
     RENAME,
     SKIPPED,
@@ -192,10 +193,10 @@ def reveal_path(path: Path) -> None:
     subprocess.Popen(["explorer", f"/select,{path}"])
 
 
-def _project_token(project: ProjectInventory) -> tuple[tuple[str, bool], ...]:
-    """Shallow project state reviewed by plans without hydrating remote file contents."""
-
-    return tuple(sorted((entry.name, entry.is_dir) for entry in project.root_entries))
+def _path_warning(action) -> str:
+    """The MAX_PATH warning for one line of a multi-action preview. ADR 0006
+    makes the warning the only safeguard, so the modal must carry it too."""
+    return f"  [path {action.path_length} > 260]" if action.path_warning else ""
 
 
 @dataclass(frozen=True)
@@ -962,6 +963,10 @@ class AtlasApp(App):
         # confirmation weight follows plan size), and the per-Project history
         # that Undo pops. Both are session state and neither reaches the CLI.
         self._armed: _ArmedRepair | None = None
+        # Bumped by every arm and cancel; a preview built off the UI thread
+        # lands only if its generation is still current (#46).
+        self._arm_generation = 0
+        self._repairing = False
         self._undo = UndoStack()
         # Which drive the tree cache and the undo stack describe. Both are keyed
         # by project name, and the same project folder can sit on two drives.
@@ -1311,6 +1316,10 @@ class AtlasApp(App):
     def _scan_drive_worker(self, root: Path, generation: int) -> None:
         try:
             inventory = scan_drive(root)
+            if not inventory.readable:
+                # Zero projects from a root Atlas could not list is a failure,
+                # never a healthy empty drive (ADR 0004).
+                raise OSError(f"cannot read the drive root ({inventory.error})")
             report = DriveReport(
                 root=inventory.root,
                 drive=inventory.map.drive,
@@ -1428,7 +1437,8 @@ class AtlasApp(App):
                     "health": Text(row.health, style=STATUS_STYLES.get(row.health, "bold")),
                     "project": Text(middle_ellipsis(row.report.name, name_cells)),
                     "sections": row.sections,
-                    "fixes": str(row.fixes) if row.fixes else "-",
+                    "fixes": ("?" if not row.report.root_readable
+                              else str(row.fixes) if row.fixes else "-"),
                     "review": str(row.review) if row.review else "-",
                 }
                 table.add_row(*(cells[key] for key in keys), key=row.key)
@@ -1906,7 +1916,13 @@ class AtlasApp(App):
                              project=inventory_projects[name].path)
             for name in names
         }
-        initial_tokens = {name: _project_token(inventory_projects[name]) for name in names}
+        # One whole-project Guard per project (ADR 0006), watching each root as
+        # the scan behind this preview saw it - the same Guard single conform uses.
+        guards: dict[str, Guard] = {
+            name: Guard.for_project(root, name, drive_map, plans[name],
+                                    root_listing=inventory_projects[name].root_entries)
+            for name in names
+        }
         lines: list[str] = []
         for name in names:
             plan = plans[name]
@@ -1916,35 +1932,19 @@ class AtlasApp(App):
             for action in plan.actions:
                 source = f"{action.src} -> " if action.src else ""
                 files = f" ({action.file_count} files)" if action.file_count else ""
-                lines.append(f"  {action.kind.title()}: {source}{action.dst}{files}")
+                lines.append(f"  {action.kind.title()}: {source}{action.dst}{files}"
+                             + _path_warning(action))
 
         def done(confirmed: bool) -> None:
             if not confirmed:
                 return
 
             def conform_batch() -> OperationOutcome:
-                fresh_inventory = scan_drive(root)
-                fresh_map = fresh_inventory.map
-                fresh_projects = {project.name: project for project in fresh_inventory.projects}
-                fresh_plans: dict[str, Plan] = {}
-                fresh_tokens: dict[str, tuple[tuple[str, bool], ...]] = {}
                 changed: list[str] = []
                 for name in names:
-                    project = fresh_projects.get(name)
-                    if project is None:
-                        changed.append(f"{name}: project no longer available")
-                        continue
-                    fresh_plan = build_plan(report_project(project, fresh_map), fresh_map,
-                                            project=project.path)
-                    fresh_plans[name] = fresh_plan
-                    fresh_tokens[name] = _project_token(project)
-                    if (
-                        fresh_plan.actions != plans[name].actions
-                        or fresh_tokens[name] != initial_tokens[name]
-                    ):
-                        changed.append(f"{name}: project contents changed")
-                if fresh_map != drive_map:
-                    changed.insert(0, "Drive map changed")
+                    stale = guards[name].check(root)
+                    if stale is not None:
+                        changed.append(f"{name}: {stale}")
                 if changed:
                     return OperationOutcome(
                         title="Batch plan changed",
@@ -1962,26 +1962,11 @@ class AtlasApp(App):
                 completed = 0
                 unresolved: set[str] = set()
                 for index, name in enumerate(names):
-                    immediate_inventory = scan_drive(root)
-                    immediate_projects = {
-                        project.name: project for project in immediate_inventory.projects
-                    }
-                    immediate_project = immediate_projects.get(name)
-                    immediate_plan = (
-                        build_plan(report_project(immediate_project, immediate_inventory.map),
-                                   immediate_inventory.map, project=immediate_project.path)
-                        if immediate_project is not None
-                        else None
-                    )
-                    immediate_token = (
-                        _project_token(immediate_project) if immediate_project is not None else None
-                    )
-                    if (
-                        immediate_inventory.map != fresh_map
-                        or immediate_plan != fresh_plans[name]
-                        or immediate_token != fresh_tokens[name]
-                    ):
-                        detail.extend((name, "  STOPPED: project or drive map changed"))
+                    # Again, immediately before this project's write: an earlier
+                    # project's apply can change a later one.
+                    stale = guards[name].check(root)
+                    if stale is not None:
+                        detail.extend((name, f"  STOPPED: {stale}"))
                         remaining = unresolved | set(names[index:])
                         return OperationOutcome(
                             title="Batch conform stopped",
@@ -1994,7 +1979,7 @@ class AtlasApp(App):
 
                     project_path = root / name
                     try:
-                        result = apply_plan(root, project_path, immediate_inventory.map, immediate_plan)
+                        result = apply_plan(root, project_path, drive_map, plans[name])
                     except Exception as error:
                         detail.extend(
                             (
@@ -2462,12 +2447,45 @@ class AtlasApp(App):
             (p for p in inventory.projects if p.name == row.key), None)
         if project is None:
             return
-        plan = build_repair_plan(row.report, inventory.map, offer.target,
-                                 project=project.path)
-        if plan.empty:
-            self._set_operation(f"{facts.name} needs no repair", "warning")
+        # Measuring the path length, snapshotting the Guard's folders and
+        # reading the move's effect all touch the drive, so they run off the UI
+        # thread (#46). The result arms only if nothing moved on meanwhile.
+        self._arm_generation += 1
+        self._arm_worker(self._arm_generation, row.key, row.report, inventory,
+                         project.path, offer.target, facts.name)
+
+    @work(thread=True, exclusive=True, group="arm", exit_on_error=False)
+    def _arm_worker(self, generation: int, project_name: str, report,
+                    inventory: DriveInventory, project_path: Path, target: str,
+                    name: str, region: str = TREE) -> None:
+        try:
+            plan = build_repair_plan(report, inventory.map, target, project=project_path)
+            guard = effect = None
+            if not plan.empty and confirms_inline(plan):
+                guard = Guard.for_action(inventory.root, project_name, inventory.map, plan)
+                effect = self._effect(project_path, plan)
+        except Exception as error:  # noqa: BLE001 - reported, not raised
+            self.call_from_thread(self._arm_failed, generation, error)
             return
-        if not confirms_inline(plan):
+        self.call_from_thread(self._arm_ready, generation, project_name, plan, guard,
+                              target, name, effect, region)
+
+    def _arm_failed(self, generation: int, error: Exception) -> None:
+        if generation == self._arm_generation:
+            self._set_operation(f"Cannot preview that repair - {error}", "error")
+
+    def _arm_ready(self, generation: int, project_name: str, plan: Plan,
+                   guard: Guard | None, target: str, name: str, effect: str | None,
+                   region: str = TREE) -> None:
+        # Anything since the key press - another arm, a cancel, a project,
+        # Region or modal change - and this preview no longer belongs on screen.
+        if (generation != self._arm_generation or project_name != self._workspace_project
+                or self._focus_region != region or self.screen is not self.screen_stack[0]):
+            return
+        if plan.empty:
+            self._set_operation(f"{name} needs no repair", "warning")
+            return
+        if guard is None:
             # Not reachable from a single node today, and not silently widened
             # into an inline confirm if it ever becomes so: ADR 0006 gives a
             # longer plan the modal because the modal is what can show a list.
@@ -2476,15 +2494,11 @@ class AtlasApp(App):
             self._conform_project()
             return
 
-        self._armed = _ArmedRepair(
-            project=row.key,
-            plan=plan,
-            guard=Guard.for_action(inventory.root, row.key, inventory.map, plan),
-            node=offer.target,
-        )
+        self._armed = _ArmedRepair(project=project_name, plan=plan, guard=guard, node=target,
+                                   region=region)
         room = (self.size.width or 0) - OPERATION_MARGIN
-        self._set_operation(confirm_line(plan, max(0, room), project=row.key,
-                                         effect=self._effect(project.path, plan)))
+        self._set_operation(confirm_line(plan, max(0, room), project=project_name,
+                                         effect=effect or ""))
 
     @staticmethod
     def _effect(project_path: Path, plan: Plan, *, inverse: bool = False) -> str:
@@ -2502,6 +2516,7 @@ class AtlasApp(App):
         modal, resize - as well as on Escape. The line is overwritten either
         way: a confirm still on screen after its repair is gone is a lie.
         """
+        self._arm_generation += 1    # a preview still being built never lands
         if self._armed is None:
             return False
         self._armed = None
@@ -2592,23 +2607,54 @@ class AtlasApp(App):
         inventory = self._inventory
         if inventory is None:
             return
-        root = inventory.root
-        stale = guard.check(root)
-        if stale is not None:
-            self._set_operation(f"Nothing moved - {stale}", "warning")
+        if self._repairing:
+            self._set_operation("A repair is still being applied - try again", "warning")
             return
-
         project = next((p for p in inventory.projects if p.name == project_name), None)
         if project is None:
             self._set_operation(f"Nothing moved - {project_name} is no longer available",
                                 "warning")
             return
-        try:
-            applied = apply_plan(root, project.path, inventory.map, plan)
-        except OpsError as error:
-            self._set_operation(f"Repair stopped: {error}", "error")
-            return
+        # Guard and write run off the UI thread (#46): over the Drive
+        # redirector even three enumerations and a rename are a visible stall.
+        # One at a time; the result comes back to _repair_applied.
+        self._repairing = True
+        self._repair_worker(inventory, project_name, project.path, plan, guard, node,
+                            remember, undo)
 
+    @work(thread=True, exclusive=True, group="repair", exit_on_error=False)
+    def _repair_worker(self, inventory: DriveInventory, project_name: str,
+                       project_path: Path, plan: Plan, guard: Guard, node: str,
+                       remember: bool, undo: UndoEntry | None) -> None:
+        root = inventory.root
+        # The same broad handler _operation_worker uses: a map caught mid-save,
+        # a locked file, a vanished mount - each is reported on the operation
+        # line, never allowed to exit the console (#4).
+        try:
+            stale = guard.check(root)
+        except Exception as error:  # noqa: BLE001 - reported, not raised
+            self.call_from_thread(self._repair_refused, f"Nothing moved - {error}", "error")
+            return
+        if stale is not None:
+            self.call_from_thread(self._repair_refused, f"Nothing moved - {stale}", "warning")
+            return
+        try:
+            applied = apply_plan(root, project_path, inventory.map, plan)
+        except Exception as error:  # noqa: BLE001 - reported, not raised
+            self.call_from_thread(self._repair_refused, f"Repair stopped: {error}", "error")
+            return
+        self.call_from_thread(self._repair_applied, inventory, project_name, applied,
+                              node, remember, undo)
+
+    def _repair_refused(self, message: str, severity: str) -> None:
+        self._repairing = False
+        self._set_operation(message, severity)
+
+    def _repair_applied(self, inventory: DriveInventory, project_name: str, applied: Plan,
+                        node: str, remember: bool, undo: UndoEntry | None) -> None:
+        """The UI half of a repair: the stack, the tree, the operation line."""
+        self._repairing = False
+        root = inventory.root
         conflicts = [a for a in applied.actions if a.status == CONFLICT]
         if undo is not None and any(a.status == DONE for a in applied.actions):
             self._undo.drop(project_name, undo)
@@ -2622,13 +2668,32 @@ class AtlasApp(App):
                 project_name, applied,
                 guard_for=lambda inverse: Guard.for_undo(root, project_name,
                                                          inventory.map, inverse))
-        self._reconcile_after(project_name, applied, node)
+        failed = [a for a in applied.actions if a.status == FAILED]
+        try:
+            if failed:
+                tree = self._trees.get(project_name)
+                if tree is not None:
+                    tree.invalidate_all()
+            self._reconcile_after(project_name, applied, node)
+        except Exception as error:  # noqa: BLE001 - the write is done; say so
+            self._set_operation(f"Repair applied; tree not refreshed - {error}", "warning")
+            return
         row = self._selected_row()
         if row is not None and row.key == project_name:
             # The Companion lists what is still unmet; a repair changes that.
             self._render_companion(row, self._trees.get(project_name))
 
         if not applied.actions:
+            return
+        if failed:
+            # An OS error stopped it part-way (#4). What moved first is on the
+            # undo stack - its manifest says exactly what.
+            moved = sum(len(a.moved) for a in failed)
+            self._set_operation(
+                f"{failed[0].kind} stopped - {failed[0].note}"
+                + (f"; {moved} item(s) moved first, u undoes them"
+                   if moved and undoable else ""),
+                "error")
             return
         # Reported by what happened, not by what was previewed (#20). Inverting
         # a merge yields one action per child moved; results_line counts them.
@@ -2723,24 +2788,10 @@ class AtlasApp(App):
         project = next((p for p in inventory.projects if p.name == row.key), None)
         if project is None:
             return
-        plan = build_repair_plan(row.report, inventory.map, offer.target,
-                                 project=project.path)
-        if plan.empty:
-            self._set_operation(f"{offer.target} needs no repair", "warning")
-            return
-        if not confirms_inline(plan):
-            self._conform_project()
-            return
-        self._armed = _ArmedRepair(
-            project=row.key,
-            plan=plan,
-            guard=Guard.for_action(inventory.root, row.key, inventory.map, plan),
-            node=offer.target,
-            region=COMPANION,
-        )
-        room = (self.size.width or 0) - OPERATION_MARGIN
-        self._set_operation(confirm_line(plan, max(0, room), project=row.key,
-                                         effect=self._effect(project.path, plan)))
+        # The tree's own arm path, off the UI thread, armed for the Companion.
+        self._arm_generation += 1
+        self._arm_worker(self._arm_generation, row.key, row.report, inventory,
+                         project.path, offer.target, offer.target, COMPANION)
 
     def _conform_project(self) -> None:
         """Preview the whole Selected Project's repairs in the modal."""
@@ -2754,11 +2805,15 @@ class AtlasApp(App):
         inventory = self._inventory
         drive_map = inventory.map
         original_project = next(project for project in inventory.projects if project.name == name)
-        original_token = _project_token(original_project)
         plan = build_plan(row.report, drive_map, project=project_path)
+        # The whole-project Guard (ADR 0006), watching the root as the scan
+        # behind this preview saw it. Ticket 21 deferred adopting it here (#46).
+        guard = Guard.for_project(inventory.root, name, drive_map, plan,
+                                  root_listing=original_project.root_entries)
         lines = [
             f"{action.kind.title()}: {action.src + ' -> ' if action.src else ''}{action.dst}"
             + (f" ({action.file_count} files)" if action.file_count else "")
+            + _path_warning(action)
             for action in plan.actions
         ]
 
@@ -2768,42 +2823,19 @@ class AtlasApp(App):
             root = inventory.root
 
             def conform() -> OperationOutcome:
-                fresh_inventory = scan_drive(root)
-                fresh_project = next(
-                    (project for project in fresh_inventory.projects if project.name == name),
-                    None,
-                )
-                if fresh_project is None:
+                stale = guard.check(root)
+                if stale is not None:
                     return OperationOutcome(
                         title="Conform plan changed",
-                        summary=f"{name} is no longer available - nothing changed",
-                        lines=("Return to the project list and refresh the drive.",),
+                        summary=f"Nothing moved - {stale}",
+                        lines=(stale, "Review the project and conform again."),
                         severity="warning",
                     )
-                fresh_map = fresh_inventory.map
-                fresh_plan = build_plan(report_project(fresh_project, fresh_map), fresh_map,
-                                        project=fresh_project.path)
-                if (
-                    fresh_map != drive_map
-                    or fresh_plan.actions != plan.actions
-                    or _project_token(fresh_project) != original_token
-                ):
-                    changed_lines = tuple(
-                        f"{action.kind.title()}: "
-                        f"{action.src + ' -> ' if action.src else ''}{action.dst}"
-                        for action in fresh_plan.actions
-                    )
-                    return OperationOutcome(
-                        title="Conform plan changed",
-                        summary=f"{name} changed since preview - nothing moved",
-                        lines=changed_lines
-                        or ("Project now follows the current drive map.",),
-                        severity="warning",
-                    )
-                result = apply_plan(root, project_path, fresh_map, fresh_plan)
+                result = apply_plan(root, project_path, drive_map, plan)
                 done_count = sum(1 for action in result.actions if action.status == DONE)
                 skipped = sum(1 for action in result.actions if action.status == SKIPPED)
                 conflicts = sum(1 for action in result.actions if action.status == CONFLICT)
+                failed = sum(1 for action in result.actions if action.status == FAILED)
                 detail = []
                 for action in result.actions:
                     source = f"{action.src} -> " if action.src else ""
@@ -2812,10 +2844,13 @@ class AtlasApp(App):
                         f"{(action.status or 'planned').upper()}: "
                         f"{action.kind} {source}{action.dst}{note}"
                     )
-                severity = "warning" if conflicts or skipped else "information"
+                severity = ("error" if failed
+                            else "warning" if conflicts or skipped else "information")
                 summary = f"Conformed {name}: {done_count} done, {skipped} skipped"
                 if conflicts:
                     summary += f", {conflicts} conflict(s) need review"
+                if failed:
+                    summary += f", {failed} failed (a file may be open)"
                 return OperationOutcome(
                     title="Conform result",
                     summary=summary,

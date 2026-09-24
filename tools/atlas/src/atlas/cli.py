@@ -7,17 +7,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from . import __version__
 from .core.conform import (
+    DONE,
+    FAILED,
     NotInvertible,
+    Plan,
     action_to_dict,
     apply_plan,
     build_plan,
     build_repair_plan,
     invert_plan,
+    measure_plan,
+    node_key,
     plan_from_dict,
 )
 from .core.contacts import (
@@ -48,14 +54,37 @@ from .core.project_data import (
     load_project_record,
     preview_project_update,
 )
-from .core.scan import DEFAULT_MOUNT_ROOT, discover_drives, scan_drive
+from .core.scan import (
+    DEFAULT_MOUNT_ROOT,
+    READ,
+    UNREADABLE,
+    ProjectInventory,
+    discover_drives,
+    exists_exact,
+    is_project_dir,
+    list_entries,
+    scan_drive,
+)
+from .core.tree import MAPPED, TreeNode, open_project_tree
+from .tui.tokens import filing_style  # the Fault Words; pure data, no Textual
+
+
+class UsageError(Exception):
+    """The command cannot run as asked: a bad argument, a missing drive, or a
+    drive Atlas cannot read.
+
+    An error, never a finding. `main` prints it to stderr and exits 2, so a
+    script can tell "the drive has drift" (1) from "the command failed" (2).
+    """
 
 
 def _resolve_drive(arg: str | None) -> Path:
     if arg:
-        root = Path(arg)
+        # Absolute: path lengths are measured on it, and Windows sees the
+        # absolute path whatever was typed (ADR 0006).
+        root = Path(os.path.abspath(arg))
         if not find_map(root):
-            raise SystemExit(f"error: no _tools/*-map.json under {root}")
+            raise UsageError(f"no _tools/*-map.json under {root}")
         return root
     cwd = Path.cwd()
     for candidate in (cwd, *cwd.parents):
@@ -65,9 +94,21 @@ def _resolve_drive(arg: str | None) -> Path:
     if len(drives) == 1:
         return drives[0]
     if not drives:
-        raise SystemExit(f"error: no mapped drives found under {DEFAULT_MOUNT_ROOT}; pass --drive")
+        raise UsageError(f"no mapped drives found under {DEFAULT_MOUNT_ROOT}; pass --drive")
     names = ", ".join(d.name for d in drives)
-    raise SystemExit(f"error: multiple mapped drives ({names}); pass --drive")
+    raise UsageError(f"multiple mapped drives ({names}); pass --drive")
+
+
+def _scan(root: Path):
+    """scan_drive, refusing a drive root it could not list.
+
+    An unreadable root yields zero projects, which doctor used to report as
+    "0 conform / 0 drift", exit 0 - a disconnected drive dressed as a clean one.
+    """
+    inventory = scan_drive(root)
+    if not inventory.readable:
+        raise UsageError(f"cannot read the drive root {root}: {inventory.error}")
+    return inventory
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
@@ -92,7 +133,7 @@ def cmd_lint(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
     try:
-        report = report_drive(scan_drive(root))
+        report = report_drive(_scan(root))
     except (MapError, FileNotFoundError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -104,28 +145,48 @@ def cmd_doctor(args: argparse.Namespace) -> int:
               f"{counts['conform']} conform / {counts['drift']} drift / "
               f"{counts['unfiled']} unfiled / {counts['stub']} stub")
         for p in report.projects:
-            print(f"\n[{p.status.upper():7}] {p.name}  ({p.sections_present} sections)")
+            sections = (f"{p.sections_present} sections" if p.root_readable
+                        else "sections unknown")
+            print(f"\n[{p.status.upper():7}] {p.name}  ({sections})")
             for item in p.missing_control_plane:
                 print(f"    control-plane missing: {item}")
             for src, dst in p.drift:
                 print(f"    drift: {src} -> {dst}")
             for h in p.relocations:
-                print(f"    relocation pending: {h.source} -> {h.target} ({h.file_count} files)")
+                count = "files unknown" if h.file_count is None else f"{h.file_count} files"
+                print(f"    relocation pending: {h.source} -> {h.target} ({count})")
             rules = dict(p.sweep_rules)
             for name, dst in p.sweeps:
                 because = f" (rule: {rules[name]})" if name in rules else ""
                 print(f"    sweep pending: {name} -> {dst}{because}")
             for name in p.unfiled:
                 print(f"    unfiled: {name}")
-    pending = any(p.actionable or p.unfiled for p in report.projects)
+            for line in p.unreadable:
+                print(f"    cannot read: {line}")
+    # An unreadable folder is pending too: a person has to look (ADR 0004).
+    pending = any(p.actionable or p.unfiled or p.unreadable for p in report.projects)
     return 1 if pending else 0
 
 
 def _resolve_project(root: Path, name: str) -> Path:
-    project = root / name
-    if not project.is_dir():
-        raise SystemExit(f"error: no project folder '{name}' under {root}")
-    return project
+    """The project folder called ``name``, looked up the way conform does.
+
+    ``root / name`` alone let "..", "." and absolute paths through, and clean's
+    seed and analysis-dir protection is relative to the "project" it is given -
+    so `clean --project .. --apply` removed seed sections on another drive. A
+    project is one entry in the drive root's own listing, by exact name, that
+    the scan would call a project. Nothing else.
+    """
+    if (not name or name in (".", "..") or "/" in name or "\\" in name
+            or ":" in name or not is_project_dir(name)):
+        raise UsageError(f"'{name}' is not a project folder name; pass one folder "
+                         f"directly under {root}")
+    listing = list_entries(root)
+    if not listing.readable:
+        raise UsageError(f"cannot read {root}: {listing.error}")
+    if not any(e.is_dir and e.name == name for e in listing):
+        raise UsageError(f"no project folder '{name}' under {root}")
+    return root / name
 
 
 def _contact_to_dict(contact: Contact) -> dict[str, object]:
@@ -713,6 +774,84 @@ def cmd_clean(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tree(args: argparse.Namespace) -> int:
+    """The tree's facts: Filing State and Load State below the project root.
+
+    A thin wrapper over ``core.tree`` (ticket 24, ADR 0008) - the TUI's seam
+    with a second consumer that is not a widget. ``--depth`` is the cost
+    control the TUI gets from lazy expansion: one enumeration per folder read,
+    never a walk. A folder at the last level is left Unread and carries no
+    counts, because an unread count is not zero.
+    """
+    if args.depth < 1:
+        raise UsageError("--depth must be 1 or more")
+    root = _resolve_drive(args.drive)
+    m = load_map(find_map(root))
+    project = _resolve_project(root, args.project)
+    inv = ProjectInventory(path=project, name=project.name, root_entries=list_entries(project))
+    tree = open_project_tree(inv, m, report_project(inv, m))
+
+    # Read first, describe after: a folder's own Load State and counts change
+    # once its children are read, and ``children`` hands out values.
+    # Level k's listings give the nodes shown at depth k-1 their counts, so
+    # --depth N reads N levels and shows N; the deepest shown stay Unread.
+    level = [""]
+    for _ in range(args.depth):
+        level = [n.key for key in level for n in tree.children(key)
+                 if n.is_dir and tree.load_state(n.key) != UNREADABLE]
+    outline: list[tuple[int, TreeNode]] = []
+
+    def describe(key: str, depth: int) -> None:
+        for node in tree.children(key):
+            outline.append((depth, node))
+            if node.is_dir and depth + 1 < args.depth and node.load == READ:
+                describe(node.key, depth + 1)
+
+    describe("", 0)
+    unmet = tree.expectations()
+    root_load = tree.load_state("")
+    findings = (root_load != READ or unmet
+                or any(n.filing != MAPPED or n.load == UNREADABLE for _d, n in outline))
+
+    if args.json:
+        nodes = {}
+        for _depth, node in outline:
+            facts: dict[str, object] = {"name": node.name, "is_dir": node.is_dir,
+                                        "filing": node.filing}
+            if node.is_dir:
+                facts["load"] = node.load
+                if node.load == READ:
+                    facts["folders"] = node.folders
+                    facts["files"] = node.files
+            nodes[node.key] = facts
+        print(json.dumps({
+            "drive": m.drive, "project": project.name, "depth": args.depth,
+            "load": root_load, "nodes": nodes,
+            "expectations": [{"path": e.path, "kind": e.kind, "repairable": e.repairable}
+                             for e in unmet],
+        }, indent=2))
+        return 1 if findings else 0
+
+    print(f"{project.name}" + ("" if root_load == READ else f"  [{root_load}]"))
+    for depth, node in outline:
+        name = f"{node.name}/" if node.is_dir else node.name
+        facts = []
+        if node.filing != MAPPED:
+            facts.append(filing_style(node.filing).label)
+        if node.is_dir and node.load == READ:
+            facts.append(f"{node.folders} folders, {node.files} files")
+        elif node.is_dir and node.load == UNREADABLE:
+            facts.append("cannot read")
+        detail = f"  ({'; '.join(facts)})" if facts else ""
+        print(f"{'  ' * (depth + 1)}{name}{detail}")
+    if unmet:
+        print("\nmissing:")
+        for e in unmet:
+            repair = "  (conform can backfill)" if e.repairable else ""
+            print(f"  {e.path}{repair}")
+    return 1 if findings else 0
+
+
 def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
     """Undo an applied conform from the manifest it printed.
 
@@ -730,7 +869,15 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
 
     plans = payload if isinstance(payload, list) else [payload]
     try:
-        inverses = [(p["project"], invert_plan(plan_from_dict(p))) for p in plans]
+        for p in plans:
+            # A manifest from drive A must never apply to a same-named project
+            # on drive B. One without a drive cannot prove where it came from.
+            if not isinstance(p, dict) or p.get("drive") != m.drive:
+                found = p.get("drive") if isinstance(p, dict) else None
+                print(f"error: {manifest} is from drive {found or '(unnamed)'}, "
+                      f"not {m.drive}; nothing moved", file=sys.stderr)
+                return 2
+        inverses = [invert_plan(plan_from_dict(p)) for p in plans]
     except NotInvertible as error:
         print(f"error: cannot reverse this manifest: {error}", file=sys.stderr)
         return 2
@@ -738,23 +885,67 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
         print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
         return 2
 
-    for name, inverse in inverses:
-        project_path = root / name
-        if not project_path.is_dir():
-            print(f"error: no project folder '{name}' under {root}", file=sys.stderr)
-            return 2
-        done = apply_plan(root, project_path, m, inverse)
-        for a in done.actions:
-            print(f"    {a.kind:9} {a.src} -> {a.dst} [{a.status}]")
-    return 0
+    # Every project and every precondition before anything moves: a
+    # multi-project manifest must not stop halfway. The guard an undo needs is
+    # "is each thing still where the repair left it" - checked by exact name.
+    for inverse in inverses:
+        project_path = _resolve_project(root, inverse.project)
+        for action in inverse.actions:
+            if not exists_exact(project_path, node_key(action.src)):
+                print(f"error: {inverse.project}/{action.src} is no longer where the "
+                      f"repair left it; nothing moved", file=sys.stderr)
+                return 2
+    # Undo moves things too: its preview carries the MAX_PATH warning.
+    inverses = [measure_plan(inverse, root / inverse.project) for inverse in inverses]
+
+    if not args.apply:
+        _print_plans(inverses, args, m.drive, applied=False)
+        return 1 if any(not p.empty for p in inverses) else 0
+
+    results = [apply_plan(root, root / inverse.project, m, inverse) for inverse in inverses]
+    _print_plans(results, args, m.drive, applied=True)
+    if any(a.status == FAILED for p in results for a in p.actions):
+        return 2
+    return 1 if any(a.status != DONE for p in results for a in p.actions) else 0
+
+
+def _action_line(a) -> str:
+    status = f" [{a.status}]" if a.status else ""
+    note = f"  ({a.note})" if a.note else ""
+    files = f" ({a.file_count} files)" if a.file_count else ""
+    src = f"{a.src} -> " if a.src else ""
+    warning = f"  [path {a.path_length} > 260]" if a.path_warning else ""
+    return f"    {a.kind:9} {src}{a.dst}{files}{status}{note}{warning}"
+
+
+def _print_plans(plans, args: argparse.Namespace, drive: str, *, applied: bool) -> None:
+    """Plans in conform's shapes: JSON a later --revert can read, or text."""
+    if args.json:
+        print(json.dumps([
+            {"drive": drive, "project": plan.project,
+             "actions": [action_to_dict(a) for a in plan.actions]}
+            for plan in plans
+        ], indent=2))
+        return
+    for plan in plans:
+        print(f"[{'APPLIED' if applied else 'PLAN':7}] {plan.project}")
+        for a in plan.actions:
+            print(_action_line(a))
+    if not applied and any(not p.empty for p in plans):
+        print("\n(dry run - pass --apply to perform)")
 
 
 def cmd_conform(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
-    inventory = scan_drive(root)
+    inventory = _scan(root)
     m = inventory.map
     if args.revert:
         return cmd_revert(args, root, m)
+    if args.all and (args.project or args.node):
+        # --all used to win silently, dropping --project and planning --node
+        # in every project on the drive.
+        print("error: --all cannot be combined with --project or --node", file=sys.stderr)
+        return 2
     if args.node and not args.project:
         # A Node Key is project-relative, so the same key names a different
         # folder in every project. Drive-wide is meaningless here.
@@ -774,10 +965,29 @@ def cmd_conform(args: argparse.Namespace) -> int:
     only = set(args.only) if args.only else None
     results = []
     pending = False
+    # What conform cannot repair but doctor still reports: only a person can
+    # decide where an Unfiled item belongs. Not "OK", and not exit 0.
+    leftovers: dict[str, int] = {}
+    # Projects, or parts of them, Atlas could not read. Never repaired - what
+    # cannot be read cannot be planned - and never reported as fine.
+    unread: dict[str, tuple[str, ...]] = {}
     for inv in targets:
         report = report_project(inv, m)
+        if report.unreadable:
+            unread[inv.name] = report.unreadable
+        if not report.root_readable:
+            results.append(Plan(project=inv.name, actions=()))
+            continue
+        if not args.node and report.unfiled:
+            leftovers[inv.name] = len(report.unfiled)
         if args.node:
             plan = build_repair_plan(report, m, args.node, project=inv.path)
+            key = node_key(args.node)
+            if plan.empty and not exists_exact(inv.path, key):
+                # "Needs no repair" is a claim about a node Atlas looked at. A
+                # path that matched nothing and is not on disk is a typo.
+                print(f"error: no such node '{key}' in {inv.name}", file=sys.stderr)
+                return 2
         else:
             plan = build_plan(report, m, project=inv.path)
         if plan.empty:
@@ -790,36 +1000,67 @@ def cmd_conform(args: argparse.Namespace) -> int:
             pending = True
 
     if args.json:
+        # "drive" lets --revert refuse a manifest from another drive.
         print(json.dumps([
-            {"project": plan.project,
+            {"drive": m.drive, "project": plan.project,
              "actions": [action_to_dict(a) for a in plan.actions]}
             for plan in results
         ], indent=2))
     else:
         for plan in results:
+            left = leftovers.get(plan.project, 0)
+            cannot = unread.get(plan.project, ())
             if plan.empty:
-                if args.node:
+                if cannot:
+                    print(f"[REVIEW ] {plan.project}: cannot read {cannot[0]}; "
+                          f"nothing changed")
+                elif args.node:
                     print(f"[OK     ] {plan.project}: {args.node} needs no repair")
+                elif left:
+                    print(f"[REVIEW ] {plan.project}: nothing Atlas can repair; "
+                          f"{left} item(s) need a person")
                 else:
                     print(f"[OK     ] {plan.project}: conforms already")
                 continue
             print(f"[{'APPLIED' if args.apply else 'PLAN':7}] {plan.project}")
             for a in plan.actions:
-                status = f" [{a.status}]" if a.status else ""
-                note = f"  ({a.note})" if a.note else ""
-                files = f" ({a.file_count} files)" if a.file_count else ""
-                src = f"{a.src} -> " if a.src else ""
-                warning = f"  [path {a.path_length} > 260]" if a.path_warning else ""
-                print(f"    {a.kind:9} {src}{a.dst}{files}{status}{note}{warning}")
+                print(_action_line(a))
+            if left:
+                print(f"    {left} unfiled item(s) need a person")
+            for line in cannot:
+                print(f"    cannot read: {line}")
         if not args.apply and pending:
             print("\n(dry run - pass --apply to perform)")
     if args.apply:
+        if any(a.status == FAILED for plan in results for a in plan.actions):
+            # An OS error stopped an action part-way. The JSON above carries
+            # what moved before it, so --revert can still put it back.
+            return 2
         conflicts = any(a.status == "conflict" for plan in results for a in plan.actions)
-        return 1 if conflicts else 0
-    return 1 if pending else 0
+        return 1 if conflicts or leftovers or unread else 0
+    return 1 if pending or leftovers or unread else 0
+
+
+def _utf8_streams() -> None:
+    """Write UTF-8 whatever the pipe's default encoding.
+
+    A redirected stdout on Windows is cp1252, and a project or contact name with
+    a character outside it would crash the print - after the command had
+    already written to the drive, so the retry fails as a duplicate. Only the
+    encoding changes; a stream that cannot be reconfigured is left alone.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        encoding = (getattr(stream, "encoding", "") or "").lower().replace("-", "")
+        if encoding == "utf8":
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError, OSError):
+            pass
 
 
 def main(argv: list[str] | None = None) -> int:
+    _utf8_streams()
     parser = argparse.ArgumentParser(prog="atlas", description="Map-driven studio drive tooling.")
     parser.add_argument("--version", action="version", version=f"atlas {__version__}")
     # The console's own drive. A separate dest: a subcommand's --drive default
@@ -835,11 +1076,19 @@ def main(argv: list[str] | None = None) -> int:
         ("add", cmd_add, "add blessed folders to a project"),
         ("clean", cmd_clean, "list/remove file-empty folders (rmdir-only; dry run by default)"),
         ("conform", cmd_conform, "plan/apply conformance: backfill, renames, relocations, sweeps"),
+        ("tree", cmd_tree, "one project's folders and files: Filing State, Load State, "
+                           "unmet Expectations (read-only)"),
     ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--drive", help="drive root (default: walk up from cwd, else auto-discover)")
         p.add_argument("--json", action="store_true", help="machine-readable output")
         p.set_defaults(fn=fn)
+
+    sub.choices["tree"].add_argument("project", help="project folder name")
+    sub.choices["tree"].add_argument(
+        "--depth", type=int, default=1,
+        help="levels to read below the project root (default 1). Each level is one "
+             "enumeration per folder; the deepest level shown stays Unread")
 
     contacts = sub.add_parser("contacts", help="list, add, and edit shared contacts")
     contact_commands = contacts.add_subparsers(dest="contacts_command", required=True)
@@ -977,7 +1226,11 @@ def main(argv: list[str] | None = None) -> int:
         return run_tui(drive)
     try:
         return args.fn(args)
-    except (ContactError, IntakeError, OpsError, ProjectDataError) as error:
+    except (ContactError, IntakeError, OpsError, ProjectDataError, MapError,
+            UsageError, OSError) as error:
+        # Every error exits 2, never 1: 1 means the drive has findings. An
+        # OSError here is the backstop - a locked file, a vanished mount - and is
+        # reported, not raised as a traceback over empty --json stdout.
         print(f"error: {error}", file=sys.stderr)
         return 2
 

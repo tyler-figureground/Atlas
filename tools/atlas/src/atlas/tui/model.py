@@ -54,7 +54,9 @@ class ProjectRow:
 
     @property
     def sections(self) -> str:
-        return f"{self.report.sections_present}/{self.section_total}"
+        # Never a zero for a project Atlas could not read (ticket 13).
+        present = self.report.sections_present if self.report.root_readable else "?"
+        return f"{present}/{self.section_total}"
 
     @property
     def search_text(self) -> str:
@@ -130,7 +132,8 @@ def project_detail(row: ProjectRow) -> str:
     fix_lines.extend(f"Backfill {name}" for name in report.missing_control_plane)
     fix_lines.extend(f"Rename {source} -> {target}" for source, target in report.drift)
     fix_lines.extend(
-        f"Move {hit.source} -> {hit.target} ({hit.file_count} files)"
+        f"Move {hit.source} -> {hit.target} "
+        + ("(files unknown)" if hit.file_count is None else f"({hit.file_count} files)")
         for hit in report.relocations
     )
     rules = dict(report.sweep_rules)

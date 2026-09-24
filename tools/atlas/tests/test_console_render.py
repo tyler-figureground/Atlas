@@ -317,8 +317,8 @@ async def test_an_unreadable_project_root_draws_a_row_saying_so(fixture_drive, m
     real = core_tree.list_entries
     monkeypatch.setattr(
         core_tree, "list_entries",
-        lambda path: Listing(UNREADABLE, error="Access is denied") if path == project
-        else real(path))
+        lambda path, **kw: Listing(UNREADABLE, error="Access is denied") if path == project
+        else real(path, **kw))
 
     class Harness(App):
         def compose(self):

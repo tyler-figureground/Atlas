@@ -15,7 +15,7 @@ from pathlib import Path
 from .filerules import first_match
 from .mapfile import DriveMap
 from .projectmd import agents_block_current, is_claude_pointer
-from .scan import DriveInventory, ProjectInventory, long_path, count_files
+from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
 # Files tolerated at a project root without being flagged: OS noise plus the
 # PRD-209 time-ledger family, which is blessed control plane per the map note.
@@ -31,7 +31,8 @@ STATUS_STUB = "stub"
 class RelocationHit:
     source: str
     target: str
-    file_count: int
+    # None when part of the source could not be read: unknown, never zero.
+    file_count: int | None
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,10 @@ class ProjectReport:
     # Folders Atlas could not enumerate. Not actionable - Atlas cannot repair what
     # it cannot read - but never silently treated as empty. See ADR 0004.
     unreadable: tuple[str, ...] = ()
+    # False when the project root itself could not be listed. Every other finding
+    # is then empty and ``sections_present`` means nothing: an unreadable project
+    # never reads as an empty one (#13, ADR 0004).
+    root_readable: bool = True
 
     @property
     def actionable(self) -> bool:
@@ -87,10 +92,24 @@ def _tolerated(name: str) -> bool:
     return any(fnmatch.fnmatch(name.lower(), pat.lower()) for pat in TOLERATED_ROOT_FILES)
 
 
+class _CannotRead(Exception):
+    """A control-plane file that exists and could not be read. Unreadable, not
+    missing: reporting it missing would have conform "backfill" over it."""
+
+
+def _reason(path: Path, exc: OSError) -> str:
+    return f"{path.name}  {type(exc).__name__}: {exc.strerror or exc}"
+
+
 def _read_control_file(path: Path) -> str | None:
+    """The file's text, or None when it is not UTF-8. Raises _CannotRead."""
     try:
-        return path.read_bytes().decode("utf-8-sig")
-    except (OSError, UnicodeDecodeError):
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise _CannotRead(_reason(path, exc)) from exc
+    try:
+        return raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
         return None
 
 
@@ -134,37 +153,63 @@ def _dir_exists_exact(base: Path, rel: str) -> bool:
     return True
 
 
-def report_project(inv: ProjectInventory, m: DriveMap) -> ProjectReport:
+def report_project(inv: ProjectInventory, m: DriveMap, *,
+                   count_files: bool = True) -> ProjectReport:
+    """One project's conformance facts.
+
+    ``count_files=False`` skips the one walk here - the file count under each
+    relocation source - leaving ``file_count`` None (unknown). For the scoped
+    Guard, which needs to know what work is due, not how big it is (#46).
+    """
+    if not inv.root_entries.readable:
+        # Nothing below is knowable. Every check would run against the failed
+        # listing's empty names and report a present control plane as missing,
+        # zero sections, and a backfill conform would then "repair". REVIEW,
+        # never STUB or CONFORM: a person has to look.
+        return ProjectReport(
+            name=inv.name, status=STATUS_UNFILED, sections_present=0,
+            unreadable=(f".  {inv.root_entries.error}",), root_readable=False,
+        )
+
     section_ids = set(m.section_ids)
     drift_lower = {k.lower(): v for k, v in m.drift_map.items()}
     root_names = {e.name for e in inv.root_entries}
 
     sections_present = sum(1 for e in inv.root_entries if e.is_dir and e.name in section_ids)
+    unreadable: list[str] = []
 
     # Control plane: report what Conform would backfill. PROJECT.md counts as
     # missing when absent OR present without the YAML machine contract - the
-    # prose-only file is exactly what Conform-Project.ps1 prepends into.
+    # prose-only file is exactly what Conform-Project.ps1 prepends into. A file
+    # that is there and cannot be read is unreadable, never missing.
     missing: list[str] = []
     if m.project_file:
         if m.project_file not in root_names:
             missing.append(m.project_file)
         else:
+            path = inv.path / m.project_file
             try:
-                head = (inv.path / m.project_file).read_text(encoding="utf-8-sig", errors="replace")[:64]
-            except OSError:
-                head = ""
-            if not head.lstrip().startswith("---"):
-                missing.append(m.project_file)
+                head = path.read_text(encoding="utf-8-sig", errors="replace")[:64]
+            except OSError as exc:
+                unreadable.append(_reason(path, exc))
+            else:
+                if not head.lstrip().startswith("---"):
+                    missing.append(m.project_file)
     if m.decisions_dir and m.decisions_dir not in root_names:
         missing.append(m.decisions_dir)
     # Agent files, AGENTS.md first so conform migrates before it points: AGENTS.md
     # must carry a current Atlas block, CLAUDE.md must be the bare pointer. Names
     # are exact-case, so a hand-saved "Agents.md" reads as missing and conform
     # renames it. ADR 0010.
-    if m.agents_file and not _agents_file_current(inv.path, m, root_names):
-        missing.append(m.agents_file)
-    if m.claude_file and not _claude_file_current(inv.path, m, root_names):
-        missing.append(m.claude_file)
+    for name, current in ((m.agents_file, _agents_file_current),
+                          (m.claude_file, _claude_file_current)):
+        if not name:
+            continue
+        try:
+            if not current(inv.path, m, root_names):
+                missing.append(name)
+        except _CannotRead as error:
+            unreadable.append(str(error))
     if m.analysis_dir and not (inv.path / m.analysis_dir).exists():
         missing.append(m.analysis_dir)
 
@@ -184,8 +229,17 @@ def report_project(inv: ProjectInventory, m: DriveMap) -> ProjectReport:
                     sweeps.append((e.name, dst))
             continue
         if _dir_exists_exact(inv.path, src):
-            src_path = inv.path / src
-            reloc_hits.append(RelocationHit(source=src, target=dst, file_count=count_files(src_path)))
+            if not count_files:
+                reloc_hits.append(RelocationHit(source=src, target=dst, file_count=None))
+                continue
+            tally = tally_files(inv.path / src)
+            unreadable.extend(
+                f"{src}/{rel}  {why}" if rel != "." else f"{src}  {why}"
+                for rel, why in tally.unreadable
+            )
+            reloc_hits.append(RelocationHit(
+                source=src, target=dst,
+                file_count=tally.files if tally.known else None))
 
     # Unfiled: whatever the canon, control plane, pending actions, and
     # tolerated set do not explain.
@@ -216,10 +270,6 @@ def report_project(inv: ProjectInventory, m: DriveMap) -> ProjectReport:
         for e in inv.root_entries
         if e.name not in explained and e.name not in swept and not _tolerated(e.name)
     )
-
-    unreadable: list[str] = []
-    if not inv.root_entries.readable:
-        unreadable.append(f".  {inv.root_entries.error}")
 
     if unreadable:
         # A person has to look. Never STUB - "no sections found" would claim we
@@ -267,7 +317,7 @@ def report_to_dict(report: DriveReport) -> dict:
             {
                 "name": p.name,
                 "status": p.status,
-                "sections_present": p.sections_present,
+                "sections_present": p.sections_present if p.root_readable else None,
                 "missing_control_plane": list(p.missing_control_plane),
                 "drift": [{"from": a, "to": b} for a, b in p.drift],
                 "relocations": [

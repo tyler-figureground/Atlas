@@ -188,7 +188,7 @@ async def test_slash_in_the_tree_filters_the_tree_not_the_hidden_list(fixture_dr
         reads = []
         real = core_tree.list_entries
         monkeypatch.setattr(core_tree, "list_entries",
-                            lambda path: reads.append(path) or real(path))
+                            lambda path, **kw: reads.append(path) or real(path, **kw))
 
         await pilot.press("slash", *"Bravo")
         await settle(app, pilot)

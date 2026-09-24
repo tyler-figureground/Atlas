@@ -20,7 +20,7 @@ from pathlib import Path
 from .conform import CONFLICT, DONE, SWEEP, Plan, parent_key
 from .doctor import ProjectReport
 from .mapfile import DriveMap
-from .scan import UNREAD, Listing, ProjectInventory, list_entries
+from .scan import READ, UNREAD, Listing, ProjectInventory, list_entries
 
 # Filing State, per ADR 0004: what the drive map says about a node that exists.
 MAPPED = "mapped"
@@ -33,6 +33,29 @@ UNFILED = "unfiled"
 # the Drive redirector, so someone else's change reaches the tree when the TTL
 # expires or when the operator asks for a refresh, and never any sooner.
 DEFAULT_TTL = 60.0
+
+# The rest of ticket 12's budgets, measured on the live drive
+# (docs/research/atlas-drive-latency-measurement.md) and recorded here, where the
+# tree reads them. They interact, so they live together.
+#
+# LOADING_DELAY: seconds before a load shows a loading state. Above the cold p99
+#   of 91 ms, below the perceptual boundary; at p90 of 1.74 ms almost no
+#   expansion ever shows it, so the tree does not flicker.
+# CONCURRENCY_CAP: node loads in flight at once. Most of the measured gain
+#   (2.15x at 8 workers, already flat), and it leaves the shared pool free.
+# PREFETCH_CAP: nodes that may be read ahead of the cursor. Moot today, and on
+#   purpose: the tree reads a folder only when the operator opens it (ADR 0007),
+#   so nothing is ever read ahead and there is nothing for the cap to bound.
+#   Prefetch was left out because ticket 12 measured the gain as small (a warm
+#   read is ~0.5 ms) against a 9.4 s pathological tail for thirty cold
+#   siblings. A prefetch that is added later stays one level ahead, cancellable,
+#   and under this cap.
+# COUNT_CAP: entries read from one folder before its listing stops as PARTIAL.
+#   The pathological tail, not the median, is what this bounds.
+LOADING_DELAY = 0.120
+CONCURRENCY_CAP = 4
+PREFETCH_CAP = 50
+COUNT_CAP = 500
 
 # What kind of thing an unmet Expectation is. The distinction is not cosmetic:
 # conform backfills the control plane and has never created a mapped section, so
@@ -104,16 +127,21 @@ class Expectation:
 
 
 def _root_filing_states(report: ProjectReport) -> dict[str, str]:
-    """Every node the report has an opinion about, by Node Key."""
+    """Every node the report has an opinion about, by Node Key.
+
+    The first rule that matches decides, in the order conform applies them -
+    drift, relocations, sweeps - so a name two rules claim reads as the action
+    conform will actually take, not the last one listed (ADR 0004).
+    """
     states: dict[str, str] = {}
     for found, _canonical in report.drift:
-        states[found] = DRIFTED
+        states.setdefault(found, DRIFTED)
     for hit in report.relocations:
-        states[hit.source] = MISPLACED
+        states.setdefault(hit.source, MISPLACED)
     for name, _target in report.sweeps:
-        states[name] = LOOSE
+        states.setdefault(name, LOOSE)
     for name in report.unfiled:
-        states[name] = UNFILED
+        states.setdefault(name, UNFILED)
     return states
 
 
@@ -121,12 +149,13 @@ class ProjectTree:
     """A lazily-expanding handle on one Project's folders and files."""
 
     def __init__(self, project: Path, drive_map: DriveMap, report: ProjectReport,
-                 *, ttl: float = DEFAULT_TTL,
+                 *, ttl: float = DEFAULT_TTL, count_cap: int | None = COUNT_CAP,
                  clock: Callable[[], float] = time.monotonic):
         self.project = project
         self.drive_map = drive_map
         self.report = report
         self.ttl = ttl
+        self.count_cap = count_cap
         self._clock = clock
         self._listings: dict[str, Listing] = {}
         self._read_at: dict[str, float] = {}
@@ -174,7 +203,7 @@ class ProjectTree:
     def _listing(self, key: str) -> Listing:
         if not self._fresh(key):
             self._listings[key] = list_entries(
-                self.project / key if key else self.project)
+                self.project / key if key else self.project, limit=self.count_cap)
             self._read_at[key] = self._clock()
         return self._listings[key]
 
@@ -193,12 +222,22 @@ class ProjectTree:
                      kind=CONTRACT if (item == self.drive_map.project_file and item in files)
                      else CONTROL_PLANE)
                  for item in self.report.missing_control_plane]
+        if root.state != READ:
+            # Nothing is known to be missing from a folder Atlas could not
+            # read, or read only up to the count cap; listing every section as
+            # unmet would draw it exactly like an empty project (ADR 0004).
+            return tuple(sorted(unmet, key=lambda e: e.path))
         present = {e.name for e in root if e.is_dir}
         for section in self.drive_map.sections:
             if section.id not in present:
                 unmet.append(Expectation(path=section.id, kind=SECTION))
                 continue
-            here = {e.name for e in self._listing(section.id)}
+            listing = self._listing(section.id)
+            if listing.state != READ:
+                # Unreadable, or stopped at the count cap: a child absent from
+                # what was read is not known to be absent from disk.
+                continue
+            here = {e.name for e in listing}
             unmet.extend(
                 Expectation(path=f"{section.id}/{child}", kind=SECTION)
                 for child in section.children if child not in here

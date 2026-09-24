@@ -42,7 +42,15 @@ from .projectmd import (
     with_agents_block,
     write_crlf_no_bom,
 )
-from .scan import ProjectInventory, list_entries, long_path, scan_drive
+from .scan import (
+    Listing,
+    ProjectInventory,
+    list_entries,
+    long_path,
+    scan_drive,
+    tally_files,
+    walk,
+)
 
 # Action kinds, in apply order.
 BACKFILL = "backfill"
@@ -54,6 +62,7 @@ SWEEP = "sweep"
 DONE = "done"
 CONFLICT = "conflict"   # no-clobber leftovers; a human resolves
 SKIPPED = "skipped"
+FAILED = "failed"       # an OS error stopped it; ``moved`` holds what moved first
 
 
 # Windows refuses a path longer than this without the extended-length prefix,
@@ -130,21 +139,36 @@ def _deepest_tail(src: Path) -> int:
     after a move is not the folder's own path but the deepest thing under it,
     re-hung beneath a destination that may be longer than where it sits now.
     """
-    base = long_path(src)
+    # scan.walk prefixes every level, not only the top: a short source with a
+    # deep subtree is otherwise under-measured on a machine without
+    # LongPathsEnabled, exactly where the warning matters.
+    base = os.fspath(src)
     root_len = len(base)
     deepest = 0
-    for root, _dirs, files in os.walk(base, followlinks=False):
+    for root, _dirs, files, links in walk(base):
         tail = len(root) - root_len
         deepest = max(deepest, tail)
-        for name in files:
+        for name in (*files, *links):
             deepest = max(deepest, tail + 1 + len(name))
     return deepest
+
+
+def measure_plan(plan: Plan, project: Path) -> Plan:
+    """The Plan with every Action's path length measured against ``project``.
+
+    For Plans ``build_plan`` did not make - an inverse above all. Undo moves
+    things too, and can push them past MAX_PATH just as a repair can.
+    """
+    return replace(plan, actions=tuple(
+        replace(a, path_length=_path_length(project, a)) for a in plan.actions))
 
 
 def _path_length(project: Path | None, action: Action) -> int:
     """Longest absolute path the action would leave behind, or 0 if unmeasured."""
     if project is None:
         return 0
+    # Absolute, always: a relative --drive measured 40 where Windows sees 220.
+    project = Path(os.path.abspath(project))
     dst = action.dst.replace("\\", "/").rstrip("/")
     if action.kind == BACKFILL:
         return len(str(project / dst))
@@ -178,6 +202,19 @@ def build_plan(report: ProjectReport, m: DriveMap, project: Path | None = None) 
     return Plan(project=report.name, actions=measured)
 
 
+def node_key(*parts: str) -> str:
+    """Project-relative path(s) joined in Node Key form: forward slashes, no
+    empty segments, no leading or trailing slash.
+
+    One function for both jobs. Normalising: what an operator types on Windows
+    ("08 OUT\\Invoices", "Meetings/") and what the tree hands over must match
+    the same Action. Joining: a plain f-string turns a root parent into
+    ``/name``, which is not a Node Key, and on Windows ``project / "/name"``
+    resolves against the drive root rather than the project.
+    """
+    return "/".join(seg for part in parts for seg in part.replace("\\", "/").split("/") if seg)
+
+
 def build_repair_plan(report: ProjectReport, m: DriveMap, path: str,
                       project: Path | None = None) -> Plan:
     """The Plan for one node's Repair, holding one Action or none.
@@ -191,12 +228,18 @@ def build_repair_plan(report: ProjectReport, m: DriveMap, path: str,
     tree introduces no action kinds of its own (ADR 0006), and two derivations of
     "what does this node need" would eventually disagree.
     """
-    full = build_plan(report, m, project=project)
+    path = node_key(path)
+    # Unmeasured first, then only the match: measuring walks each source's
+    # subtree, and a one-node repair has no business walking the others (#46).
+    full = build_plan(report, m, project=None)
     match = next(
         (a for a in full.actions if a.src == path),
         next((a for a in full.actions if not a.src and a.dst == path), None),
     )
-    return Plan(project=report.name, actions=(match,) if match else ())
+    if match is None:
+        return Plan(project=report.name, actions=())
+    return Plan(project=report.name,
+                actions=(replace(match, path_length=_path_length(project, match)),))
 
 
 def action_to_dict(action: Action) -> dict:
@@ -237,25 +280,61 @@ def plan_from_dict(payload: dict) -> Plan:
     try:
         actions = tuple(
             Action(
-                kind=a["kind"],
-                src=a["src"],
-                dst=a["dst"],
+                kind=_known_kind(a["kind"]),
+                src=_inside(a["src"], "src"),
+                dst=_inside(a["dst"], "dst"),
                 file_count=a["file_count"],
                 status=a["status"],
                 note=a["note"],
                 moved=tuple(
-                    Move(src=mv["src"], dst=mv["dst"], is_dir=mv["is_dir"])
+                    Move(src=_inside(mv["src"], "moved src", required=True),
+                         dst=_inside(mv["dst"], "moved dst", required=True),
+                         is_dir=mv["is_dir"])
                     for mv in a["moved"]
                 ),
                 path_length=a["path_length"],
-                created=tuple(a.get("created", ())),
-                prune=tuple(a.get("prune", ())),
+                # Both name folders Atlas will rmdir: the same path rule applies.
+                created=tuple(_inside(k, "created", required=True)
+                              for k in a.get("created", ())),
+                prune=tuple(_inside(k, "prune", required=True)
+                            for k in a.get("prune", ())),
             )
             for a in payload["actions"]
         )
-        return Plan(project=payload["project"], actions=actions)
+        return Plan(project=_one_folder(payload["project"]), actions=actions)
     except (KeyError, TypeError) as error:
         raise OpsError(f"manifest is missing {error}") from error
+
+
+def _known_kind(kind: object) -> str:
+    if kind not in (BACKFILL, RENAME, RELOCATE, SWEEP):
+        raise OpsError(f"manifest names an unknown action kind {kind!r}")
+    return kind
+
+
+def _inside(path: object, field: str, *, required: bool = False) -> str:
+    """A project-relative path from an operator-supplied manifest, or refuse.
+
+    Every path in a manifest is joined onto the project folder. Without this, a
+    crafted ``..``, absolute or drive-lettered path moved things in from - or
+    out to - anywhere the operator could write (#9).
+    """
+    if not isinstance(path, str):
+        raise OpsError(f"manifest {field} is not a path: {path!r}")
+    normalised = path.replace("\\", "/")
+    parts = normalised.split("/")
+    if (normalised.startswith("/") or re.match(r"^[A-Za-z]:", normalised)
+            or ".." in parts or (required and not node_key(normalised))):
+        raise OpsError(f"manifest {field} '{path}' is not a path inside the project")
+    return path
+
+
+def _one_folder(name: object) -> str:
+    """A manifest's project: one folder name, never a path."""
+    if (not isinstance(name, str) or not name or name in (".", "..")
+            or any(c in name for c in "/\\:")):
+        raise OpsError(f"manifest project {name!r} is not a project folder name")
+    return name
 
 
 # ----------------------------------------------------------------- inverse
@@ -269,12 +348,8 @@ def parent_key(rel: str) -> str:
 
 def child_key(parent: str, name: str) -> str:
     """The Node Key of ``name`` inside ``parent``; the root's key is "".
-
-    One join for every manifest path. A plain f-string turns a root parent into
-    ``/name``, which is not a Node Key, and on Windows ``project / "/name"``
-    resolves against the drive root rather than the project.
-    """
-    return "/".join(part for part in (parent, name) if part)
+    ``node_key`` under the name that reads right at a join."""
+    return node_key(parent, name)
 
 
 def invert_plan(plan: Plan) -> Plan:
@@ -296,8 +371,10 @@ def invert_plan(plan: Plan) -> Plan:
     still refused: its manifest never describes what it changed.
     """
     for action in plan.actions:
-        if action.status == SKIPPED:
+        if action.status == SKIPPED or (action.status == FAILED and not action.moved):
             continue    # nothing happened, so there is nothing to reverse
+        if action.status == FAILED:
+            continue    # stopped part-way: what its manifest moved goes back
         if action.status == CONFLICT and action.kind in (RENAME, RELOCATE, SWEEP):
             continue    # the manifest names exactly what moved, possibly nothing
         if action.status != DONE:
@@ -356,6 +433,11 @@ def _watched_dirs(plan: Plan) -> tuple[str, ...]:
     return tuple(sorted(dirs))
 
 
+def _identity(action: Action) -> tuple[str, str, str]:
+    """What an action does, without what it costs to describe."""
+    return action.kind, action.src, action.dst
+
+
 def _snapshot(project: Path, dirs: tuple[str, ...]) -> tuple[_Snapshot, ...]:
     """Enumerate the watched directories, carrying Load State so that a folder
     that became unreadable reads as a change rather than as an empty one."""
@@ -396,11 +478,21 @@ class Guard:
     derived: bool = True
 
     @classmethod
-    def for_project(cls, drive_root: Path, project: str, m: DriveMap, plan: Plan) -> Guard:
-        """Guard a whole-project conform: every action, and the project root."""
+    def for_project(cls, drive_root: Path, project: str, m: DriveMap, plan: Plan,
+                    root_listing: Listing | None = None) -> Guard:
+        """Guard a whole-project conform: every action, and the project root.
+
+        ``root_listing`` is the root as the preview's scan saw it. Pass it when
+        the plan came from that scan, so a change between scan and confirm is
+        caught too; without it the root is snapshotted now.
+        """
+        if root_listing is None:
+            watched = _snapshot(drive_root / project, ("",))
+        else:
+            watched = (("", root_listing.state,
+                        tuple(sorted((e.name, e.is_dir) for e in root_listing))),)
         return cls(project=project, drive_map=m, actions=plan.actions,
-                   watched=_snapshot(drive_root / project, ("",)),
-                   whole_project=True)
+                   watched=watched, whole_project=True)
 
     @classmethod
     def for_action(cls, drive_root: Path, project: str, m: DriveMap, plan: Plan) -> Guard:
@@ -451,14 +543,20 @@ class Guard:
         if self.derived:
             inv = ProjectInventory(path=project_path, name=self.project,
                                    root_entries=list_entries(project_path))
-            report = report_project(inv, fresh_map)
             if self.whole_project:
+                report = report_project(inv, fresh_map)
                 fresh = build_plan(report, fresh_map, project=project_path).actions
+                if fresh != self.actions:
+                    return f"{self.project} no longer needs the same work"
             else:
-                fresh = build_repair_plan(report, fresh_map, self.node,
-                                          project=project_path).actions
-            if fresh != self.actions:
-                return f"{self.project} no longer needs the same work"
+                # What ADR 0006 promised and the first version did not do: no
+                # walk. File counts and path lengths describe the work, they do
+                # not decide it - the action is its kind and its two ends, and
+                # the watched parents below catch anything that moved (#46).
+                report = report_project(inv, fresh_map, count_files=False)
+                fresh = build_repair_plan(report, fresh_map, self.node).actions
+                if [_identity(a) for a in fresh] != [_identity(a) for a in self.actions]:
+                    return f"{self.project} no longer needs the same work"
 
         if _snapshot(project_path, tuple(rel for rel, _s, _e in self.watched)) != self.watched:
             return f"{self.project} changed on disk since the preview"
@@ -475,30 +573,67 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
     applied: list[Action] = []
     order = {BACKFILL: 0, RENAME: 1, RELOCATE: 2, SWEEP: 3}
     ordered = plan.actions if plan.inverse else sorted(plan.actions, key=lambda a: order[a.kind])
-    for action in ordered:
-        if only and action.kind not in only:
-            applied.append(replace(action, status=SKIPPED, note="filtered by --only"))
-            continue
-        absent = _absent_chain(project, _created_root(action))
-        if action.kind == BACKFILL:
-            result = _apply_backfill(project, m, action)
-        elif action.kind in (RENAME, RELOCATE):
-            result = _apply_move(project, action, merge_into_existing=True,
-                                 remove_empty_duplicate=not plan.inverse)
-        else:
-            result = _apply_sweep(project, action)
-        created = tuple(rel for rel in absent if (project / rel).exists())
-        if created:
-            result = replace(result, created=created)
-        if result.status == DONE and action.prune:
-            _prune_empty(project, action.prune)
-        applied.append(result)
-    result = Plan(project=plan.project, actions=tuple(applied), inverse=plan.inverse)
-    done = [a for a in result.actions if a.status == DONE]
-    if done:
-        append_log(drive_root, f"[{project.name}] conform: " +
-                   "; ".join(f"{a.kind} {a.src or a.dst} -> {a.dst}" for a in done))
-    return result
+    try:
+        for action in ordered:
+            if only and action.kind not in only:
+                applied.append(replace(action, status=SKIPPED, note="filtered by --only"))
+                continue
+            # One failed action fails that action, not the process: a file held
+            # open in Revit or Excel refuses the rename, and everything that
+            # already moved must still be recorded, logged and undoable.
+            try:
+                absent = _absent_chain(project, _created_root(action))
+                result = _apply_one(project, m, action, inverse=plan.inverse)
+            except OSError as error:
+                applied.append(replace(action, status=FAILED, note=_os_note(error)))
+                continue
+            created = tuple(rel for rel in absent if (project / rel).exists())
+            if created:
+                result = replace(result, created=created)
+            if result.status == DONE and action.prune:
+                _prune_empty(project, action.prune)
+            applied.append(result)
+    finally:
+        _log_applied(drive_root, project, applied)
+    return Plan(project=plan.project, actions=tuple(applied), inverse=plan.inverse)
+
+
+def _apply_one(project: Path, m: DriveMap, action: Action, *, inverse: bool = False) -> Action:
+    if action.kind == BACKFILL:
+        return _apply_backfill(project, m, action)
+    if action.kind in (RENAME, RELOCATE):
+        return _apply_move(project, action, merge_into_existing=True,
+                           remove_empty_duplicate=not inverse)
+    if action.kind == SWEEP:
+        return _apply_sweep(project, action)
+    return replace(action, status=SKIPPED, note=f"unknown action kind '{action.kind}'")
+
+
+def _os_note(error: OSError, where: str = "") -> str:
+    name = Path(error.filename).name if error.filename else where
+    reason = error.strerror or str(error)
+    return f"{name}: {reason}" if name else reason
+
+
+def _log_applied(drive_root: Path, project: Path, applied: list[Action]) -> None:
+    """One drive-log line for whatever changed the drive, failures included.
+
+    Written in a ``finally`` so a failure part-way still leaves a record of
+    what moved before it. A failed action is logged only when it moved
+    something - its manifest is the record.
+    """
+    parts = []
+    for a in applied:
+        if a.status == DONE:
+            parts.append(f"{a.kind} {a.src or a.dst} -> {a.dst}")
+        elif a.status == FAILED and a.moved:
+            moved = ", ".join(f"{mv.src} -> {mv.dst}" for mv in a.moved)
+            parts.append(f"{a.kind} {a.src} -> {a.dst} FAILED ({a.note}) after moving {moved}")
+    if parts:
+        try:
+            append_log(drive_root, f"[{project.name}] conform: " + "; ".join(parts))
+        except OSError:
+            pass    # the log is a record, never a reason to lose the result
 
 
 def _created_root(action: Action) -> str:
@@ -720,19 +855,28 @@ def _backfill_claude(project: Path, m: DriveMap, action: Action) -> Action:
 
 # ---- moves (renames + relocations share one engine) -------------------------
 
-def _file_count(path: Path) -> int:
-    total = 0
-    for _r, _d, files in os.walk(path, followlinks=False):
-        total += len(files)
-    return total
+def _empty_levels(path: Path):
+    """The bottom-up walk of ``path`` if nothing beneath holds a file or a link
+    and every folder could be read; otherwise None. Not known empty is not empty."""
+    errors: list[tuple[str, str]] = []
+    levels = list(walk(path, topdown=False, errors=errors))
+    if errors or any(files or links for _root, _dirs, files, links in levels):
+        return None
+    return levels
 
 
 def _remove_if_file_empty(path: Path) -> bool:
-    if _file_count(path) != 0:
+    """rmdir ``path`` and its folders if nothing beneath holds a file or a link.
+
+    A link is content: its target lives elsewhere, and walking into a junction
+    here once removed empty folders outside the project.
+    """
+    levels = _empty_levels(path)
+    if levels is None:
         return False
-    for root, dirs, _files in os.walk(path, topdown=False, followlinks=False):
+    for root, dirs, _files, _links in levels:
         for d in dirs:
-            (Path(root) / d).rmdir()
+            os.rmdir(long_path(os.path.join(root, d)))
     path.rmdir()
     return True
 
@@ -763,7 +907,7 @@ def move_effect(project: Path, action: Action, *, inverse: bool = False) -> str:
     dst = project / action.dst
     if not dst.exists() or _same_folder(src, dst):
         return MOVE
-    if not inverse and src.is_dir() and _file_count(src) == 0:
+    if not inverse and src.is_dir() and _empty_levels(src) is not None:
         return REMOVE
     return MERGE
 
@@ -775,11 +919,29 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
     if not src.is_dir():
         return replace(action, status=SKIPPED, note="source gone")
 
+    # A source with a folder Atlas cannot read is not known to be empty, and
+    # what cannot be seen cannot be accounted for in a manifest. Leave it.
+    tally = tally_files(src)
+    if not tally.known:
+        rel, _why = tally.unreadable[0]
+        where = action.src if rel == "." else f"{action.src}/{rel}"
+        return replace(action, status=CONFLICT, note=f"cannot read {where}; left in place")
+
     if _same_folder(src, dst) and action.src != action.dst:
         # Case-only rename on a case-insensitive mount: two-step via temp.
         tmp = src.with_name(src.name + ".atlas-tmp")
         src.rename(tmp)
-        tmp.rename(dst)
+        try:
+            tmp.rename(dst)
+        except OSError as error:
+            # Never strand the folder under its temp name: put it back first.
+            try:
+                tmp.rename(src)
+            except OSError:
+                return replace(action, status=FAILED, note=(
+                    f"{_os_note(error, action.src)}; left as {tmp.name}"),
+                    moved=(Move(src=action.src, dst=f"{action.src}.atlas-tmp", is_dir=True),))
+            return replace(action, status=FAILED, note=_os_note(error, action.src))
         return replace(action, status=DONE, note="case-only rename",
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
 
@@ -802,17 +964,24 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
     # Merge, never clobber: move each child whose name is free at the target.
     manifest: list[Move] = []
     left = 0
-    for child in list(src.iterdir()):
-        target = dst / child.name
-        if target.exists():
-            left += 1
-            continue
-        is_dir = child.is_dir()
-        child.rename(target)
-        manifest.append(Move(src=f"{action.src}/{child.name}",
-                             dst=f"{action.dst}/{child.name}", is_dir=is_dir))
+    try:
+        for child in list(src.iterdir()):
+            target = dst / child.name
+            if target.exists():
+                left += 1
+                continue
+            is_dir = child.is_dir()
+            child.rename(target)
+            manifest.append(Move(src=child_key(action.src, child.name),
+                                 dst=child_key(action.dst, child.name), is_dir=is_dir))
+        emptied = left == 0 and _remove_if_file_empty(src)
+    except OSError as error:
+        # Earlier children already moved. The manifest is the only record of
+        # which, so it leaves with the failure rather than being lost to it.
+        return replace(action, status=FAILED, note=_os_note(error),
+                       moved=tuple(manifest))
     moved = len(manifest)
-    if left == 0 and _remove_if_file_empty(src):
+    if emptied:
         return replace(action, status=DONE, note=f"merged {moved} item(s)",
                        moved=tuple(manifest))
     return replace(action, status=CONFLICT,

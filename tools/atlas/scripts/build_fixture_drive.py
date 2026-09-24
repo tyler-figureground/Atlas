@@ -1,6 +1,8 @@
 """Build a throwaway fixture drive that shows all four repairable Filing States.
 
-Never point this at the studio drive. It writes only under the path given.
+Never point this at the studio drive. It writes only under the path given, and
+it replaces an existing folder only when that folder carries the marker file it
+wrote there itself.
 """
 
 from __future__ import annotations
@@ -11,6 +13,10 @@ import sys
 from pathlib import Path
 
 from pypdf import PdfWriter
+
+# Written at the root of every drive this script builds. Its presence is the only
+# thing that lets a later run delete that folder.
+MARKER = ".atlas-fixture"
 
 FIXTURE_MAP = {
     "drive": "TESTDRIVE",
@@ -59,9 +65,35 @@ def _pdf(path: Path, title: str) -> None:
         writer.write(handle)
 
 
+def _clear(root: Path) -> None:
+    """Empty ``root`` only if this script built it.
+
+    A mistyped or tab-completed argument must never cost a real drive, project
+    or repo: on a Drive File Stream mount the deletion syncs to the shared drive.
+    So an existing, non-empty folder is removed only when it carries the marker
+    this script writes, and anything else is refused before a byte is touched.
+    """
+    if not root.exists():
+        return
+    if not root.is_dir():
+        raise SystemExit(f"refusing: {root} is a file, not a fixture drive")
+    if not any(root.iterdir()):
+        return
+    if not (root / MARKER).is_file():
+        raise SystemExit(
+            f"refusing: {root} exists, is not empty, and has no {MARKER} - "
+            "this script only replaces a fixture drive it built itself"
+        )
+    shutil.rmtree(root)
+
+
 def build(root: Path) -> None:
-    if root.exists():
-        shutil.rmtree(root)
+    _clear(root)
+    root.mkdir(parents=True, exist_ok=True)
+    (root / MARKER).write_text(
+        "Built by tools/atlas/scripts/build_fixture_drive.py. Safe to delete.\n",
+        encoding="utf-8",
+    )
     tools = root / "_tools"
     tools.mkdir(parents=True)
     (tools / "testdrive-map.json").write_text(

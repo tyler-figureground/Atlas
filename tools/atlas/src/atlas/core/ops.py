@@ -12,7 +12,6 @@ steps each.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +31,7 @@ from .project_index import (
     append_project_index_row,
     preflight_project_index,
 )
+from .scan import walk
 from .projectmd import (
     agents_md_lines,
     claude_md_lines,
@@ -252,7 +252,9 @@ def find_empty_dirs(project: Path, m: DriveMap, include_seeds: bool = False) -> 
     seed_ids = {s.id for s in m.sections if s.seed}
 
     empties: list[str] = []
-    for root, dirs, files in os.walk(project, topdown=False, followlinks=False):
+    # Bottom-up, never through a link: a junction's target lives outside the
+    # project, and a link counts as content so its folder is never "empty".
+    for root, dirs, files, links in walk(project, topdown=False):
         root_path = Path(root)
         if root_path == project:
             continue
@@ -264,8 +266,9 @@ def find_empty_dirs(project: Path, m: DriveMap, include_seeds: bool = False) -> 
             continue
         if not include_seeds and rel in seed_ids:
             continue
-        # Empty means: no files here, and every subdir already marked empty.
-        if files:
+        # Empty means: no files or links here, and every subdir already marked
+        # empty.
+        if files or links:
             continue
         if all(f"{rel}/{d}" in empties for d in dirs):
             empties.append(rel)

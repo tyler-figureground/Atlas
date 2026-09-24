@@ -7,7 +7,7 @@ generated_by: skills-for-architects
 # atlas tree - the tree's facts on the CLI
 
 Type: task
-Status: open
+Status: resolved (GitHub #30) - `cmd_tree` in `cli.py`, tests in `tests/test_tree_cli.py`
 Blocked by: -
 Parent: ../map.md
 

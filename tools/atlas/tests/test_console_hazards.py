@@ -69,9 +69,11 @@ async def test_a_load_finished_for_the_previous_project_is_dropped(fixture_drive
         await settle(app, pilot)
         view = app.query_one(ProjectTreeView)
         view.set_source(new)
-        assert view.loading
+        # Loading shows after a short delay; the timer is the pending state.
+        assert view.loading or view._loading_timer is not None
         view._loaded("", old)          # the old project's root read, landing late
-        assert view.loading, "a stale load cleared the new project's loading state"
+        assert view.loading or view._loading_timer is not None, \
+            "a stale load cleared the new project's loading state"
         assert [n.data for n in view.root.children] == []
         await settle(app, pilot)
         assert [n.data for n in view.root.children] == ["06 Research", "08 OUT"]
