@@ -538,11 +538,18 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
             args.other_use_case = _prompt_retain(
                 "Other Project Use Case", current.project_use_case.custom_label
             )
+        # Default to the stable contact ID, never the snapshot email: the
+        # email may have changed in the directory, or now belong to someone
+        # else (ADR 0003).
         args.billing_contact = _prompt_retain(
-            "Billing Contact ID or email", record.billing_contact.email
+            f"Billing Contact ID or email (now {record.billing_contact.full_name} "
+            f"<{record.billing_contact.email}>)",
+            current.billing_contact_id,
         )
         args.client_contact = _prompt_retain(
-            "Client Contact ID or email", record.client_contact.email
+            f"Client Contact ID or email (now {record.client_contact.full_name} "
+            f"<{record.client_contact.email}>)",
+            current.client_contact_id,
         )
         args.desc = _prompt_retain(
             "Description", current.description, clearable=True
