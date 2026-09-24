@@ -28,7 +28,8 @@ leaves conflicts in place. Clean removes file-empty folders only.
 | `atlas conform --project NAME --node PATH [--apply]` | Preview or apply the repair for one node, by project-relative path |
 | `atlas conform --revert FILE` | Undo an applied conform from the `--json` manifest it printed |
 
-TUI keys: `n` new project, `e` edit selected project, `m` manage contacts, `/` filter,
+TUI keys: `n` new project, `e` edit selected project, `m` manage contacts, `/` filter the
+focused Region (projects by name or health; the tree by the names it has opened, never reading more),
 `Enter` drill in or confirm, `Escape` back, `Tab` next Region, `Space` mark or open a folder,
 `x` conform marked, `a` add folders, `f` conform, `u` undo, `?` help, `Ctrl+P` command palette.
 Additional actions remain searchable in the palette.

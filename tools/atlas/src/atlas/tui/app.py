@@ -829,6 +829,7 @@ class AtlasApp(App):
     #mark { height: auto; padding: 1 2 0 2; }
     #drives { height: 1fr; padding: 1 2; }
     #filter { display: none; margin: 0 1; }
+    #tree-filter { display: none; }
     #custom-use-case-label, #custom-use-case { display: none; }
     #console { height: 1fr; }
     #projects { width: 2fr; height: 1fr; }
@@ -924,6 +925,8 @@ class AtlasApp(App):
                 yield Static("", id="workspace-title", markup=False)
                 with Vertical(id="tree"):
                     yield ProjectTreeView(id="tree-body")
+                    yield Input(placeholder="Filter opened folders and files by name",
+                                id="tree-filter")
                 with VerticalScroll(id="companion"):
                     yield Static("", id="companion-title", markup=False)
                     yield Static("", id="companion-body", markup=False)
@@ -1073,7 +1076,8 @@ class AtlasApp(App):
         if not region.display:
             return
         widget = region if region.focusable else next(
-            (child for child in region.query("*") if child.focusable), None)
+            (child for child in region.query("*") if child.focusable and child.display),
+            None)
         if widget is not None:
             widget.focus()
 
@@ -1423,6 +1427,10 @@ class AtlasApp(App):
             # A new project answers a new question; the Companion goes back to
             # the mode that has to be readable beside the tree (ADR 0005).
             self._companion_mode = DEFAULT_MODE
+            # A tree filter belongs to the tree it narrowed.
+            tree_filter = self.query_one("#tree-filter", Input)
+            tree_filter.value = ""
+            tree_filter.display = False
         if row.key in self._trees or not self._follow_debounce:
             self._update_workspace(row)
             return
@@ -1481,9 +1489,11 @@ class AtlasApp(App):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "filter":
             self._fill()
+        elif event.input.id == "tree-filter":
+            self.query_one(ProjectTreeView).set_filter(event.value)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "filter":
+        if event.input.id in {"filter", "tree-filter"}:
             self._focus_current_region()
 
     # ------------------------------------------------------------- feedback and workers
@@ -1581,6 +1591,13 @@ class AtlasApp(App):
             # Escape unwinds, and the innermost thing to unwind out of is an
             # armed write. Nothing has happened on disk, so this costs nothing.
             return
+        tree_filter = self.query_one("#tree-filter", Input)
+        if tree_filter.display and self._focus_region == TREE:
+            tree_filter.value = ""
+            tree_filter.display = False
+            self.query_one(ProjectTreeView).set_filter("")
+            self._focus_current_region()
+            return
         filter_input = self.query_one("#filter", Input)
         if filter_input.display:
             filter_input.value = ""
@@ -1673,7 +1690,18 @@ class AtlasApp(App):
         self._focus_current_region()
 
     def action_filter_projects(self) -> None:
+        """`/` filters whichever Region has focus (ADR 0005): the Project List
+        by project name or health, the tree by the names it has opened."""
         if self._busy or self._inventory is None:
+            return
+        if self._showing == "projects" and self._focus_region == TREE:
+            tree_filter = self.query_one("#tree-filter", Input)
+            tree_filter.display = True
+            tree_filter.focus()
+            return
+        if self._showing == "projects" and self._focus_region == COMPANION:
+            # The Companion's lists are a handful of lines; nothing to narrow.
+            self._set_operation("/ filters the project list or the tree - Tab to one")
             return
         filter_input = self.query_one("#filter", Input)
         filter_input.display = True

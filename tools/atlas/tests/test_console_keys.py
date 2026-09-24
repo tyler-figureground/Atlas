@@ -143,6 +143,93 @@ async def test_enter_in_a_modal_never_commits_an_armed_repair(fixture_drive):
     assert (fixture_drive / "260813_Fixit" / "Meetings").is_dir(), "the repair behind the modal ran"
 
 
+# ------------------------------------------------ `/` filters the focused Region (#41)
+
+
+def tree_rows(tree: ProjectTreeView) -> list[str]:
+    rows = []
+
+    def walk(node):
+        for child in node.children:
+            rows.append(str(child.data))
+            if child.is_expanded:
+                walk(child)
+
+    walk(tree.root)
+    return rows
+
+
+def nested(drive):
+    make_project(drive, "260501_Alpha",
+                 sections=["01 Model/01 Site Model", "06 Research/Zoning", "Meetings"],
+                 files={"Meetings/k.md": "z"})
+    make_project(drive, "260502_Bravo", sections=["01 Model"])
+
+
+async def test_slash_in_the_tree_filters_the_tree_not_the_hidden_list(fixture_drive, monkeypatch):
+    """ADR 0005: `/` filters whichever Region has focus. At Single-Region widths
+    it used to filter the hidden project list - `Zed` blanked the tree and
+    `Bravo` swapped it to another project."""
+    nested(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(87, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        tree = app.query_one(ProjectTreeView)
+        tree.node_for("01 Model").expand()
+        await settle(app, pilot)
+        project = app._workspace_project
+        everything = tree_rows(tree)
+        assert "01 Model/01 Site Model" in everything
+
+        import atlas.core.tree as core_tree
+        reads = []
+        real = core_tree.list_entries
+        monkeypatch.setattr(core_tree, "list_entries",
+                            lambda path: reads.append(path) or real(path))
+
+        await pilot.press("slash", *"Bravo")
+        await settle(app, pilot)
+        assert app._workspace_project == project, "the tree swapped project"
+        assert app.query_one("#projects", DataTable).row_count == 2
+        assert tree_rows(tree) == []
+
+        filter_box = app.query_one("#tree-filter", Input)
+        filter_box.value = "site"
+        await settle(app, pilot)
+        assert tree_rows(tree) == ["01 Model", "01 Model/01 Site Model"]
+        assert reads == [], "filtering read the drive"
+
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert isinstance(app.focused, ProjectTreeView)
+        assert tree_rows(tree) == ["01 Model", "01 Model/01 Site Model"], "Enter kept it"
+
+        await pilot.press("slash")
+        await pilot.pause()
+        await pilot.press("escape")
+        await settle(app, pilot)
+        assert tree_rows(tree) == everything, "Escape restores the tree as it was"
+        assert isinstance(app.focused, ProjectTreeView)
+
+
+async def test_slash_in_the_companion_says_what_it_filters(fixture_drive):
+    nested(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("enter", "enter")
+        await settle(app, pilot)
+        assert app._focus_region == "companion"
+        await pilot.press("slash")
+        await pilot.pause()
+        assert not app.query_one("#filter", Input).display
+        assert "/" in app._operation_text
+
+
 # ------------------------------------------------ launching on a drive (#53)
 
 

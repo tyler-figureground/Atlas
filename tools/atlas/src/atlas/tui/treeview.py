@@ -183,6 +183,9 @@ class ProjectTreeView(Tree):
         self._by_key: dict[str, TreeNodeWidget] = {}
         self._opened: set[str] = set()
         self._pending_key: str | None = None
+        self._filter = ""
+        self._expanded_before: set[str] = set()
+        self._drawn: dict[str, list[TreeNode]] = {}
         self.show_root = False
         self.guide_depth = 2
 
@@ -196,6 +199,9 @@ class ProjectTreeView(Tree):
         self._by_key = {}
         self._opened = set()
         self._pending_key = None
+        self._filter = ""
+        self._expanded_before = set()
+        self._drawn = {}
         self.reset("", data="")
         self._by_key[""] = self.root
         # The root level is a displayed node like any other, so it is read the
@@ -240,6 +246,78 @@ class ProjectTreeView(Tree):
             if sibling.key == key:
                 self._facts[key] = sibling
                 return
+
+    # ---- the Tree Region's filter (ADR 0005: `/` filters the focused Region)
+
+    @property
+    def filter_text(self) -> str:
+        return self._filter
+
+    def set_filter(self, query: str) -> None:
+        """Show only the loaded nodes whose names contain ``query``, with the
+        folders that lead to them; an empty query restores the tree as it was.
+
+        Never reads. It searches what Atlas has already opened - the nodes the
+        widget holds facts for - because a filter that walked the project to
+        find a name would be the enumeration ticket 06 rules out, one keystroke
+        at a time. A name inside a folder nobody opened is not found, which is
+        the honest answer for a lazy tree.
+        """
+        query = query.strip().casefold()
+        if query == self._filter:
+            return
+        if not self._filter:
+            # Snapshot what is drawn - every loaded node, open or closed - and
+            # the operator's own expansion, to give both back on clear.
+            self._drawn = {}
+            self._expanded_before = set()
+
+            def walk(node: TreeNodeWidget, key: str) -> None:
+                for child in node.children:
+                    child_key = str(child.data or "")
+                    if child_key not in self._facts:
+                        continue
+                    self._drawn.setdefault(key, []).append(self._facts[child_key])
+                    if child.is_expanded:
+                        self._expanded_before.add(child_key)
+                    walk(child, child_key)
+
+            walk(self.root, "")
+        self._filter = query
+
+        children = self._drawn
+        keep: set[str] | None = None
+        if query:
+            keep = set()
+            for facts in (f for group in children.values() for f in group):
+                if query in facts.name.casefold():
+                    key = facts.key
+                    while key and key not in keep:
+                        keep.add(key)
+                        key = parent_key(key)
+
+        self.reset("", data="")
+        self._by_key = {"": self.root}
+
+        def add(parent: TreeNodeWidget, key: str) -> None:
+            for facts in children.get(key, ()):
+                if keep is not None and facts.key not in keep:
+                    continue
+                if facts.is_dir:
+                    expand = (facts.key in children and
+                              (keep is not None or facts.key in self._expanded_before))
+                    node = parent.add(facts.name, data=facts.key, expand=expand)
+                    self._by_key[facts.key] = node
+                    add(node, facts.key)
+                else:
+                    self._by_key[facts.key] = parent.add_leaf(facts.name, data=facts.key)
+
+        add(self.root, "")
+        if not query:
+            self._expanded_before = set()
+            self._drawn = {}
+        if self.root.children:
+            self.cursor_line = 0
 
     def node_for(self, key: str) -> TreeNodeWidget | None:
         """The widget node for a Node Key, or None if it is not drawn."""
