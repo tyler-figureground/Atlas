@@ -250,3 +250,46 @@ def test_a_backfill_reports_what_it_created():
     action = Action(kind=BACKFILL, src="", dst="decisions", status=DONE)
 
     assert result_line(action) == "Done: create decisions"
+
+
+def test_a_skipped_action_does_not_read_as_done():
+    """Issue #20. The line printed `Done:` whatever the status said."""
+    action = Action(kind=RELOCATE, src="11 Meetings", dst="Meetings",
+                    status="skipped", note="source gone")
+
+    line = result_line(action)
+    assert not line.startswith("Done"), line
+    assert "skipped" in line.lower() and "source gone" in line
+
+
+def test_a_removal_reads_as_a_removal_not_the_rename_it_was_previewed_as():
+    action = Action(kind=RELOCATE, src="08 OUT/Invoices", dst="10 Legal/Invoices",
+                    status=DONE, note="removed file-empty source")
+
+    line = result_line(action)
+    assert "remove" in line.lower() and "08 OUT/Invoices" in line, line
+    assert "->" not in line
+
+
+def test_a_note_rides_along_with_done():
+    action = Action(kind=RENAME, src="Meetings", dst="11 Meetings", status=DONE,
+                    note="merged 2 item(s)")
+
+    assert "merged 2 item(s)" in result_line(action)
+
+
+def test_a_repair_that_cannot_be_undone_says_so():
+    action = Action(kind=BACKFILL, src="", dst="CLAUDE.md", status=DONE)
+
+    assert "cannot be undone" in result_line(action, undoable=False)
+
+
+def test_the_confirm_says_merge_when_the_destination_exists():
+    """Issue #20: `rename Meetings -> 11 Meetings` when 11 Meetings exists and
+    the action will merge into it."""
+    plan = plan_of(Action(kind=RENAME, src="Meetings", dst="11 Meetings"))
+
+    assert confirm_line(plan, effect="merge").startswith("merge Meetings -> 11 Meetings")
+    removal = confirm_line(plan_of(Action(kind=RELOCATE, src="08 OUT/Invoices",
+                                          dst="10 Legal/Invoices")), effect="remove")
+    assert removal.startswith("remove empty 08 OUT/Invoices"), removal

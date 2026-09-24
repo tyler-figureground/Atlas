@@ -17,10 +17,15 @@ from dataclasses import dataclass
 from ..core.conform import (
     BACKFILL,
     CONFLICT,
+    DONE,
+    MERGE,
     RELOCATE,
+    REMOVE,
     RENAME,
+    SKIPPED,
     SWEEP,
     WINDOWS_MAX_PATH,
+    Action,
     NotInvertible,
     Plan,
     invert_plan,
@@ -99,7 +104,7 @@ def confirms_inline(plan: Plan) -> bool:
 
 
 def confirm_line(plan: Plan, width: int = 0, *, project: str = "",
-                 prefix: str = "") -> str:
+                 prefix: str = "", effect: str = "") -> str:
     """What the operation line reads while a repair is armed.
 
     Names the project as well as the path: every project has a ``Meetings``, and
@@ -115,6 +120,13 @@ def confirm_line(plan: Plan, width: int = 0, *, project: str = "",
     verb = _VERB.get(action.kind, action.kind)
     subject = action.src or action.dst
     body = f"{verb} {subject} -> {action.dst}" if action.src else f"{verb} {action.dst}"
+    # ``effect`` is core's move_effect: what the move will actually do on disk.
+    # A move into an existing folder merges, and a file-empty source is removed
+    # outright; the line has to say so rather than promise a rename (#20, #5).
+    if effect == MERGE:
+        body = f"merge {action.src} -> {action.dst}"
+    elif effect == REMOVE:
+        body = f"remove empty {action.src} ({action.dst} exists)"
     if action.path_length > WINDOWS_MAX_PATH:
         body += f"  [path {action.path_length} > {WINDOWS_MAX_PATH}]"
     if project:
@@ -132,7 +144,10 @@ def confirm_line(plan: Plan, width: int = 0, *, project: str = "",
     return line
 
 
-def result_line(action: Action) -> str:
+_REMOVED = "removed file-empty source"
+
+
+def result_line(action: Action, *, undoable: bool = True) -> str:
     """What the operation line reads once a repair has been applied.
 
     The same verb the armed line used. `sweep` and `relocate` are the model's
@@ -140,11 +155,40 @@ def result_line(action: Action) -> str:
     ago; reporting the result in a different vocabulary reads as a different
     operation. The project root is named rather than printed, because its path is
     the empty string and an arrow pointing at nothing is not a destination.
+
+    It reports what happened, not what was previewed (#20): the status leads, a
+    note rides along, a removal says removal, and a write the undo stack could
+    not keep says it cannot be undone.
     """
     verb = _VERB.get(action.kind, action.kind)
-    if not action.src:
-        return f"Done: {verb} {action.dst}"
-    return f"Done: {verb} {action.src} -> {action.dst or 'the project root'}"
+    if action.note == _REMOVED:
+        what = f"removed empty {action.src}"
+        note = ""
+    else:
+        what = (f"{verb} {action.src} -> {action.dst or 'the project root'}"
+                if action.src else f"{verb} {action.dst}")
+        note = action.note
+    lead = {SKIPPED: "Skipped", CONFLICT: "Conflict"}.get(action.status, "Done")
+    line = f"{lead}: {what}"
+    if note:
+        line += f" - {note}"
+    if not undoable and action.status == DONE:
+        line += " (cannot be undone)"
+    return line
+
+
+def results_line(applied: Plan, where: str, *, undoable: bool = True) -> str:
+    """The same, for a Plan of several actions - a merge's undo. Counted by
+    status, because naming only the first would report part as all of it."""
+    if len(applied.actions) == 1:
+        return result_line(applied.actions[0], undoable=undoable)
+    counts = {status: sum(1 for a in applied.actions if a.status == status)
+              for status in (DONE, SKIPPED, CONFLICT)}
+    parts = [f"{counts[DONE]} moved"]
+    parts += [f"{n} {status}" for status, n in ((SKIPPED, counts[SKIPPED]),
+                                               (CONFLICT, counts[CONFLICT])) if n]
+    lead = "Done" if counts[DONE] == len(applied.actions) else "Partly done"
+    return f"{lead}: {', '.join(parts)} in {where}"
 
 
 # ------------------------------------------------------- the undo stack

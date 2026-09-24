@@ -36,12 +36,15 @@ from textual.widgets import (
 from ..core.conform import (
     CONFLICT,
     DONE,
+    RELOCATE,
+    RENAME,
     SKIPPED,
     Guard,
     Plan,
     apply_plan,
     build_plan,
     build_repair_plan,
+    move_effect,
 )
 from ..core.contacts import (
     Contact,
@@ -105,7 +108,7 @@ from .repair import (
     confirm_line,
     confirms_inline,
     repair_offer,
-    result_line,
+    results_line,
 )
 from .treeview import ProjectTreeView
 
@@ -2233,7 +2236,17 @@ class AtlasApp(App):
             node=offer.target,
         )
         room = (self.size.width or 0) - OPERATION_MARGIN
-        self._set_operation(confirm_line(plan, max(0, room), project=row.key))
+        self._set_operation(confirm_line(plan, max(0, room), project=row.key,
+                                         effect=self._effect(project.path, plan)))
+
+    @staticmethod
+    def _effect(project_path: Path, plan: Plan, *, inverse: bool = False) -> str:
+        """What a one-move Plan will do on disk - move, merge or remove - by the
+        rule _apply_move follows, so the confirm cannot promise a rename (#20)."""
+        action = plan.actions[0]
+        if action.kind not in (RENAME, RELOCATE):
+            return ""
+        return move_effect(project_path, action, inverse=inverse)
 
     def _cancel_repair(self) -> bool:
         """Abandon an armed repair. True if there was one to abandon.
@@ -2301,8 +2314,9 @@ class AtlasApp(App):
             self._armed = _ArmedRepair(project=row.key, plan=inverse, guard=guard,
                                        node=node, region=self._focus_region, undo=entry)
             room = (self.size.width or 0) - OPERATION_MARGIN
+            effect = self._effect(self._inventory.root / row.key, inverse, inverse=True)
             self._set_operation(confirm_line(inverse, max(0, room), project=row.key,
-                                             prefix=prefix))
+                                             prefix=prefix, effect=effect))
             return
 
         project_name = row.key
@@ -2351,26 +2365,26 @@ class AtlasApp(App):
         conflicts = [a for a in applied.actions if a.status == CONFLICT]
         if undo is not None and any(a.status == DONE for a in applied.actions):
             self._undo.drop(project_name, undo)
+        undoable = True
         if remember:
             # The undo's Guard is snapshotted now, as the repair left the drive.
             # Built at `u` time it could not see anything done in between (#6).
-            self._undo.push(
+            # A write the stack refuses says so now, not when `u` finds an older
+            # entry to undo instead (#20).
+            undoable = self._undo.push(
                 project_name, applied,
                 guard_for=lambda inverse: Guard.for_undo(root, project_name,
                                                          inventory.map, inverse))
         self._reconcile_after(project_name, applied, node)
 
-        action = applied.actions[0] if applied.actions else None
-        if conflicts:
-            self._set_operation(
-                f"{conflicts[0].kind} left in place - {conflicts[0].note or 'conflict'}",
-                "warning")
-        elif len(applied.actions) > 1:
-            # Inverting a merge yields one action per child moved. Naming only
-            # the first would report a third of what happened as all of it.
-            self._set_operation(f"Done: {len(applied.actions)} moves in {node or project_name}")
-        elif action is not None:
-            self._set_operation(result_line(action))
+        if not applied.actions:
+            return
+        # Reported by what happened, not by what was previewed (#20). Inverting
+        # a merge yields one action per child moved; results_line counts them.
+        settled = all(a.status == DONE for a in applied.actions)
+        self._set_operation(
+            results_line(applied, node or project_name, undoable=undoable),
+            "information" if settled and not conflicts else "warning")
 
     def _reconcile_after(self, project_name: str, applied: Plan, node: str) -> None:
         """Forget the folders the Move Manifest names and follow the cursor to

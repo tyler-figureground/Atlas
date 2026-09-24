@@ -453,6 +453,52 @@ async def test_the_repair_key_refuses_when_the_tree_is_not_the_selected_project(
         assert untouched(alpha, bravo)
 
 
+# ------------------------------------------ the line says what happened (#20)
+
+
+async def test_the_confirm_says_merge_and_the_result_says_what_moved(fixture_drive):
+    make_project(fixture_drive, "260608_Merge", sections=["01 Model", "Meetings", "11 Meetings"],
+                 files={"Meetings/a.md": "a", "11 Meetings/n.md": "n"})
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        await pilot.press("f")
+        await settle(app, pilot)
+        assert operation_text(app).startswith("merge Meetings -> 11 Meetings"), operation_text(app)
+
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert "merged 1 item(s)" in operation_text(app)
+
+
+async def test_a_removal_is_reported_as_one_and_as_not_undoable(fixture_drive):
+    project = make_project(fixture_drive, "260609_Dup",
+                           sections=["01 Model", "08 OUT/Invoices", "10 Legal/Invoices"])
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        view = app.query_one(ProjectTreeView)
+        view.node_for("08 OUT").expand()
+        await settle(app, pilot)
+        view.select_key("08 OUT/Invoices")
+        await settle(app, pilot)
+        await pilot.press("f")
+        await settle(app, pilot)
+        assert "remove empty 08 OUT/Invoices" in operation_text(app)
+
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        line = operation_text(app)
+        assert "removed empty 08 OUT/Invoices" in line and "cannot be undone" in line, line
+        assert not (project / "08 OUT" / "Invoices").exists()
+
+
 # ------------------------------------------------ the tree stays fresh (#12, #40)
 
 
