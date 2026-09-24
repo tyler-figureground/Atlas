@@ -160,6 +160,70 @@ def test_option_lists_do_not_parse_markup():
     assert not isinstance(AddSectionModal._option_label("[old] Archive"), str)
 
 
+# ------------------------------------- the distinguishing tail survives (#38)
+
+
+def widget_text(widget) -> str:
+    return "\n".join("".join(seg.text for seg in widget.render_line(y))
+                     for y in range(widget.size.height))
+
+
+async def test_long_names_keep_the_part_that_tells_them_apart_at_46_columns(fixture_drive):
+    """The naming convention puts the distinguishing part at the end, which is
+    exactly what right-clipping removes."""
+    make_project(fixture_drive, "260901_1842 Oak Street-Kitchen Renovation", sections=["01 Model"])
+    make_project(fixture_drive, "260901_1842 Oak Street-Kitchen Remodel", sections=["01 Model"])
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(46, 51)) as pilot:
+        await settle(app, pilot)
+        table = app.query_one("#projects", DataTable)
+        shown = widget_text(table)
+        assert "Renovation" in shown and "Remodel" in shown, shown
+
+        await pilot.press("c")
+        await settle(app, pilot)
+        assert isinstance(app.screen, ConfirmListModal)
+        title = widget_text(app.screen.query_one(".dialog-title", Label))
+        assert "Kitchen Re" in title and title.split()[-1] in ("Renovation", "Remodel"), title
+
+
+def test_the_list_gives_up_columns_before_the_name_gets_too_short():
+    from atlas.tui.layout import MIN_PROJECT_CELLS, list_columns
+
+    wide, name = list_columns(87)
+    assert "review" in wide and name >= MIN_PROJECT_CELLS
+    narrow, name = list_columns(46)
+    assert narrow == ("mark", "health", "project")
+    assert name > 20
+
+
+def test_middle_ellipsis_keeps_both_ends():
+    from atlas.tui.treeview import middle_ellipsis
+
+    short = middle_ellipsis("260901_1842 Oak Street-Kitchen Remodel", 24)
+    assert len(short) == 24
+    assert short.startswith("260901_1842") and short.endswith("Remodel")
+    assert middle_ellipsis("abc", 10) == "abc"
+
+
+async def test_the_split_list_keeps_its_columns_on_screen(fixture_drive):
+    """At 120 columns the list is 2fr of the width and Fixes and Review used to
+    sit off its right edge. Columns that do not fit are dropped, not clipped."""
+    make_project(fixture_drive, "260901_1842 Oak Street-Kitchen Renovation", sections=["01 Model"])
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    for width in (100, 120, 153, 179):
+        async with app.run_test(size=(width, 51)) as pilot:
+            await settle(app, pilot)
+            table = app.query_one("#projects", DataTable)
+            header = "".join(seg.text for seg in table.render_line(0))
+            labels = [str(column.label) for column in table.columns.values()]
+            for label in labels:
+                assert label in header, (width, label, header)
+        app = AtlasApp(fixture_drive, follow_debounce=0)
+
+
 # ------------------------------------------------------------- resize (#18)
 
 

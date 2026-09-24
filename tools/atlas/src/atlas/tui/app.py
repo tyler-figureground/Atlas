@@ -86,6 +86,9 @@ from .layout import (
     DEFAULT_MODE,
     SPLIT_COLUMNS,
     EXPECTATIONS,
+    LIST_COLUMNS,
+    list_columns,
+    list_width,
     HEALTH,
     MODE_LABELS,
     PROJECT_LIST,
@@ -107,7 +110,7 @@ from .repair import (
     repair_offer,
     result_line,
 )
-from .treeview import ProjectTreeView
+from .treeview import ProjectTreeView, middle_ellipsis
 
 @dataclass(frozen=True)
 class _ArmedRepair:
@@ -875,6 +878,7 @@ class AtlasApp(App):
         # breakpoint default; the width overrides it only when it cannot carry it.
         self._focus_region = PROJECT_LIST
         self._screen_size: Size | None = None
+        self._list_shape_drawn: tuple[tuple[str, ...], int] | None = None
         self._collapsed: set[str] = set()
         self._zoomed: str | None = None
         self._companion_mode = DEFAULT_MODE
@@ -1016,6 +1020,10 @@ class AtlasApp(App):
         self._merge_status = layout.merge_status
         self._render_chrome(refusing)
         self._render_status()
+        # The list's columns and name width follow the width it is drawn at.
+        if (self._inventory is not None and self._list_shape_drawn is not None
+                and self._list_shape() != self._list_shape_drawn):
+            self._render_table()
 
     def _render_chrome(self, refusing: bool = False) -> None:
         """Textual's footer where there is room for it, three keys where there
@@ -1067,13 +1075,8 @@ class AtlasApp(App):
 
     def on_mount(self) -> None:
         self._refresh_mark()
+        # Columns are added by _render_table, which knows how many fit.
         table = self.query_one("#projects", DataTable)
-        table.add_column("Mark", key="mark", width=4)
-        table.add_column("Health", key="health")
-        table.add_column("Project", key="project")
-        table.add_column("Sections", key="sections")
-        table.add_column("Fixes", key="fixes")
-        table.add_column("Review", key="review")
         table.cursor_type = "row"
         table.display = False
         self._showing = "drives"
@@ -1265,6 +1268,52 @@ class AtlasApp(App):
 
     # ------------------------------------------------------------- table and detail
 
+    def _list_shape(self) -> tuple[tuple[str, ...], int]:
+        """The Project List's columns and name width at this terminal size."""
+        size = self._terminal_size()
+        width = size.width or 80
+        layout = layout_for(
+            width, size.height or 24,
+            focus=self._focus_region, collapsed=self._collapsed, zoomed=self._zoomed,
+        )
+        return list_columns(list_width(width, layout))
+
+    def _render_table(self) -> None:
+        """Draw the visible rows into the list, sized to the width it has.
+
+        Only the drawing: the cursor stays on the same project and nothing
+        follows it, so a resize redraws the list without re-reading the tree.
+        Names shorten in the middle - the convention puts what tells two
+        projects apart at the end, which right-clipping removes.
+        """
+        table = self.query_one("#projects", DataTable)
+        selected = self._selected_row()
+        keys, name_cells = self._list_shape()
+        self._list_shape_drawn = (keys, name_cells)
+        with table.prevent(DataTable.RowHighlighted):
+            if keys != tuple(str(key.value) for key in table.columns):
+                table.clear(columns=True)
+                headers = {key: header for key, header, _ in LIST_COLUMNS}
+                for key in keys:
+                    table.add_column(headers[key], key=key, width=4 if key == "mark" else None)
+            else:
+                table.clear()
+            for row in self._visible_rows:
+                cells = {
+                    "mark": "*" if row.key in self._marked else "",
+                    "health": Text(row.health, style=STATUS_STYLES.get(row.health, "bold")),
+                    "project": Text(middle_ellipsis(row.report.name, name_cells)),
+                    "sections": row.sections,
+                    "fixes": str(row.fixes) if row.fixes else "-",
+                    "review": str(row.review) if row.review else "-",
+                }
+                table.add_row(*(cells[key] for key in keys), key=row.key)
+            if selected is not None:
+                index = next((i for i, row in enumerate(self._visible_rows)
+                              if row.key == selected.key), None)
+                if index is not None:
+                    table.move_cursor(row=index)
+
     def _fill(self, preserve: str | None = None) -> None:
         if self._inventory is None:
             return
@@ -1276,18 +1325,8 @@ class AtlasApp(App):
             sort_column=self._sort_column,
             reverse=self._sort_reverse,
         )
+        self._render_table()
         table = self.query_one("#projects", DataTable)
-        table.clear()
-        for row in self._visible_rows:
-            table.add_row(
-                "*" if row.key in self._marked else "",
-                Text(row.health, style=STATUS_STYLES.get(row.health, "bold")),
-                Text(row.report.name),
-                row.sections,
-                str(row.fixes) if row.fixes else "-",
-                str(row.review) if row.review else "-",
-                key=row.key,
-            )
 
         if self._visible_rows:
             selected_index = next(

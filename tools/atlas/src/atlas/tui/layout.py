@@ -151,6 +151,57 @@ def footer_actions(width: int) -> tuple[str, ...] | None:
     return NAVIGATION_ACTIONS if width < SPLIT_COLUMNS else None
 
 
+# ------------------------------------------------------ the Project List
+
+# (key, header, content width). The project name's width is whatever is left.
+LIST_COLUMNS = (
+    ("mark", "Mark", 4),
+    ("health", "Health", 6),
+    ("project", "Project", 0),
+    ("sections", "Sections", 8),
+    ("fixes", "Fixes", 5),
+    ("review", "Review", 6),
+)
+# What a narrowing list gives up, in order. Sections first - Health already says
+# whether anything is missing - then the two counts, which the Companion's
+# Project health mode spells out in full. Mark, Health and the name stay.
+LIST_DROP_ORDER = (("sections",), ("fixes", "review"))
+# The fewest cells a project name gets before another column is given up.
+MIN_PROJECT_CELLS = 24
+# DataTable's cell padding, both sides, and its vertical scrollbar.
+_CELL_PADDING = 2
+_SCROLLBAR = 2
+
+
+def list_columns(width: int) -> tuple[tuple[str, ...], int]:
+    """Which Project List columns fit ``width`` cells, and the name's share.
+
+    Columns that do not fit are dropped rather than left to sit past the right
+    edge, where the list clipped `Fixes` and `Review` at 120 columns and the
+    header to `Revie` at 153.
+    """
+    keys = [key for key, _, _ in LIST_COLUMNS]
+    content = {key: cells for key, _, cells in LIST_COLUMNS}
+
+    def room(shown: list[str]) -> int:
+        others = sum(content[k] + _CELL_PADDING for k in shown if k != "project")
+        return width - _SCROLLBAR - others - _CELL_PADDING
+
+    for dropped in LIST_DROP_ORDER:
+        if room(keys) >= MIN_PROJECT_CELLS:
+            break
+        keys = [key for key in keys if key not in dropped]
+    return tuple(keys), max(1, room(keys))
+
+
+def list_width(width: int, layout: Layout) -> int:
+    """How wide the Project List is drawn in ``layout``: its 2fr of Split, or
+    all of it when it stands alone."""
+    if layout.composition == SPLIT and len(layout.visible) > 1 and PROJECT_LIST in layout.visible:
+        return width * 2 // 5
+    return width
+
+
 def summary_line(region: str, *, drive_summary: str, project: str,
                  companion_mode: str, companion_count: int) -> str:
     """One line answering for whichever Region has focus."""
