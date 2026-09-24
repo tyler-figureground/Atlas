@@ -101,12 +101,30 @@ class Contact:
     address: dict[str, str] | None
     created_at: str
     updated_at: str
+    # Keys this build does not know, carried through every write untouched so
+    # a newer Atlas on another workstation never has its fields stripped.
+    _extra: Mapping[str, object] = field(default_factory=dict, repr=False, compare=False)
+    _address_extra: Mapping[str, object] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
 
 @dataclass(frozen=True)
 class ContactDirectory:
     contacts: tuple[Contact, ...] = ()
     _digest: str | None = field(default=None, repr=False, compare=False)
+    _extra: Mapping[str, object] = field(default_factory=dict, repr=False, compare=False)
+
+
+_CONTACT_KEYS = frozenset(
+    ("id", "firstName", "lastName", "email", "phone", "company", "address", "createdAt", "updatedAt")
+)
+_ADDRESS_KEYS = frozenset(("street", "unit", "city", "state", "postalCode", "country"))
+_DIRECTORY_KEYS = frozenset(("schemaVersion", "contacts"))
+
+
+def _unknown(raw: Mapping[str, object], known: frozenset[str]) -> dict[str, object]:
+    return {key: value for key, value in raw.items() if key not in known}
 
 
 @dataclass(frozen=True)
@@ -205,7 +223,12 @@ def _contact_from_storage(item: object, path: Path, index: int) -> Contact:
         raise _record_error(path, index, "'company' must be text or null")
     created_at = _required_record_text(item, "createdAt", path, index)
     updated_at = _required_record_text(item, "updatedAt", path, index)
+    raw_address = item.get("address")
     return Contact(
+        _extra=_unknown(item, _CONTACT_KEYS),
+        _address_extra=(
+            _unknown(raw_address, _ADDRESS_KEYS) if isinstance(raw_address, dict) else {}
+        ),
         id=contact_id,
         first_name=first_name,
         last_name=last_name,
@@ -218,7 +241,9 @@ def _contact_from_storage(item: object, path: Path, index: int) -> Contact:
     )
 
 
-def _address_to_storage(value: dict[str, str] | None) -> dict[str, str] | None:
+def _address_to_storage(
+    value: dict[str, str] | None, extra: Mapping[str, object] | None = None
+) -> dict[str, object] | None:
     if value is None:
         return None
     return {
@@ -228,6 +253,7 @@ def _address_to_storage(value: dict[str, str] | None) -> dict[str, str] | None:
         "state": value["state"],
         "postalCode": value["postal_code"],
         "country": value["country"],
+        **(extra or {}),
     }
 
 
@@ -305,9 +331,12 @@ def _validate_draft(draft: ContactDraft) -> _ContactValues:
     )
 
 
-def _contacts_payload(contacts: tuple[Contact, ...]) -> dict[str, object]:
+def _contacts_payload(
+    contacts: tuple[Contact, ...], extra: Mapping[str, object] | None = None
+) -> dict[str, object]:
     return {
         "schemaVersion": 1,
+        **(extra or {}),
         "contacts": [
             {
                 "id": item.id,
@@ -316,9 +345,10 @@ def _contacts_payload(contacts: tuple[Contact, ...]) -> dict[str, object]:
                 "email": item.email,
                 "phone": item.phone,
                 "company": item.company,
-                "address": _address_to_storage(item.address),
+                "address": _address_to_storage(item.address, item._address_extra),
                 "createdAt": item.created_at,
                 "updatedAt": item.updated_at,
+                **item._extra,
             }
             for item in contacts
         ],
@@ -434,6 +464,7 @@ def load_contacts(drive_root: Path) -> ContactDirectory:
     return ContactDirectory(
         contacts=contacts,
         _digest=hashlib.sha256(contents).hexdigest(),
+        _extra=_unknown(raw, _DIRECTORY_KEYS),
     )
 
 
@@ -529,7 +560,9 @@ def add_contact(drive_root: Path, draft: ContactDraft) -> Contact:
                 )
             contacts = tuple(sorted((*directory.contacts, contact), key=_sort_key))
             try:
-                _write_payload(path, _contacts_payload(contacts), directory._digest)
+                _write_payload(
+                    path, _contacts_payload(contacts, directory._extra), directory._digest
+                )
             except _ConcurrentContactWrite:
                 if attempt == 0:
                     continue
@@ -586,6 +619,8 @@ def update_contact(drive_root: Path, contact_id: str, draft: ContactDraft) -> Co
                 address=values.address,
                 created_at=current.created_at,
                 updated_at=updated_at.isoformat().replace("+00:00", "Z"),
+                _extra=current._extra,
+                _address_extra=current._address_extra if values.address else {},
             )
             contacts = tuple(
                 sorted(
@@ -594,7 +629,9 @@ def update_contact(drive_root: Path, contact_id: str, draft: ContactDraft) -> Co
                 )
             )
             try:
-                _write_payload(path, _contacts_payload(contacts), directory._digest)
+                _write_payload(
+                    path, _contacts_payload(contacts, directory._extra), directory._digest
+                )
             except _ConcurrentContactWrite:
                 if attempt == 0:
                     continue
