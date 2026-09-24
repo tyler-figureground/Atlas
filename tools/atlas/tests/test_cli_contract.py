@@ -154,3 +154,51 @@ def test_conform_does_not_call_a_project_with_unfiled_leftovers_ok(fixture_drive
     out = capsys.readouterr().out
     assert "[OK" not in out
     assert "need a person" in out
+
+
+# ------------------------------------------------------- --project (#14)
+
+
+def _escape_setup(tmp_path: Path) -> tuple[Path, Path]:
+    """A drive beside another drive, each with an empty seeded skeleton."""
+    drive = tmp_path / "drive2"
+    drive.mkdir()
+    write_map(drive)
+    make_project(drive, "260101_ProjA", sections=["01 Model", "06 Research/Code"])
+    other = tmp_path / "otherdrive"
+    make_project(other, "ProjZ", sections=["01 Model"])
+    return drive, other
+
+
+@pytest.mark.parametrize("bad", ["..", ".", "260101_ProjA/01 Model",
+                                 "260101_ProjA\\01 Model", "_tools", "ABSOLUTE"])
+def test_clean_refuses_a_project_that_is_not_one_folder_on_this_drive(tmp_path, capsys, bad):
+    drive, other = _escape_setup(tmp_path)
+    if bad == "ABSOLUTE":
+        bad = str(other / "ProjZ")
+
+    assert main(["clean", "--drive", str(drive), "--project", bad, "--apply", "--json"]) == 2
+    assert "error" in capsys.readouterr().err
+    assert (drive / "260101_ProjA" / "01 Model").is_dir()
+    assert (drive / "260101_ProjA" / "06 Research" / "Code").is_dir()
+    assert (other / "ProjZ" / "01 Model").is_dir()
+
+
+@pytest.mark.parametrize("bad", ["..", "."])
+def test_add_refuses_the_drive_root_as_a_project(fixture_drive, capsys, bad):
+    assert main(["add", "--drive", str(fixture_drive), "--project", bad,
+                 "--section", "10 Legal"]) == 2
+    assert not (fixture_drive / "10 Legal").exists()
+    assert not (fixture_drive.parent / "10 Legal").exists()
+
+
+def test_project_edit_refuses_a_path_for_a_folder(fixture_drive, capsys):
+    assert main(["project", "edit", "--drive", str(fixture_drive), "..",
+                 "--yes", "--name", "X"]) == 2
+
+
+def test_a_real_project_still_resolves(fixture_drive, capsys):
+    make_project(fixture_drive, "260101_Fine", sections=["01 Model", "Empty"])
+    assert main(["clean", "--drive", str(fixture_drive), "--project", "260101_Fine",
+                 "--json"]) == 1
+    assert json.loads(capsys.readouterr().out)["empty"] == ["Empty"]

@@ -48,7 +48,13 @@ from .core.project_data import (
     load_project_record,
     preview_project_update,
 )
-from .core.scan import DEFAULT_MOUNT_ROOT, discover_drives, scan_drive
+from .core.scan import (
+    DEFAULT_MOUNT_ROOT,
+    discover_drives,
+    is_project_dir,
+    list_entries,
+    scan_drive,
+)
 
 
 class UsageError(Exception):
@@ -130,10 +136,24 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def _resolve_project(root: Path, name: str) -> Path:
-    project = root / name
-    if not project.is_dir():
+    """The project folder called ``name``, looked up the way conform does.
+
+    ``root / name`` alone let "..", "." and absolute paths through, and clean's
+    seed and analysis-dir protection is relative to the "project" it is given -
+    so `clean --project .. --apply` removed seed sections on another drive. A
+    project is one entry in the drive root's own listing, by exact name, that
+    the scan would call a project. Nothing else.
+    """
+    if (not name or name in (".", "..") or "/" in name or "\\" in name
+            or ":" in name or not is_project_dir(name)):
+        raise UsageError(f"'{name}' is not a project folder name; pass one folder "
+                         f"directly under {root}")
+    listing = list_entries(root)
+    if not listing.readable:
+        raise UsageError(f"cannot read {root}: {listing.error}")
+    if not any(e.is_dir and e.name == name for e in listing):
         raise UsageError(f"no project folder '{name}' under {root}")
-    return project
+    return root / name
 
 
 def _contact_to_dict(contact: Contact) -> dict[str, object]:
