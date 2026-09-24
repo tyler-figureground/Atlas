@@ -202,3 +202,53 @@ def test_a_real_project_still_resolves(fixture_drive, capsys):
     assert main(["clean", "--drive", str(fixture_drive), "--project", "260101_Fine",
                  "--json"]) == 1
     assert json.loads(capsys.readouterr().out)["empty"] == ["Empty"]
+
+
+# ------------------------------------------------------- --node (#29)
+
+
+def _node_project(drive: Path) -> Path:
+    return make_project(
+        drive, "260201_Node",
+        sections=["01 Model", "Meetings", "08 OUT/Invoices", "10 Legal"],
+        files={"Meetings/kickoff.md": "z", "08 OUT/Invoices/INV-1.pdf": "z"},
+    )
+
+
+@pytest.mark.parametrize("spelling", ["08 OUT\\Invoices", "08 OUT/Invoices/", "/08 OUT/Invoices"])
+def test_node_is_normalised_to_the_node_key_before_matching(fixture_drive, capsys, spelling):
+    _node_project(fixture_drive)
+    assert main(["conform", "--drive", str(fixture_drive), "--project", "260201_Node",
+                 "--node", spelling, "--json"]) == 1
+    actions = [a for p in json.loads(capsys.readouterr().out) for a in p["actions"]]
+    assert [(a["kind"], a["src"]) for a in actions] == [("relocate", "08 OUT/Invoices")]
+
+
+@pytest.mark.parametrize("missing", ["No Such Folder", "meetings"])
+def test_a_node_that_is_not_there_is_an_error_not_ok(fixture_drive, capsys, missing):
+    _node_project(fixture_drive)
+    assert main(["conform", "--drive", str(fixture_drive), "--project", "260201_Node",
+                 "--node", missing]) == 2
+    captured = capsys.readouterr()
+    assert "no such node" in captured.err
+    assert "[OK" not in captured.out
+
+
+def test_a_missing_expectation_is_still_a_node_conform_can_backfill(fixture_drive, capsys):
+    """A backfill's node does not exist yet - that is the point of it."""
+    _node_project(fixture_drive)
+    assert main(["conform", "--drive", str(fixture_drive), "--project", "260201_Node",
+                 "--node", "PROJECT.md", "--json"]) == 1
+    actions = [a for p in json.loads(capsys.readouterr().out) for a in p["actions"]]
+    assert [(a["kind"], a["dst"]) for a in actions] == [("backfill", "PROJECT.md")]
+
+
+@pytest.mark.parametrize("extra", [["--project", "260201_Node"], ["--node", "Meetings"],
+                                   ["--project", "260201_Node", "--node", "Meetings"]])
+def test_all_cannot_be_combined_with_project_or_node(fixture_drive, capsys, extra):
+    project = _node_project(fixture_drive)
+    make_project(fixture_drive, "260202_Other", sections=["01 Model", "Meetings"])
+    assert main(["conform", "--drive", str(fixture_drive), "--all", *extra, "--apply"]) == 2
+    assert "--all" in capsys.readouterr().err
+    assert (project / "Meetings").is_dir()
+    assert (fixture_drive / "260202_Other" / "Meetings").is_dir()

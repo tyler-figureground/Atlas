@@ -167,6 +167,13 @@ def build_plan(report: ProjectReport, m: DriveMap, project: Path | None = None) 
     return Plan(project=report.name, actions=measured)
 
 
+def node_key(path: str) -> str:
+    """A project-relative path in Node Key form: forward slashes, no leading or
+    trailing slash. What an operator types on Windows ("08 OUT\\Invoices",
+    "Meetings/") and what the tree hands over must match the same Action."""
+    return "/".join(part for part in path.replace("\\", "/").split("/") if part)
+
+
 def build_repair_plan(report: ProjectReport, m: DriveMap, path: str,
                       project: Path | None = None) -> Plan:
     """The Plan for one node's Repair, holding one Action or none.
@@ -180,6 +187,7 @@ def build_repair_plan(report: ProjectReport, m: DriveMap, path: str,
     tree introduces no action kinds of its own (ADR 0006), and two derivations of
     "what does this node need" would eventually disagree.
     """
+    path = node_key(path)
     full = build_plan(report, m, project=project)
     match = next(
         (a for a in full.actions if a.src == path),

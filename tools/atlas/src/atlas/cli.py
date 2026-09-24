@@ -18,6 +18,7 @@ from .core.conform import (
     build_plan,
     build_repair_plan,
     invert_plan,
+    node_key,
     plan_from_dict,
 )
 from .core.contacts import (
@@ -51,6 +52,7 @@ from .core.project_data import (
 from .core.scan import (
     DEFAULT_MOUNT_ROOT,
     discover_drives,
+    exists_exact,
     is_project_dir,
     list_entries,
     scan_drive,
@@ -767,6 +769,11 @@ def cmd_conform(args: argparse.Namespace) -> int:
     m = inventory.map
     if args.revert:
         return cmd_revert(args, root, m)
+    if args.all and (args.project or args.node):
+        # --all used to win silently, dropping --project and planning --node
+        # in every project on the drive.
+        print("error: --all cannot be combined with --project or --node", file=sys.stderr)
+        return 2
     if args.node and not args.project:
         # A Node Key is project-relative, so the same key names a different
         # folder in every project. Drive-wide is meaningless here.
@@ -795,6 +802,12 @@ def cmd_conform(args: argparse.Namespace) -> int:
             leftovers[inv.name] = len(report.unfiled)
         if args.node:
             plan = build_repair_plan(report, m, args.node, project=inv.path)
+            key = node_key(args.node)
+            if plan.empty and not exists_exact(inv.path, key):
+                # "Needs no repair" is a claim about a node Atlas looked at. A
+                # path that matched nothing and is not on disk is a typo.
+                print(f"error: no such node '{key}' in {inv.name}", file=sys.stderr)
+                return 2
         else:
             plan = build_plan(report, m, project=inv.path)
         if plan.empty:

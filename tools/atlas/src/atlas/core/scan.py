@@ -127,6 +127,23 @@ def list_entries(path: Path) -> Listing:
         return Listing(state=UNREADABLE, error=f"{type(exc).__name__}: {exc.strerror or exc}")
 
 
+def exists_exact(base: Path, rel: str) -> bool:
+    """Whether ``rel`` exists under ``base`` with exactly that spelling.
+
+    ``Path.exists`` is case-insensitive on the Windows and Drive mounts, so it
+    would call "meetings" present when only "Meetings" is. One listing per
+    segment, which for a Node Key is a handful of enumerations.
+    """
+    current = base
+    for segment in rel.replace("\\", "/").split("/"):
+        if not segment:
+            continue
+        if not any(e.name == segment for e in list_entries(current)):
+            return False
+        current = current / segment
+    return True
+
+
 def scan_drive(drive_root: Path) -> DriveInventory:
     map_path = find_map(drive_root)
     if map_path is None:
