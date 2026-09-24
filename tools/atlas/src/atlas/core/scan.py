@@ -165,9 +165,59 @@ def scan_drive(drive_root: Path) -> DriveInventory:
     return DriveInventory(root=drive_root, map=drive_map, projects=tuple(projects))
 
 
+def _is_link(entry: os.DirEntry) -> bool:
+    """A symlink or an NTFS junction. ``os.walk(followlinks=False)`` only skips
+    the first: a junction answers ``islink()`` False and ``isjunction()`` True,
+    so it was walked into, counted through and emptied."""
+    try:
+        return entry.is_symlink() or entry.is_junction()
+    except OSError:
+        return True     # cannot tell: never descend
+
+
+def walk(top: Path | str, *, topdown: bool = True,
+         errors: list[tuple[str, str]] | None = None):
+    """The one recursive walk. ``os.walk``'s shape plus a fourth list, links.
+
+    Yields ``(root, dirs, files, links)`` with ``root`` unprefixed. Differs
+    from ``os.walk`` in the two ways every caller needs:
+
+    - **Links are leaves.** Symlinks and junctions are listed in ``links`` and
+      never descended into, so nothing outside the tree is counted or removed.
+      A caller deciding "empty" must treat a link as content.
+    - **Every level is prefixed** with ``long_path``, not only the top, so a
+      short source with a deep subtree is read rather than skipped.
+
+    A folder that cannot be listed is not yielded; with ``errors`` given, its
+    path and reason are appended there instead of vanishing as ``os.walk``
+    makes them vanish. An unreadable folder never reads as empty (ADR 0004).
+    """
+    top = os.fspath(top)
+    try:
+        with os.scandir(long_path(top)) as it:
+            entries = list(it)
+    except OSError as exc:
+        if errors is not None:
+            errors.append((top, f"{type(exc).__name__}: {exc.strerror or exc}"))
+        return
+    dirs: list[str] = []
+    files: list[str] = []
+    links: list[str] = []
+    for entry in entries:
+        if _is_link(entry):
+            links.append(entry.name)
+        elif entry.is_dir(follow_symlinks=False):
+            dirs.append(entry.name)
+        else:
+            files.append(entry.name)
+    if topdown:
+        yield top, dirs, files, links
+    for name in dirs:
+        yield from walk(os.path.join(top, name), topdown=topdown, errors=errors)
+    if not topdown:
+        yield top, dirs, files, links
+
+
 def count_files(path: Path) -> int:
     """Recursive file count; never follows junctions/symlinks."""
-    total = 0
-    for _root, _dirs, files in os.walk(long_path(path), followlinks=False):
-        total += len(files)
-    return total
+    return sum(len(files) for _root, _dirs, files, _links in walk(path))

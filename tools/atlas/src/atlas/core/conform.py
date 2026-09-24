@@ -42,7 +42,7 @@ from .projectmd import (
     with_agents_block,
     write_crlf_no_bom,
 )
-from .scan import ProjectInventory, list_entries, long_path, scan_drive
+from .scan import ProjectInventory, list_entries, long_path, scan_drive, walk
 
 # Action kinds, in apply order.
 BACKFILL = "backfill"
@@ -646,19 +646,18 @@ def _backfill_claude(project: Path, m: DriveMap, action: Action) -> Action:
 
 # ---- moves (renames + relocations share one engine) -------------------------
 
-def _file_count(path: Path) -> int:
-    total = 0
-    for _r, _d, files in os.walk(path, followlinks=False):
-        total += len(files)
-    return total
-
-
 def _remove_if_file_empty(path: Path) -> bool:
-    if _file_count(path) != 0:
+    """rmdir ``path`` and its folders if nothing beneath holds a file or a link.
+
+    A link is content: its target lives elsewhere, and walking into a junction
+    here once removed empty folders outside the project.
+    """
+    levels = list(walk(path, topdown=False))
+    if any(files or links for _root, _dirs, files, links in levels):
         return False
-    for root, dirs, _files in os.walk(path, topdown=False, followlinks=False):
+    for root, dirs, _files, _links in levels:
         for d in dirs:
-            (Path(root) / d).rmdir()
+            os.rmdir(long_path(os.path.join(root, d)))
     path.rmdir()
     return True
 
