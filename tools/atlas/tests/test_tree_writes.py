@@ -17,9 +17,11 @@ from atlas.cli import main
 
 from atlas.core.conform import (
     WINDOWS_MAX_PATH,
+    Action,
     Guard,
     NotInvertible,
     OpsError,
+    Plan,
     action_to_dict,
     apply_plan,
     build_plan,
@@ -297,10 +299,11 @@ def test_the_preview_says_what_a_move_will_actually_do(fixture_drive):
     assert effects["10 Legal Business"] == "merge"
 
 
-def test_a_conflict_cannot_be_inverted(fixture_drive):
-    """A conflicted merge has a manifest, but the drive is in a state neither
-    side of the move owns. Reversing half of it is not an undo."""
-    make_project(
+def test_a_conflicted_merge_undoes_exactly_what_it_moved(fixture_drive):
+    """Issue #48. A merge that hits a name collision leaves the colliding item
+    where it was and moves the rest. The manifest records exactly the rest, so
+    reversing it restores the drive as it was: the collision never moved."""
+    project = make_project(
         fixture_drive, "260309_Conflicted",
         sections=["01 Model", "Meetings", "11 Meetings"],
         files={"Meetings/a.md": "old-a", "Meetings/b.md": "old-b",
@@ -310,8 +313,41 @@ def test_a_conflict_cannot_be_inverted(fixture_drive):
     applied = apply_plan(fixture_drive, inv.path, m, plan, only={"rename"})
     assert next(a for a in applied.actions if a.kind == "rename").status == "conflict"
 
+    undone = apply_plan(fixture_drive, inv.path, m, invert_plan(applied))
+
+    assert all(a.status == "done" for a in undone.actions), undone.actions
+    assert (project / "Meetings" / "b.md").read_text(encoding="utf-8") == "old-b"
+    assert (project / "Meetings" / "a.md").read_text(encoding="utf-8") == "old-a"
+    assert (project / "11 Meetings" / "a.md").read_text(encoding="utf-8") == "new-a"
+    assert not (project / "11 Meetings" / "b.md").exists()
+
+
+def test_a_merge_colliding_on_an_empty_skeleton_goes_on_the_undo_stack(fixture_drive):
+    """The common merge: both sides carry the same seeded empty folder."""
+    from atlas.tui.repair import UndoStack
+
+    make_project(
+        fixture_drive, "260335_Skeleton",
+        sections=["01 Model", "Meetings/Agendas", "11 Meetings/Agendas"],
+        files={"Meetings/notes.txt": "n"},
+    )
+    plan, inv, m = plan_for(fixture_drive, "260335_Skeleton")
+    applied = apply_plan(fixture_drive, inv.path, m, plan, only={"rename"})
+    assert next(a for a in applied.actions if a.kind == "rename").status == "conflict"
+
+    stack = UndoStack()
+    assert stack.push("260335_Skeleton", applied)
+    assert stack.depth("260335_Skeleton") == 1
+
+
+def test_a_conflicted_backfill_still_cannot_be_inverted():
+    """A backfill's manifest never describes what it changed, conflict or not."""
+    plan = Plan(project="X", actions=(
+        Action(kind="backfill", src="", dst="CLAUDE.md", status="conflict",
+               note="renamed Claude.md -> CLAUDE.md; has words AGENTS.md lacks"),))
+
     with pytest.raises(NotInvertible, match="conflict"):
-        invert_plan(applied)
+        invert_plan(plan)
 
 
 # --------------------------------------------------------- one-action Plans

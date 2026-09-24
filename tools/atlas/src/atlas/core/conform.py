@@ -272,13 +272,21 @@ def invert_plan(plan: Plan) -> Plan:
 
     Invertibility is all-or-nothing. An action that changed the drive in a way
     its manifest does not describe - a backfill, which creates, or a removed
-    file-empty source, which deletes - makes the whole Plan uninvertible, as does
-    a conflict. A partial undo would leave a third state that is neither before
-    nor after, and the operator pressed one key expecting one thing.
+    file-empty source, which deletes - makes the whole Plan uninvertible. A
+    partial undo would leave a third state that is neither before nor after, and
+    the operator pressed one key expecting one thing.
+
+    A conflicted move is not that. A merge that meets a name collision leaves the
+    colliding item where it was and records every item it did move, so reversing
+    its manifest restores the drive exactly - the collision never left. Seeded
+    skeletons make that the common merge (issue #48). A conflicted backfill is
+    still refused: its manifest never describes what it changed.
     """
     for action in plan.actions:
         if action.status == SKIPPED:
             continue    # nothing happened, so there is nothing to reverse
+        if action.status == CONFLICT and action.kind in (RENAME, RELOCATE, SWEEP):
+            continue    # the manifest names exactly what moved, possibly nothing
         if action.status != DONE:
             raise NotInvertible(
                 f"{action.kind} {action.src or action.dst} is "

@@ -164,9 +164,11 @@ class UndoStack:
         depth. Returns whether it was kept.
         """
         try:
-            invert_plan(plan)
+            inverse = invert_plan(plan)
         except NotInvertible:
             return False
+        if inverse.empty:
+            return False    # nothing moved, so there is nothing to put back
         self._stacks.setdefault(project, []).append(plan)
         return True
 
