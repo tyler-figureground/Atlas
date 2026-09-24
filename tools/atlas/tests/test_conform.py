@@ -112,7 +112,8 @@ def test_relocation_moves_and_empty_source_removed(fixture_drive):
     assert (inv.path / "10 Legal" / "Invoices" / "inv-1.pdf").is_file()
     assert not (inv.path / "08 OUT" / "Invoices").exists()
 
-    make_project(fixture_drive, "260207_EmptyDup", sections=["01 Model", "08 OUT/Invoices"])
+    make_project(fixture_drive, "260207_EmptyDup",
+                 sections=["01 Model", "08 OUT/Invoices", "10 Legal/Invoices"])
     result, inv, m = conform(fixture_drive, "260207_EmptyDup")
     action = next(a for a in result.actions if a.src == "08 OUT/Invoices")
     assert action.status == DONE and "file-empty" in action.note

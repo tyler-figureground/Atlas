@@ -25,6 +25,7 @@ from atlas.core.conform import (
     build_plan,
     build_repair_plan,
     invert_plan,
+    move_effect,
     plan_from_dict,
 )
 from atlas.core.doctor import report_project
@@ -194,7 +195,7 @@ def test_a_removed_file_empty_source_cannot_be_inverted(fixture_drive):
     manifest describes the folder chain it removed."""
     make_project(
         fixture_drive, "260308_EmptyDup",
-        sections=["01 Model", "08 OUT/Invoices"],
+        sections=["01 Model", "08 OUT/Invoices", "10 Legal/Invoices"],
     )
     plan, inv, m = plan_for(fixture_drive, "260308_EmptyDup")
     applied = apply_plan(fixture_drive, inv.path, m, plan, only={"relocate"})
@@ -203,6 +204,76 @@ def test_a_removed_file_empty_source_cannot_be_inverted(fixture_drive):
 
     with pytest.raises(NotInvertible, match="moved nothing"):
         invert_plan(applied)
+
+
+def test_an_empty_drifted_folder_is_renamed_when_its_canonical_name_is_free(fixture_drive):
+    """Issue #5. The empty-duplicate shortcut fired before the destination was
+    looked at, so a skeleton with no files was deleted instead of renamed, the
+    preview said rename, and the result could not be undone."""
+    project = make_project(
+        fixture_drive, "260330_EmptyDrift",
+        sections=["01 Model", "Meetings/Agendas", "Meetings/Minutes"],
+    )
+    plan, inv, m = plan_for(fixture_drive, "260330_EmptyDrift")
+    applied = apply_plan(fixture_drive, inv.path, m, plan, only={"rename"})
+
+    action = next(a for a in applied.actions if a.kind == "rename")
+    assert action.status == "done" and "removed" not in action.note
+    assert (project / "11 Meetings" / "Agendas").is_dir()
+    assert (project / "11 Meetings" / "Minutes").is_dir()
+    assert not (project / "Meetings").exists()
+
+    apply_plan(fixture_drive, inv.path, m, invert_plan(applied))
+    assert (project / "Meetings" / "Agendas").is_dir()
+
+
+def test_a_case_only_rename_of_an_empty_folder_renames_it(fixture_drive):
+    write_map(fixture_drive, {**FIXTURE_MAP, "driftMap": {"01 model": "01 Model"}})
+    project = make_project(fixture_drive, "260331_EmptyCase", sections=["01 model"])
+    plan, inv, m = plan_for(fixture_drive, "260331_EmptyCase")
+
+    applied = apply_plan(fixture_drive, inv.path, m, plan, only={"rename"})
+
+    action = next(a for a in applied.actions if a.kind == "rename")
+    assert action.status == "done" and action.moved, action
+    assert [e.name for e in os.scandir(project)] == ["01 Model"]
+
+
+def test_undoing_a_merge_puts_an_empty_child_folder_back(fixture_drive):
+    """The inverse of a merge moves each child back. An empty child took the
+    removal branch and was deleted rather than returned."""
+    project = make_project(
+        fixture_drive, "260332_UndoEmptyChild",
+        sections=["01 Model", "Meetings/Photos", "11 Meetings"],
+        files={"Meetings/notes.txt": "n", "11 Meetings/native.md": "x"},
+    )
+    plan, inv, m = plan_for(fixture_drive, "260332_UndoEmptyChild")
+    applied = apply_plan(fixture_drive, inv.path, m, plan, only={"rename"})
+    assert (project / "11 Meetings" / "Photos").is_dir()
+
+    undone = apply_plan(fixture_drive, inv.path, m, invert_plan(applied))
+
+    assert all(a.status == "done" and a.moved for a in undone.actions), undone.actions
+    assert (project / "Meetings" / "Photos").is_dir()
+    assert (project / "Meetings" / "notes.txt").is_file()
+    assert not (project / "11 Meetings" / "Photos").exists()
+
+
+def test_the_preview_says_what_a_move_will_actually_do(fixture_drive):
+    """Rename, merge, or remove an empty duplicate - decided by the same rule
+    _apply_move follows, so the confirm line cannot promise one and do another."""
+    make_project(
+        fixture_drive, "260333_Effects",
+        sections=["01 Model", "Meetings", "11 Meetings", "08 OUT/Invoices",
+                  "10 Legal/Invoices", "10 Legal Business"],
+        files={"Meetings/a.md": "a", "10 Legal Business/b.md": "b"},
+    )
+    plan, inv, m = plan_for(fixture_drive, "260333_Effects")
+    effects = {a.src: move_effect(inv.path, a) for a in plan.actions if a.src}
+
+    assert effects["Meetings"] == "merge"
+    assert effects["08 OUT/Invoices"] == "remove"
+    assert effects["10 Legal Business"] == "merge"
 
 
 def test_a_conflict_cannot_be_inverted(fixture_drive):

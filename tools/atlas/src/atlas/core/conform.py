@@ -106,6 +106,9 @@ class Action:
 class Plan:
     project: str
     actions: tuple[Action, ...]
+    # True for a Plan built by invert_plan. An undo puts things back; it never
+    # takes the empty-duplicate shortcut, which deletes rather than moves.
+    inverse: bool = False
 
     @property
     def empty(self) -> bool:
@@ -295,7 +298,7 @@ def invert_plan(plan: Plan) -> Plan:
                 # A file goes back by sweep, whose destination is the folder it
                 # came from. _apply_move refuses files outright.
                 actions.append(Action(kind=SWEEP, src=mv.dst, dst=parent_key(mv.src)))
-    return Plan(project=plan.project, actions=tuple(actions))
+    return Plan(project=plan.project, actions=tuple(actions), inverse=True)
 
 
 # ------------------------------------------------------------------ guards
@@ -444,13 +447,12 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
             continue
         if action.kind == BACKFILL:
             applied.append(_apply_backfill(project, m, action))
-        elif action.kind == RENAME:
-            applied.append(_apply_move(project, action, merge_into_existing=True))
-        elif action.kind == RELOCATE:
-            applied.append(_apply_move(project, action, merge_into_existing=True))
+        elif action.kind in (RENAME, RELOCATE):
+            applied.append(_apply_move(project, action, merge_into_existing=True,
+                                       remove_empty_duplicate=not plan.inverse))
         elif action.kind == SWEEP:
             applied.append(_apply_sweep(project, action))
-    result = Plan(project=plan.project, actions=tuple(applied))
+    result = Plan(project=plan.project, actions=tuple(applied), inverse=plan.inverse)
     done = [a for a in result.actions if a.status == DONE]
     if done:
         append_log(drive_root, f"[{project.name}] conform: " +
@@ -664,17 +666,45 @@ def _remove_if_file_empty(path: Path) -> bool:
     return True
 
 
-def _apply_move(project: Path, action: Action, merge_into_existing: bool) -> Action:
+MOVE = "move"
+MERGE = "merge"
+REMOVE = "remove"
+
+
+def _same_folder(src: Path, dst: Path) -> bool:
+    """Whether two spellings name one folder - a case-only rename on a
+    case-insensitive mount, where ``dst.exists()`` is true of the source itself."""
+    try:
+        return os.path.samefile(src, dst)
+    except OSError:
+        return False
+
+
+def move_effect(project: Path, action: Action, *, inverse: bool = False) -> str:
+    """What applying a RENAME or RELOCATE would do right now: MOVE, MERGE or REMOVE.
+
+    The same rule ``_apply_move`` follows, so a preview cannot promise a rename
+    and then delete. REMOVE is the empty-duplicate shortcut: the source holds no
+    files and the destination is a separate folder that already exists. An
+    inverse Plan never removes - an undo puts things back.
+    """
+    src = project / action.src
+    dst = project / action.dst
+    if not dst.exists() or _same_folder(src, dst):
+        return MOVE
+    if not inverse and src.is_dir() and _file_count(src) == 0:
+        return REMOVE
+    return MERGE
+
+
+def _apply_move(project: Path, action: Action, merge_into_existing: bool,
+                remove_empty_duplicate: bool = True) -> Action:
     src = project / action.src
     dst = project / action.dst
     if not src.is_dir():
         return replace(action, status=SKIPPED, note="source gone")
 
-    # Empty duplicate: the canonical home already owns the artifact class.
-    if _remove_if_file_empty(src):
-        return replace(action, status=DONE, note="removed file-empty source")
-
-    if src.resolve() == dst.resolve() and action.src != action.dst:
+    if _same_folder(src, dst) and action.src != action.dst:
         # Case-only rename on a case-insensitive mount: two-step via temp.
         tmp = src.with_name(src.name + ".atlas-tmp")
         src.rename(tmp)
@@ -687,6 +717,13 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool) -> Act
         src.rename(dst)
         return replace(action, status=DONE,
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
+
+    # Empty duplicate: the canonical home already exists and owns the artifact
+    # class, so a source with no files in it is removed rather than merged. Only
+    # here, where the destination is a separate existing folder - anywhere
+    # earlier it deletes a folder the preview said it would rename.
+    if remove_empty_duplicate and _remove_if_file_empty(src):
+        return replace(action, status=DONE, note="removed file-empty source")
 
     if not merge_into_existing:
         return replace(action, status=CONFLICT, note="target exists")
