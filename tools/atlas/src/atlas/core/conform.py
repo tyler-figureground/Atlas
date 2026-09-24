@@ -232,23 +232,56 @@ def plan_from_dict(payload: dict) -> Plan:
     try:
         actions = tuple(
             Action(
-                kind=a["kind"],
-                src=a["src"],
-                dst=a["dst"],
+                kind=_known_kind(a["kind"]),
+                src=_inside(a["src"], "src"),
+                dst=_inside(a["dst"], "dst"),
                 file_count=a["file_count"],
                 status=a["status"],
                 note=a["note"],
                 moved=tuple(
-                    Move(src=mv["src"], dst=mv["dst"], is_dir=mv["is_dir"])
+                    Move(src=_inside(mv["src"], "moved src", required=True),
+                         dst=_inside(mv["dst"], "moved dst", required=True),
+                         is_dir=mv["is_dir"])
                     for mv in a["moved"]
                 ),
                 path_length=a["path_length"],
             )
             for a in payload["actions"]
         )
-        return Plan(project=payload["project"], actions=actions)
+        return Plan(project=_one_folder(payload["project"]), actions=actions)
     except (KeyError, TypeError) as error:
         raise OpsError(f"manifest is missing {error}") from error
+
+
+def _known_kind(kind: object) -> str:
+    if kind not in (BACKFILL, RENAME, RELOCATE, SWEEP):
+        raise OpsError(f"manifest names an unknown action kind {kind!r}")
+    return kind
+
+
+def _inside(path: object, field: str, *, required: bool = False) -> str:
+    """A project-relative path from an operator-supplied manifest, or refuse.
+
+    Every path in a manifest is joined onto the project folder. Without this, a
+    crafted ``..``, absolute or drive-lettered path moved things in from - or
+    out to - anywhere the operator could write (#9).
+    """
+    if not isinstance(path, str):
+        raise OpsError(f"manifest {field} is not a path: {path!r}")
+    normalised = path.replace("\\", "/")
+    parts = normalised.split("/")
+    if (normalised.startswith("/") or re.match(r"^[A-Za-z]:", normalised)
+            or ".." in parts or (required and not node_key(normalised))):
+        raise OpsError(f"manifest {field} '{path}' is not a path inside the project")
+    return path
+
+
+def _one_folder(name: object) -> str:
+    """A manifest's project: one folder name, never a path."""
+    if (not isinstance(name, str) or not name or name in (".", "..")
+            or any(c in name for c in "/\\:")):
+        raise OpsError(f"manifest project {name!r} is not a project folder name")
+    return name
 
 
 # ----------------------------------------------------------------- inverse

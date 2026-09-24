@@ -26,7 +26,7 @@ leaves conflicts in place. Clean removes file-empty folders only.
 | `atlas clean --project NAME [--apply]` | Preview or remove empty folders |
 | `atlas conform --project NAME [--apply]` | Preview or apply mapped repairs |
 | `atlas conform --project NAME --node PATH [--apply]` | Preview or apply the repair for one node, by project-relative path |
-| `atlas conform --revert FILE` | Undo an applied conform from the `--json` manifest it printed |
+| `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
 
 TUI keys: `n` new project, `e` edit selected project, `m` manage contacts, `/` filter,
 `Enter` drill in or confirm, `Escape` back, `Tab` next Region, `Space` mark or open a folder,

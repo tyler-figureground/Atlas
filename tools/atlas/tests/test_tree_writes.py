@@ -562,7 +562,8 @@ def test_conform_revert_undoes_an_applied_node_repair(fixture_drive, capsys, tmp
     manifest.write_text(capsys.readouterr().out, encoding="utf-8")
     assert (project / "11 Meetings").is_dir()
 
-    assert main(["conform", "--drive", str(fixture_drive), "--revert", str(manifest)]) == 0
+    assert main(["conform", "--drive", str(fixture_drive), "--revert", str(manifest),
+                 "--apply"]) == 0
 
     assert (project / "Meetings").is_dir(), "the folder went back where it came from"
     assert not (project / "11 Meetings").exists()

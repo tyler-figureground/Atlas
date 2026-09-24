@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import __version__
 from .core.conform import (
+    DONE,
     FAILED,
     NotInvertible,
     Plan,
@@ -765,7 +766,15 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
 
     plans = payload if isinstance(payload, list) else [payload]
     try:
-        inverses = [(p["project"], invert_plan(plan_from_dict(p))) for p in plans]
+        for p in plans:
+            # A manifest from drive A must never apply to a same-named project
+            # on drive B. One without a drive cannot prove where it came from.
+            if not isinstance(p, dict) or p.get("drive") != m.drive:
+                found = p.get("drive") if isinstance(p, dict) else None
+                print(f"error: {manifest} is from drive {found or '(unnamed)'}, "
+                      f"not {m.drive}; nothing moved", file=sys.stderr)
+                return 2
+        inverses = [invert_plan(plan_from_dict(p)) for p in plans]
     except NotInvertible as error:
         print(f"error: cannot reverse this manifest: {error}", file=sys.stderr)
         return 2
@@ -773,15 +782,52 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
         print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
         return 2
 
-    for name, inverse in inverses:
-        project_path = root / name
-        if not project_path.is_dir():
-            print(f"error: no project folder '{name}' under {root}", file=sys.stderr)
-            return 2
-        done = apply_plan(root, project_path, m, inverse)
-        for a in done.actions:
-            print(f"    {a.kind:9} {a.src} -> {a.dst} [{a.status}]")
-    return 0
+    # Every project and every precondition before anything moves: a
+    # multi-project manifest must not stop halfway. The guard an undo needs is
+    # "is each thing still where the repair left it" - checked by exact name.
+    for inverse in inverses:
+        project_path = _resolve_project(root, inverse.project)
+        for action in inverse.actions:
+            if not exists_exact(project_path, node_key(action.src)):
+                print(f"error: {inverse.project}/{action.src} is no longer where the "
+                      f"repair left it; nothing moved", file=sys.stderr)
+                return 2
+
+    if not args.apply:
+        _print_plans(inverses, args, m.drive, applied=False)
+        return 1 if any(not p.empty for p in inverses) else 0
+
+    results = [apply_plan(root, root / inverse.project, m, inverse) for inverse in inverses]
+    _print_plans(results, args, m.drive, applied=True)
+    if any(a.status == FAILED for p in results for a in p.actions):
+        return 2
+    return 1 if any(a.status != DONE for p in results for a in p.actions) else 0
+
+
+def _action_line(a) -> str:
+    status = f" [{a.status}]" if a.status else ""
+    note = f"  ({a.note})" if a.note else ""
+    files = f" ({a.file_count} files)" if a.file_count else ""
+    src = f"{a.src} -> " if a.src else ""
+    warning = f"  [path {a.path_length} > 260]" if a.path_warning else ""
+    return f"    {a.kind:9} {src}{a.dst}{files}{status}{note}{warning}"
+
+
+def _print_plans(plans, args: argparse.Namespace, drive: str, *, applied: bool) -> None:
+    """Plans in conform's shapes: JSON a later --revert can read, or text."""
+    if args.json:
+        print(json.dumps([
+            {"drive": drive, "project": plan.project,
+             "actions": [action_to_dict(a) for a in plan.actions]}
+            for plan in plans
+        ], indent=2))
+        return
+    for plan in plans:
+        print(f"[{'APPLIED' if applied else 'PLAN':7}] {plan.project}")
+        for a in plan.actions:
+            print(_action_line(a))
+    if not applied and any(not p.empty for p in plans):
+        print("\n(dry run - pass --apply to perform)")
 
 
 def cmd_conform(args: argparse.Namespace) -> int:
@@ -849,8 +895,9 @@ def cmd_conform(args: argparse.Namespace) -> int:
             pending = True
 
     if args.json:
+        # "drive" lets --revert refuse a manifest from another drive.
         print(json.dumps([
-            {"project": plan.project,
+            {"drive": m.drive, "project": plan.project,
              "actions": [action_to_dict(a) for a in plan.actions]}
             for plan in results
         ], indent=2))
@@ -872,12 +919,7 @@ def cmd_conform(args: argparse.Namespace) -> int:
                 continue
             print(f"[{'APPLIED' if args.apply else 'PLAN':7}] {plan.project}")
             for a in plan.actions:
-                status = f" [{a.status}]" if a.status else ""
-                note = f"  ({a.note})" if a.note else ""
-                files = f" ({a.file_count} files)" if a.file_count else ""
-                src = f"{a.src} -> " if a.src else ""
-                warning = f"  [path {a.path_length} > 260]" if a.path_warning else ""
-                print(f"    {a.kind:9} {src}{a.dst}{files}{status}{note}{warning}")
+                print(_action_line(a))
             if left:
                 print(f"    {left} unfiled item(s) need a person")
             for line in cannot:
