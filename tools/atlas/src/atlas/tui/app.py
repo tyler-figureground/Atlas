@@ -2194,7 +2194,12 @@ class AtlasApp(App):
         row = self._selected_row()
         tree = self._trees.get(self._workspace_project)
         facts = self.query_one(ProjectTreeView).selected_facts()
-        if row is None or tree is None or self._inventory is None:
+        if row is None or self._inventory is None:
+            return
+        if tree is None:
+            # The Workspace follows the cursor on a debounce, so the tree can
+            # be moments from existing. A key that stays quiet reads as broken.
+            self._set_operation("Tree still loading - try again in a moment", "warning")
             return
         if facts is None:
             # The cursor is on nothing - an empty project, or a tree still
@@ -2221,7 +2226,9 @@ class AtlasApp(App):
             # Not reachable from a single node today, and not silently widened
             # into an inline confirm if it ever becomes so: ADR 0006 gives a
             # longer plan the modal because the modal is what can show a list.
-            self.action_conform()
+            # Straight to the modal: action_conform would route a focused tree
+            # back here, and recurse.
+            self._conform_project()
             return
 
         self._armed = _ArmedRepair(
@@ -2344,6 +2351,12 @@ class AtlasApp(App):
             # The key means "conform what has focus". On the project list that is
             # the whole project; in the tree it is the node under the cursor.
             self._arm_repair()
+            return
+        self._conform_project()
+
+    def _conform_project(self) -> None:
+        """Preview the whole Selected Project's repairs in the modal."""
+        if self._busy or not self._inventory_fresh:
             return
         selected = self._selected_project()
         row = self._selected_row()

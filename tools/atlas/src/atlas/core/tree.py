@@ -245,7 +245,10 @@ class ProjectTree:
         """Forget what Atlas knew about these folders, and about their subtrees."""
         for key in keys:
             prefix = f"{key}/" if key else ""
-            for cached in [k for k in self._listings
+            # A snapshot, not the live dict: tree-load workers write listings
+            # from their own thread, and iterating while one lands raises
+            # "dictionary changed size during iteration".
+            for cached in [k for k in list(self._listings)
                            if k == key or (prefix and k.startswith(prefix))]:
                 self._listings.pop(cached, None)
                 self._read_at.pop(cached, None)

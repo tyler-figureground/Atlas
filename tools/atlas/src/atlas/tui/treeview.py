@@ -309,9 +309,14 @@ class ProjectTreeView(Tree):
         if source is None:
             return
         source.children(key)
-        self.app.call_from_thread(self._loaded, key)
+        self.app.call_from_thread(self._loaded, key, source)
 
-    def _loaded(self, key: str) -> None:
+    def _loaded(self, key: str, source: ProjectTree | None = None) -> None:
+        # Tagged with the project it was started for. One that finishes after
+        # the operator moved on would otherwise re-read the *current* project
+        # on the UI thread and clear its loading state early.
+        if source is not None and source is not self.source:
+            return
         if not key:
             self.loading = False
         node = self._by_key.get(key)

@@ -65,5 +65,5 @@ async def test_the_companion_names_the_contract_not_an_absence(fixture_drive):
         assert "PROJECT.md - no front matter" in body, body
 
 
-def companion_text(app: AtlasApp) -> str:
+def companion_text(app: AtlasApp) -> str:  # noqa: D103 - shared helper
     return str(app.query_one("#companion-body", Static).content)
