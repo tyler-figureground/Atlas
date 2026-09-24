@@ -252,3 +252,42 @@ def test_all_cannot_be_combined_with_project_or_node(fixture_drive, capsys, extr
     assert "--all" in capsys.readouterr().err
     assert (project / "Meetings").is_dir()
     assert (fixture_drive / "260202_Other" / "Meetings").is_dir()
+
+
+# --------------------------------------------- an unreadable drive root (#26)
+
+
+def _deny_listing(monkeypatch, name: str) -> None:
+    real = os.scandir
+
+    def scandir(path="."):
+        if os.path.basename(os.fspath(path).rstrip("\\/")) == name:
+            raise PermissionError(13, "Access is denied", os.fspath(path))
+        return real(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+
+
+def test_scan_carries_the_drive_roots_load_state(fixture_drive, monkeypatch):
+    from atlas.core.scan import scan_drive
+
+    make_project(fixture_drive, "260301_Hidden", sections=["01 Model"])
+    assert scan_drive(fixture_drive).readable
+    _deny_listing(monkeypatch, fixture_drive.name)
+    inventory = scan_drive(fixture_drive)
+    assert not inventory.readable
+    assert "Access is denied" in inventory.error
+
+
+@pytest.mark.parametrize("argv", [["doctor"], ["doctor", "--json"], ["conform", "--all"]])
+def test_an_unreadable_drive_root_is_an_error_not_an_empty_drive(fixture_drive, capsys,
+                                                                 monkeypatch, argv):
+    """A disconnected or permission-broken drive used to read as a healthy empty
+    one: "0 conform / 0 drift", exit 0."""
+    make_project(fixture_drive, "260301_Hidden", sections=["01 Model"])
+    _deny_listing(monkeypatch, fixture_drive.name)
+
+    assert main(_with_drive(argv, fixture_drive)) == 2
+    captured = capsys.readouterr()
+    assert "cannot read" in captured.err
+    assert "0 conform" not in captured.out

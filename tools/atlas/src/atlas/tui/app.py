@@ -1160,6 +1160,10 @@ class AtlasApp(App):
     def _scan_drive_worker(self, root: Path, generation: int) -> None:
         try:
             inventory = scan_drive(root)
+            if not inventory.readable:
+                # Zero projects from a root Atlas could not list is a failure,
+                # never a healthy empty drive (ADR 0004).
+                raise OSError(f"cannot read the drive root ({inventory.error})")
             report = DriveReport(
                 root=inventory.root,
                 drive=inventory.map.drive,

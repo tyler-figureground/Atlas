@@ -98,6 +98,17 @@ class DriveInventory:
     root: Path
     map: DriveMap
     projects: tuple[ProjectInventory, ...]
+    # The drive root's own Load State. An unreadable root yields no projects,
+    # and "no projects" must never read as a healthy empty drive (ADR 0004).
+    root_listing: Listing = field(default_factory=lambda: Listing(state=READ))
+
+    @property
+    def readable(self) -> bool:
+        return self.root_listing.readable
+
+    @property
+    def error(self) -> str | None:
+        return self.root_listing.error
 
 
 def discover_drives(mount_root: Path = DEFAULT_MOUNT_ROOT) -> list[Path]:
@@ -151,7 +162,8 @@ def scan_drive(drive_root: Path) -> DriveInventory:
     drive_map = load_map(map_path)
 
     projects: list[ProjectInventory] = []
-    for entry in list_entries(drive_root):
+    root_listing = list_entries(drive_root)
+    for entry in root_listing:
         if not entry.is_dir or not is_project_dir(entry.name):
             continue
         project_path = drive_root / entry.name
@@ -162,7 +174,8 @@ def scan_drive(drive_root: Path) -> DriveInventory:
                 root_entries=list_entries(project_path),
             )
         )
-    return DriveInventory(root=drive_root, map=drive_map, projects=tuple(projects))
+    return DriveInventory(root=drive_root, map=drive_map, projects=tuple(projects),
+                          root_listing=root_listing)
 
 
 def _is_link(entry: os.DirEntry) -> bool:

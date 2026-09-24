@@ -60,7 +60,8 @@ from .core.scan import (
 
 
 class UsageError(Exception):
-    """The command cannot run as asked: a bad argument or a missing drive.
+    """The command cannot run as asked: a bad argument, a missing drive, or a
+    drive Atlas cannot read.
 
     An error, never a finding. `main` prints it to stderr and exits 2, so a
     script can tell "the drive has drift" (1) from "the command failed" (2).
@@ -86,6 +87,18 @@ def _resolve_drive(arg: str | None) -> Path:
     raise UsageError(f"multiple mapped drives ({names}); pass --drive")
 
 
+def _scan(root: Path):
+    """scan_drive, refusing a drive root it could not list.
+
+    An unreadable root yields zero projects, which doctor used to report as
+    "0 conform / 0 drift", exit 0 - a disconnected drive dressed as a clean one.
+    """
+    inventory = scan_drive(root)
+    if not inventory.readable:
+        raise UsageError(f"cannot read the drive root {root}: {inventory.error}")
+    return inventory
+
+
 def cmd_lint(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
     try:
@@ -108,7 +121,7 @@ def cmd_lint(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
     try:
-        report = report_drive(scan_drive(root))
+        report = report_drive(_scan(root))
     except (MapError, FileNotFoundError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -769,7 +782,7 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
 
 def cmd_conform(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
-    inventory = scan_drive(root)
+    inventory = _scan(root)
     m = inventory.map
     if args.revert:
         return cmd_revert(args, root, m)
