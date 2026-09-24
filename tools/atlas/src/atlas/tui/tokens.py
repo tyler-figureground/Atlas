@@ -236,5 +236,6 @@ def stylesheet(palette: Palette = PALETTE) -> str:
     #operation.-error {{ color: {p.status["ACTION"]}; }}
 
     DataTable > .datatable--cursor {{ background: {p.ember[2]}; color: {p.ground}; }}
+    Tree > .tree--cursor {{ background: {p.ember[2]}; color: {p.ground}; text-style: bold; }}
     DataTable > .datatable--header {{ color: {p.muted}; }}
     """

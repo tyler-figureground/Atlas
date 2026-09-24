@@ -259,7 +259,16 @@ class ProjectTreeView(Tree):
         facts = self._facts.get(str(node.data or ""))
         if facts is None:
             return super().render_label(node, base_style, style)
-        return node_label(facts, narrow=self.narrow, expanded=node.is_expanded)
+        label = node_label(facts, narrow=self.narrow, expanded=node.is_expanded)
+        # Textual delivers the cursor and hover highlight only through `style`.
+        # Dropping it drew every row the same, so the operator could not see
+        # which node `f` would repair. The row's own colours sit under it; the
+        # cursor, laid over the top, is the one full-strength thing (ticket 02).
+        if base_style:
+            label.stylize_before(base_style)
+        if style:
+            label.stylize(style)
+        return label
 
     def get_label_width(self, node: TreeNodeWidget) -> int:
         facts = self._facts.get(str(node.data or ""))
