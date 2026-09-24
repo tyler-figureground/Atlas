@@ -96,6 +96,14 @@ class Action:
     # Longest absolute path this action would create, measured at preview time.
     # Zero when the plan was built without a project path to measure against.
     path_length: int = 0
+    # What the write brought into existence that was not a Move: the file or
+    # folder a backfill made, and any parent folder a move or sweep had to create
+    # on the way. Empty until applied. The tree reconciles by it (ADR 0007), and
+    # the undo removes created folders it leaves empty.
+    created: tuple[str, ...] = ()
+    # On an inverse Action only: folders the write being undone created, removed
+    # after this action if they are then empty. Deepest first.
+    prune: tuple[str, ...] = ()
 
     @property
     def path_warning(self) -> bool:
@@ -106,6 +114,9 @@ class Action:
 class Plan:
     project: str
     actions: tuple[Action, ...]
+    # True for a Plan built by invert_plan. An undo puts things back; it never
+    # takes the empty-duplicate shortcut, which deletes rather than moves.
+    inverse: bool = False
 
     @property
     def empty(self) -> bool:
@@ -203,6 +214,8 @@ def action_to_dict(action: Action) -> dict:
                   for mv in action.moved],
         "path_length": action.path_length,
         "path_warning": action.path_warning,
+        "created": list(action.created),
+        "prune": list(action.prune),
     }
 
 
@@ -218,7 +231,8 @@ def plan_from_dict(payload: dict) -> Plan:
     ``moved`` becomes an uninvertible Plan two steps later, where the message no
     longer names the real problem. ``path_warning`` is derived and ignored on the
     way in - it is a property, and honouring a supplied one would let a manifest
-    contradict its own ``path_length``.
+    contradict its own ``path_length``. ``created`` and ``prune`` came later and
+    default to empty, so a manifest an older Atlas printed still reads back.
     """
     try:
         actions = tuple(
@@ -234,6 +248,8 @@ def plan_from_dict(payload: dict) -> Plan:
                     for mv in a["moved"]
                 ),
                 path_length=a["path_length"],
+                created=tuple(a.get("created", ())),
+                prune=tuple(a.get("prune", ())),
             )
             for a in payload["actions"]
         )
@@ -251,6 +267,15 @@ def parent_key(rel: str) -> str:
     return normalised.rpartition("/")[0]
 
 
+def child_key(parent: str, name: str) -> str:
+    """The Node Key of ``name`` inside ``parent``; the root's key is "".
+
+    One join for every manifest path. A plain f-string turns a root parent into
+    ``/name``, which is not a Node Key, and on Windows ``project / "/name"``
+    resolves against the drive root rather than the project.
+    """
+    return "/".join(part for part in (parent, name) if part)
+
 
 def invert_plan(plan: Plan) -> Plan:
     """The Plan that reverses an applied one, built from the Move Manifests.
@@ -260,13 +285,21 @@ def invert_plan(plan: Plan) -> Plan:
 
     Invertibility is all-or-nothing. An action that changed the drive in a way
     its manifest does not describe - a backfill, which creates, or a removed
-    file-empty source, which deletes - makes the whole Plan uninvertible, as does
-    a conflict. A partial undo would leave a third state that is neither before
-    nor after, and the operator pressed one key expecting one thing.
+    file-empty source, which deletes - makes the whole Plan uninvertible. A
+    partial undo would leave a third state that is neither before nor after, and
+    the operator pressed one key expecting one thing.
+
+    A conflicted move is not that. A merge that meets a name collision leaves the
+    colliding item where it was and records every item it did move, so reversing
+    its manifest restores the drive exactly - the collision never left. Seeded
+    skeletons make that the common merge (issue #48). A conflicted backfill is
+    still refused: its manifest never describes what it changed.
     """
     for action in plan.actions:
         if action.status == SKIPPED:
             continue    # nothing happened, so there is nothing to reverse
+        if action.status == CONFLICT and action.kind in (RENAME, RELOCATE, SWEEP):
+            continue    # the manifest names exactly what moved, possibly nothing
         if action.status != DONE:
             raise NotInvertible(
                 f"{action.kind} {action.src or action.dst} is "
@@ -277,16 +310,28 @@ def invert_plan(plan: Plan) -> Plan:
                 f"{action.kind} {action.src or action.dst} moved nothing Atlas can "
                 f"put back; the plan cannot be reversed"
             )
+    # Last applied, first undone. One action's destination can contain another's
+    # (rename `10 Legal Business` -> `10 Legal`, then relocate into `10 Legal`),
+    # and undoing the outer move first carries the inner one away with it. The
+    # applied Plan is already in apply order, so reversing it is the whole rule;
+    # apply_plan keeps an inverse Plan's order rather than re-sorting by kind.
     actions: list[Action] = []
-    for action in plan.actions:
-        for mv in action.moved:
+    for action in reversed(plan.actions):
+        start = len(actions)
+        for mv in reversed(action.moved):
             if mv.is_dir:
                 actions.append(Action(kind=RELOCATE, src=mv.dst, dst=mv.src))
             else:
                 # A file goes back by sweep, whose destination is the folder it
                 # came from. _apply_move refuses files outright.
                 actions.append(Action(kind=SWEEP, src=mv.dst, dst=parent_key(mv.src)))
-    return Plan(project=plan.project, actions=tuple(actions))
+        if action.created and len(actions) > start:
+            # The folders this action had to create go once its moves are back,
+            # so the undo leaves no empty parent that existed neither before nor
+            # after. Removed only if empty: someone may have filed into them.
+            prune = tuple(sorted(action.created, key=lambda k: k.count("/"), reverse=True))
+            actions[-1] = replace(actions[-1], prune=prune)
+    return Plan(project=plan.project, actions=tuple(actions), inverse=True)
 
 
 # ------------------------------------------------------------------ guards
@@ -429,24 +474,61 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
         raise OpsError(f"project folder is no longer available: {project}")
     applied: list[Action] = []
     order = {BACKFILL: 0, RENAME: 1, RELOCATE: 2, SWEEP: 3}
-    for action in sorted(plan.actions, key=lambda a: order[a.kind]):
+    ordered = plan.actions if plan.inverse else sorted(plan.actions, key=lambda a: order[a.kind])
+    for action in ordered:
         if only and action.kind not in only:
             applied.append(replace(action, status=SKIPPED, note="filtered by --only"))
             continue
+        absent = _absent_chain(project, _created_root(action))
         if action.kind == BACKFILL:
-            applied.append(_apply_backfill(project, m, action))
-        elif action.kind == RENAME:
-            applied.append(_apply_move(project, action, merge_into_existing=True))
-        elif action.kind == RELOCATE:
-            applied.append(_apply_move(project, action, merge_into_existing=True))
-        elif action.kind == SWEEP:
-            applied.append(_apply_sweep(project, action))
-    result = Plan(project=plan.project, actions=tuple(applied))
+            result = _apply_backfill(project, m, action)
+        elif action.kind in (RENAME, RELOCATE):
+            result = _apply_move(project, action, merge_into_existing=True,
+                                 remove_empty_duplicate=not plan.inverse)
+        else:
+            result = _apply_sweep(project, action)
+        created = tuple(rel for rel in absent if (project / rel).exists())
+        if created:
+            result = replace(result, created=created)
+        if result.status == DONE and action.prune:
+            _prune_empty(project, action.prune)
+        applied.append(result)
+    result = Plan(project=plan.project, actions=tuple(applied), inverse=plan.inverse)
     done = [a for a in result.actions if a.status == DONE]
     if done:
         append_log(drive_root, f"[{project.name}] conform: " +
                    "; ".join(f"{a.kind} {a.src or a.dst} -> {a.dst}" for a in done))
     return result
+
+
+def _created_root(action: Action) -> str:
+    """The deepest path an action may bring into existence other than by a Move:
+    a backfill's target, a sweep's destination folder, a move's parent."""
+    dst = action.dst.replace("\\", "/").rstrip("/")
+    if action.kind in (BACKFILL, SWEEP):
+        return dst
+    return parent_key(dst)
+
+
+def _absent_chain(project: Path, rel: str) -> tuple[str, ...]:
+    """``rel`` and each of its ancestors that does not exist yet, shallowest first."""
+    absent: list[str] = []
+    parts = [p for p in rel.split("/") if p]
+    for depth in range(1, len(parts) + 1):
+        key = "/".join(parts[:depth])
+        if not (project / key).exists():
+            absent.append(key)
+    return tuple(absent)
+
+
+def _prune_empty(project: Path, keys: tuple[str, ...]) -> None:
+    """Remove each folder that is now entirely empty, deepest first. rmdir is the
+    whole check: it refuses a folder with anything at all in it."""
+    for key in keys:
+        try:
+            (project / key).rmdir()
+        except OSError:
+            pass
 
 
 # ---- control plane ---------------------------------------------------------
@@ -655,17 +737,45 @@ def _remove_if_file_empty(path: Path) -> bool:
     return True
 
 
-def _apply_move(project: Path, action: Action, merge_into_existing: bool) -> Action:
+MOVE = "move"
+MERGE = "merge"
+REMOVE = "remove"
+
+
+def _same_folder(src: Path, dst: Path) -> bool:
+    """Whether two spellings name one folder - a case-only rename on a
+    case-insensitive mount, where ``dst.exists()`` is true of the source itself."""
+    try:
+        return os.path.samefile(src, dst)
+    except OSError:
+        return False
+
+
+def move_effect(project: Path, action: Action, *, inverse: bool = False) -> str:
+    """What applying a RENAME or RELOCATE would do right now: MOVE, MERGE or REMOVE.
+
+    The same rule ``_apply_move`` follows, so a preview cannot promise a rename
+    and then delete. REMOVE is the empty-duplicate shortcut: the source holds no
+    files and the destination is a separate folder that already exists. An
+    inverse Plan never removes - an undo puts things back.
+    """
+    src = project / action.src
+    dst = project / action.dst
+    if not dst.exists() or _same_folder(src, dst):
+        return MOVE
+    if not inverse and src.is_dir() and _file_count(src) == 0:
+        return REMOVE
+    return MERGE
+
+
+def _apply_move(project: Path, action: Action, merge_into_existing: bool,
+                remove_empty_duplicate: bool = True) -> Action:
     src = project / action.src
     dst = project / action.dst
     if not src.is_dir():
         return replace(action, status=SKIPPED, note="source gone")
 
-    # Empty duplicate: the canonical home already owns the artifact class.
-    if _remove_if_file_empty(src):
-        return replace(action, status=DONE, note="removed file-empty source")
-
-    if src.resolve() == dst.resolve() and action.src != action.dst:
+    if _same_folder(src, dst) and action.src != action.dst:
         # Case-only rename on a case-insensitive mount: two-step via temp.
         tmp = src.with_name(src.name + ".atlas-tmp")
         src.rename(tmp)
@@ -678,6 +788,13 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool) -> Act
         src.rename(dst)
         return replace(action, status=DONE,
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
+
+    # Empty duplicate: the canonical home already exists and owns the artifact
+    # class, so a source with no files in it is removed rather than merged. Only
+    # here, where the destination is a separate existing folder - anywhere
+    # earlier it deletes a folder the preview said it would rename.
+    if remove_empty_duplicate and _remove_if_file_empty(src):
+        return replace(action, status=DONE, note="removed file-empty source")
 
     if not merge_into_existing:
         return replace(action, status=CONFLICT, note="target exists")
@@ -715,4 +832,4 @@ def _apply_sweep(project: Path, action: Action) -> Action:
         return replace(action, status=CONFLICT, note="name exists at target")
     src.rename(target)
     return replace(action, status=DONE,
-                   moved=(Move(src=action.src, dst=f"{dst_rel}/{src.name}", is_dir=False),))
+                   moved=(Move(src=action.src, dst=child_key(dst_rel, src.name), is_dir=False),))
