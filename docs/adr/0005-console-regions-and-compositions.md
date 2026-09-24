@@ -115,3 +115,18 @@ operation merge below 30 rows.
 The measured distribution is one machine over one period, and Herdr is new to the
 studio's workflow. If the pane habits change materially, the breakpoints are cheap
 to move; the Region model and the constant-navigation rule are not.
+
+## Note, 2026-09-23: what `/` filters in each Region
+
+Built in #41. `/` filters the Project List by project name or health, and the Tree
+Region by the names of the nodes Atlas has already opened - never by reading
+further, because a filter that walked the project to find a name would be the
+enumeration ticket 06 rules out, one keystroke at a time.
+
+In the Companion Region `/` does not filter. It says, on the operation line, that
+it filters the list or the tree. The Companion's lists are a handful of lines, and
+acting on a Region the operator is not looking at - the old behaviour, which
+filtered the hidden Project List - is the failure this ADR's navigation rule
+exists to prevent. This is a deliberate narrowing of "`/` filters whichever Region
+has focus", not an oversight; revisit it if a Companion Mode grows long enough to
+need one.

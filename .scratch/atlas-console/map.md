@@ -271,7 +271,7 @@ Fog toward the destination. Graduates into tickets as the frontier clears it.
   ticket 25 gave the map a way to make a root file Loose by name or content, and the
   tree already offers its Sweep. Ticket 04's non-writes are built (#45): `o` opens
   the node under the cursor (an Unfiled node is revealed in Explorer instead), `y`
-  copies its path. What is still fog is rename, delete, and whether a file the
+  copies its path - on Unfiled nodes too, since it is not a write (ticket 04 note). What is still fog is rename, delete, and whether a file the
   operator picks can be moved anywhere the map has not named. Ticket 26 asks the
   narrowest version of the last one.
 - **Load State labels do not abbreviate.** Ticket 10 gave the Fault Word a short

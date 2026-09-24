@@ -79,6 +79,12 @@ lives in the Companion Region, not the tree.
 - **Not offered:** delete, rename-to-arbitrary, create-arbitrary. An Unfiled node
   offers reveal and nothing else, which is what `CONTEXT.md` already says about it.
 
+  *Note, 2026-09-23 (#45, built):* `o` opens the node under the cursor, and on an
+  Unfiled node reveals it in Explorer instead. `y` copies the node's path on every
+  node, Unfiled included. "Reveal and nothing else" was written against the writes
+  above it; copying a path is not a write, touches nothing on the drive, and is
+  what a person deciding where an Unfiled thing belongs reaches for first.
+
 Core gains no new concepts. It gains a way to build a Plan holding one Action.
 
 ### Plan and confirm, with no exceptions
