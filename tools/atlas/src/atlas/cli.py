@@ -51,11 +51,19 @@ from .core.project_data import (
 from .core.scan import DEFAULT_MOUNT_ROOT, discover_drives, scan_drive
 
 
+class UsageError(Exception):
+    """The command cannot run as asked: a bad argument or a missing drive.
+
+    An error, never a finding. `main` prints it to stderr and exits 2, so a
+    script can tell "the drive has drift" (1) from "the command failed" (2).
+    """
+
+
 def _resolve_drive(arg: str | None) -> Path:
     if arg:
         root = Path(arg)
         if not find_map(root):
-            raise SystemExit(f"error: no _tools/*-map.json under {root}")
+            raise UsageError(f"no _tools/*-map.json under {root}")
         return root
     cwd = Path.cwd()
     for candidate in (cwd, *cwd.parents):
@@ -65,9 +73,9 @@ def _resolve_drive(arg: str | None) -> Path:
     if len(drives) == 1:
         return drives[0]
     if not drives:
-        raise SystemExit(f"error: no mapped drives found under {DEFAULT_MOUNT_ROOT}; pass --drive")
+        raise UsageError(f"no mapped drives found under {DEFAULT_MOUNT_ROOT}; pass --drive")
     names = ", ".join(d.name for d in drives)
-    raise SystemExit(f"error: multiple mapped drives ({names}); pass --drive")
+    raise UsageError(f"multiple mapped drives ({names}); pass --drive")
 
 
 def cmd_lint(args: argparse.Namespace) -> int:
@@ -124,7 +132,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 def _resolve_project(root: Path, name: str) -> Path:
     project = root / name
     if not project.is_dir():
-        raise SystemExit(f"error: no project folder '{name}' under {root}")
+        raise UsageError(f"no project folder '{name}' under {root}")
     return project
 
 
@@ -758,8 +766,13 @@ def cmd_conform(args: argparse.Namespace) -> int:
     only = set(args.only) if args.only else None
     results = []
     pending = False
+    # What conform cannot repair but doctor still reports: only a person can
+    # decide where an Unfiled item belongs. Not "OK", and not exit 0.
+    leftovers: dict[str, int] = {}
     for inv in targets:
         report = report_project(inv, m)
+        if not args.node and report.unfiled:
+            leftovers[inv.name] = len(report.unfiled)
         if args.node:
             plan = build_repair_plan(report, m, args.node, project=inv.path)
         else:
@@ -781,9 +794,13 @@ def cmd_conform(args: argparse.Namespace) -> int:
         ], indent=2))
     else:
         for plan in results:
+            left = leftovers.get(plan.project, 0)
             if plan.empty:
                 if args.node:
                     print(f"[OK     ] {plan.project}: {args.node} needs no repair")
+                elif left:
+                    print(f"[REVIEW ] {plan.project}: nothing Atlas can repair; "
+                          f"{left} item(s) need a person")
                 else:
                     print(f"[OK     ] {plan.project}: conforms already")
                 continue
@@ -795,12 +812,14 @@ def cmd_conform(args: argparse.Namespace) -> int:
                 src = f"{a.src} -> " if a.src else ""
                 warning = f"  [path {a.path_length} > 260]" if a.path_warning else ""
                 print(f"    {a.kind:9} {src}{a.dst}{files}{status}{note}{warning}")
+            if left:
+                print(f"    {left} unfiled item(s) need a person")
         if not args.apply and pending:
             print("\n(dry run - pass --apply to perform)")
     if args.apply:
         conflicts = any(a.status == "conflict" for plan in results for a in plan.actions)
-        return 1 if conflicts else 0
-    return 1 if pending else 0
+        return 1 if conflicts or leftovers else 0
+    return 1 if pending or leftovers else 0
 
 
 def _utf8_streams() -> None:
@@ -975,7 +994,11 @@ def main(argv: list[str] | None = None) -> int:
         return run_tui()
     try:
         return args.fn(args)
-    except (ContactError, IntakeError, OpsError, ProjectDataError) as error:
+    except (ContactError, IntakeError, OpsError, ProjectDataError, MapError,
+            UsageError, OSError) as error:
+        # Every error exits 2, never 1: 1 means the drive has findings. An
+        # OSError here is the backstop - a locked file, a vanished mount - and is
+        # reported, not raised as a traceback over empty --json stdout.
         print(f"error: {error}", file=sys.stderr)
         return 2
 

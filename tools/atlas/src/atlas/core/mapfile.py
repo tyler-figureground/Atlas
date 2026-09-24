@@ -110,25 +110,33 @@ def load_map(path: Path) -> DriveMap:
     except json.JSONDecodeError as e:
         raise MapError(f"map is not valid JSON: {path}: {e}") from e
 
+    if not isinstance(raw, dict):
+        raise MapError(f"map must be a JSON object: {path}")
     for key in ("drive", "version", "sections"):
         if key not in raw:
             raise MapError(f"map missing required key '{key}': {path}")
 
+    if not isinstance(raw["sections"], list):
+        raise MapError(f"sections must be a list: {path}")
     sections: list[Section] = []
     for entry in raw["sections"]:
-        if "id" not in entry:
-            raise MapError(f"section without 'id' in {path}")
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str):
+            raise MapError(f"section without a string 'id' in {path}")
+        children = entry.get("children", [])
+        if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
+            raise MapError(f"section '{entry['id']}' children must be a list of names: {path}")
         sections.append(
             Section(
                 id=entry["id"],
                 seed=bool(entry.get("seed", False)),
-                children=tuple(entry.get("children", ())),
+                children=tuple(children),
             )
         )
 
     # Keys beginning with "_" inside relocations are commentary, not rules.
     relocations = {
-        k: v for k, v in raw.get("relocations", {}).items() if not k.startswith("_")
+        k: v for k, v in _string_map(raw, "relocations", path).items()
+        if not k.startswith("_")
     }
 
     return DriveMap(
@@ -137,11 +145,28 @@ def load_map(path: Path) -> DriveMap:
         version=str(raw["version"]),
         project_naming=raw.get("projectNaming", ""),
         sections=tuple(sections),
-        drift_map=dict(raw.get("driftMap", {})),
+        drift_map=_string_map(raw, "driftMap", path),
         relocations=relocations,
-        control_plane=dict(raw.get("controlPlane", {})),
+        control_plane=_string_map(raw, "controlPlane", path, strings=False),
         file_rules=_parse_file_rules(raw.get("fileRules", []), path),
     )
+
+
+def _string_map(raw: dict, key: str, path: Path, *, strings: bool = True) -> dict[str, str]:
+    """An optional object of name -> string. Anything else refuses the map.
+
+    A list where an object belongs used to load and then fail later, as an
+    AttributeError traceback in whichever command touched it first. Keys
+    beginning with "_" are commentary and may hold anything. ``strings=False``
+    checks the object only: controlPlane readers already tolerate other values.
+    """
+    value = raw.get(key, {})
+    if not isinstance(value, dict):
+        raise MapError(f"{key} must be an object of name -> path: {path}")
+    for k, v in value.items():
+        if strings and not k.startswith("_") and not isinstance(v, str):
+            raise MapError(f"{key} '{k}' must map to a string: {path}")
+    return dict(value)
 
 
 # Match keys a File Rule may use, and the FileRule field each one fills.
