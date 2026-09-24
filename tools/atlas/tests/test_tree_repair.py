@@ -15,7 +15,7 @@ from textual.widgets import Static
 from atlas.tui.app import OPERATION_MARGIN, AtlasApp
 from atlas.tui.treeview import ProjectTreeView
 
-from conftest import make_project
+from conftest import make_project, write_map
 
 
 async def settle(app: AtlasApp, pilot) -> None:
@@ -128,9 +128,123 @@ async def test_undo_puts_it_back(fixture_drive):
 
         await pilot.press("u")
         await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
 
         assert (project / "Meetings" / "kickoff.md").is_file()
         assert not (project / "11 Meetings").exists()
+
+
+async def repair_meetings(app, pilot):
+    await settle(app, pilot)
+    await open_tree_on(app, pilot, "Meetings")
+    await pilot.press("f")
+    await settle(app, pilot)
+    await pilot.press("enter")
+    await settle(app, pilot)
+
+
+async def test_undo_previews_and_waits_for_enter(fixture_drive):
+    """Issue #7. `u` moved folders on one keypress. Undo is a write like any
+    other: it builds a Plan, previews it, and waits for the confirm."""
+    project = drifted_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+
+        await pilot.press("u")
+        await settle(app, pilot)
+
+        line = operation_text(app)
+        assert "undo" in line.lower() and "Enter confirm" in line, line
+        assert (project / "11 Meetings").is_dir(), "arming the undo must not write"
+
+        await pilot.press("escape")
+        await settle(app, pilot)
+        assert (project / "11 Meetings").is_dir()
+        assert app._undo.depth("260601_Drift") == 1, "a cancelled undo stays on the stack"
+
+
+async def test_a_merge_undo_confirms_in_the_modal(fixture_drive):
+    """ADR 0006: confirmation weight follows plan size, and undo inherits it.
+    Undoing a merge is one move per child, so it gets the list."""
+    project = make_project(fixture_drive, "260606_MergeUndo",
+                           sections=["01 Model", "Meetings", "11 Meetings"],
+                           files={"Meetings/a.md": "a", "Meetings/b.md": "b",
+                                  "11 Meetings/native.md": "n"})
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+        assert (project / "11 Meetings" / "a.md").is_file()
+
+        await pilot.press("u")
+        await settle(app, pilot)
+        assert app.screen is not app.screen_stack[0], "the modal is up"
+        assert (project / "11 Meetings" / "a.md").is_file()
+        await pilot.click("#ok")
+        await settle(app, pilot)
+
+        assert (project / "Meetings" / "a.md").is_file()
+        assert (project / "Meetings" / "b.md").is_file()
+        assert (project / "11 Meetings" / "native.md").is_file()
+
+
+async def test_undo_refuses_a_change_made_after_the_repair_and_keeps_the_entry(fixture_drive):
+    """Issue #6. The undo guard was built when `u` was pressed, so it could not
+    see anything done between the repair and the undo. It is snapshotted when the
+    repair applies. A refused undo stays on the stack for a retry."""
+    project = drifted_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+
+        (project / "ZZZ Colleague").mkdir()     # the undo's watched folder moved on
+        await pilot.press("u")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert "nothing moved" in operation_text(app).lower()
+        assert (project / "11 Meetings").is_dir()
+        assert app._undo.depth("260601_Drift") == 1
+
+        (project / "ZZZ Colleague").rmdir()     # the operator puts it right
+        await pilot.press("u")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert (project / "Meetings" / "kickoff.md").is_file()
+        assert app._undo.depth("260601_Drift") == 0
+
+
+async def test_a_project_wide_conform_forgets_the_project_s_undo(fixture_drive):
+    """UndoStack.forget had no caller, so after a whole-project conform `u`
+    reversed a tree repair inside the freshly conformed project."""
+    project = make_project(fixture_drive, "260607_Forget", sections=["01 Model", "Meetings"],
+                           files={"Meetings/k.md": "k", "HANDOFF-x.md": "h"})
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+        assert app._undo.depth("260607_Forget") == 1
+
+        app._move_to_region("projects")
+        await pilot.press("r")
+        await settle(app, pilot)
+        await pilot.press("f")
+        await pilot.pause()
+        await pilot.click("#ok")
+        await settle(app, pilot)
+        assert (project / ".agent" / "handoff" / "HANDOFF-x.md").is_file()
+
+        await pilot.press("u")
+        await settle(app, pilot)
+        assert "nothing to undo" in operation_text(app).lower()
+        assert (project / "11 Meetings").is_dir()
 
 
 async def test_undo_with_an_empty_stack_says_so(fixture_drive):
@@ -164,3 +278,399 @@ async def test_the_confirm_is_not_clipped_by_the_operation_line_padding(fixture_
         line = operation_text(app)
         assert "Esc cancel" in line, line
         assert len(line) <= 46 - OPERATION_MARGIN, line
+
+
+# ------------------------------------------- an armed repair and its context
+
+
+def alpha_and_bravo(drive):
+    """Two projects with the same drift, so a write to the wrong one is visible."""
+    alpha = make_project(drive, "260601_Alpha", sections=["01 Model", "Meetings"],
+                         files={"Meetings/a.md": "a"})
+    bravo = make_project(drive, "260602_Bravo", sections=["01 Model", "Meetings"],
+                         files={"Meetings/b.md": "b"})
+    return alpha, bravo
+
+
+async def arm_on_alpha(app, pilot):
+    await settle(app, pilot)
+    await open_tree_on(app, pilot, "Meetings")
+    await pilot.press("f")
+    await settle(app, pilot)
+    assert "Enter confirm" in operation_text(app)
+
+
+def untouched(*projects):
+    return all((p / "Meetings").is_dir() and not (p / "11 Meetings").exists()
+               for p in projects)
+
+
+async def test_the_confirm_line_names_the_project(fixture_drive):
+    """Issue #2. The confirm named a path, and every project has a Meetings."""
+    alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        assert "260601_Alpha" in operation_text(app)
+
+
+async def test_switching_project_disarms_the_repair(fixture_drive):
+    """Issue #2. Arm in Alpha, move to Bravo, press Enter to open Bravo: that
+    Enter renamed Alpha's folder."""
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        app._move_to_region("projects")
+        await pilot.press("down")
+        await settle(app, pilot)
+        assert app._workspace_project == "260602_Bravo"
+        assert "Enter confirm" not in operation_text(app)
+
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert untouched(alpha, bravo)
+
+
+async def test_a_refresh_disarms_the_repair(fixture_drive):
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        await pilot.press("r")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert untouched(alpha, bravo)
+
+
+async def test_opening_the_filter_disarms_the_repair(fixture_drive):
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        await pilot.press("slash")
+        await pilot.press("B", "r", "a", "v", "o")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert untouched(alpha, bravo)
+
+
+async def test_a_modal_disarms_the_repair_behind_it(fixture_drive):
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        app.action_add_section()
+        await settle(app, pilot)
+        assert app.screen is not app.screen_stack[0], "the modal is up"
+        app.action_drill()
+        await settle(app, pilot)
+
+        assert untouched(alpha, bravo)
+
+
+async def test_escape_during_a_rescan_disarms_the_repair(fixture_drive):
+    """Escape took the scan branch before the cancel, so the repair survived the
+    trip to the drive picker and committed on the next Enter."""
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        app.action_refresh()
+        app.action_back()
+        await settle(app, pilot)
+        app._open_drive(fixture_drive)
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "01 Model")
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert app._armed is None
+        assert untouched(alpha, bravo)
+
+
+async def test_a_write_to_another_project_does_not_repaint_the_tree(fixture_drive):
+    """Issue #3. Reconciling after a write pointed the widget at the written
+    project's tree even when another project was on screen, so the Tree Region
+    showed Alpha under Bravo's title and the next repair wrote to Bravo."""
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        armed = app._armed
+        app._move_to_region("projects")
+        await pilot.press("down")
+        await settle(app, pilot)
+        assert app._workspace_project == "260602_Bravo"
+
+        app._apply_repair(armed.project, armed.plan, armed.guard, armed.node,
+                          remember=True)
+        await settle(app, pilot)
+
+        assert (alpha / "11 Meetings").is_dir()
+        view = app.query_one(ProjectTreeView)
+        assert view.source.project == bravo, "Bravo's title, Bravo's tree"
+
+
+async def test_the_repair_key_refuses_when_the_tree_is_not_the_selected_project(fixture_drive):
+    """Issue #3's second half: the Plan is built for the list's project, the node
+    comes from the widget. When they disagree, nothing is armed."""
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        alpha_tree = app._trees["260601_Alpha"]
+        app._move_to_region("projects")
+        await pilot.press("down")
+        await settle(app, pilot)
+        app._move_to_region("tree")
+        view = app.query_one(ProjectTreeView)
+        view.set_source(alpha_tree)
+        await settle(app, pilot)
+        view.select_key("Meetings")
+        await settle(app, pilot)
+
+        await pilot.press("f")
+        await settle(app, pilot)
+
+        assert app._armed is None
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert untouched(alpha, bravo)
+
+
+# ------------------------------------------ the list follows the tree (#25)
+
+
+async def test_a_tree_repair_updates_the_list_row_so_a_project_conform_is_not_refused(fixture_drive):
+    """Issue #25. The row kept its pre-repair report, so `f` on the list
+    previewed the repair just done and the apply was refused as changed."""
+    project = make_project(fixture_drive, "260610_Row", sections=["01 Model", "Meetings"],
+                           files={"Meetings/k.md": "k", "HANDOFF-x.md": "h"})
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+        row = app._selected_row()
+        assert row.report.drift == (), "the row took the fresh report"
+
+        app._move_to_region("projects")
+        await pilot.press("f")
+        await pilot.pause()
+        await pilot.click("#ok")
+        await settle(app, pilot)
+
+        assert (project / ".agent" / "handoff" / "HANDOFF-x.md").is_file()
+        assert (project / "11 Meetings" / "k.md").is_file()
+
+
+# ------------------------------------------ the line says what happened (#20)
+
+
+async def test_the_confirm_says_merge_and_the_result_says_what_moved(fixture_drive):
+    make_project(fixture_drive, "260608_Merge", sections=["01 Model", "Meetings", "11 Meetings"],
+                 files={"Meetings/a.md": "a", "11 Meetings/n.md": "n"})
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        await pilot.press("f")
+        await settle(app, pilot)
+        assert operation_text(app).startswith("merge Meetings -> 11 Meetings"), operation_text(app)
+
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert "merged 1 item(s)" in operation_text(app)
+
+
+async def test_a_removal_is_reported_as_one_and_as_not_undoable(fixture_drive):
+    project = make_project(fixture_drive, "260609_Dup",
+                           sections=["01 Model", "08 OUT/Invoices", "10 Legal/Invoices"])
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        view = app.query_one(ProjectTreeView)
+        view.node_for("08 OUT").expand()
+        await settle(app, pilot)
+        view.select_key("08 OUT/Invoices")
+        await settle(app, pilot)
+        await pilot.press("f")
+        await settle(app, pilot)
+        assert "remove empty 08 OUT/Invoices" in operation_text(app)
+
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        line = operation_text(app)
+        assert "removed empty 08 OUT/Invoices" in line and "cannot be undone" in line, line
+        assert not (project / "08 OUT" / "Invoices").exists()
+
+
+# ------------------------------------------------ the tree stays fresh (#12, #40)
+
+
+async def test_a_refresh_shows_a_colleague_s_rename_in_the_tree(fixture_drive):
+    """Issue #12. `r` refreshed the list and left the tree on its first report:
+    Meetings still drawn Drifted after a colleague had renamed it."""
+    project = drifted_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        view = app.query_one(ProjectTreeView)
+        assert view.node_for("Meetings") is not None
+
+        (project / "Meetings").rename(project / "11 Meetings")
+        (project / "Scratch").mkdir()
+        await pilot.press("r")
+        await settle(app, pilot)
+
+        assert view.node_for("Meetings") is None
+        assert view.node_for("11 Meetings") is not None
+        assert view.source.filing_state("Scratch") == "unfiled"
+
+
+async def test_a_project_wide_conform_refreshes_the_tree(fixture_drive):
+    """ADR 0007: a project-wide conform invalidates the whole project."""
+    drifted_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        app._move_to_region("projects")
+        await pilot.press("f")
+        await pilot.pause()
+        await pilot.click("#ok")
+        await settle(app, pilot)
+
+        view = app.query_one(ProjectTreeView)
+        assert view.node_for("Meetings") is None
+        assert view.node_for("11 Meetings") is not None
+        assert view.source.filing_state("Meetings") != "drifted"
+
+
+def invoices_project(drive):
+    return make_project(drive, "260605_Keep",
+                        sections=["01 Model", "08 OUT/Invoices", "10 Legal"],
+                        files={"08 OUT/Invoices/inv.pdf": "i"})
+
+
+async def open_invoices(app, pilot):
+    await settle(app, pilot)
+    await pilot.press("enter")
+    await settle(app, pilot)
+    view = app.query_one(ProjectTreeView)
+    view.node_for("08 OUT").expand()
+    await settle(app, pilot)
+    view.select_key("08 OUT/Invoices")
+    await settle(app, pilot)
+    assert view.cursor_node.data == "08 OUT/Invoices"
+    return view
+
+
+@pytest.mark.parametrize("action", [
+    "action_cycle_companion", "action_show_health", "action_toggle_mark", "action_cycle_sort",
+])
+async def test_switching_what_the_companion_shows_keeps_the_tree(fixture_drive, action):
+    """Issue #40. `d`, health, mark and sort rebuilt the tree from the top, so
+    the operator lost the open folder and the cursor, and the next `f` had
+    nothing to act on."""
+    invoices_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        view = await open_invoices(app, pilot)
+
+        getattr(app, action)()
+        await settle(app, pilot)
+
+        assert view.node_for("08 OUT").is_expanded
+        assert view.cursor_node is not None and view.cursor_node.data == "08 OUT/Invoices"
+
+
+async def test_a_refresh_keeps_what_was_open_and_where_the_cursor_was(fixture_drive):
+    """Where a rebuild cannot be avoided, it restores by Node Key."""
+    invoices_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        view = await open_invoices(app, pilot)
+
+        await pilot.press("r")
+        await settle(app, pilot)
+
+        assert view.node_for("08 OUT") is not None and view.node_for("08 OUT").is_expanded
+        assert view.cursor_node is not None and view.cursor_node.data == "08 OUT/Invoices"
+
+
+# ------------------------------------------------------ the drive switch
+
+
+def two_drives(tmp_path):
+    """The same project folder on two drives - an active and an archive copy."""
+    drives = []
+    for letter in ("A", "B"):
+        drive = tmp_path / letter
+        drive.mkdir()
+        write_map(drive)
+        drives.append(drive)
+    make_project(drives[0], "260604_SameName", sections=["01 Model", "Meetings"],
+                 files={"Meetings/a.md": "a"})
+    make_project(drives[1], "260604_SameName", sections=["01 Model", "11 Meetings"],
+                 files={"11 Meetings/b.md": "b"})
+    return drives
+
+
+async def test_undo_does_not_follow_the_operator_to_another_drive(tmp_path, monkeypatch):
+    """Issue #8. The stack and the tree cache were keyed by project name and
+    outlived a drive switch, so drive A's undo renamed drive B's folder."""
+    drive_a, drive_b = two_drives(tmp_path)
+    monkeypatch.setattr("atlas.tui.app.discover_drives", lambda: [drive_a, drive_b])
+    app = AtlasApp(drive_a, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        await pilot.press("f")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert (drive_a / "260604_SameName" / "11 Meetings" / "a.md").is_file()
+
+        app._show_drives(auto_open=False)
+        await settle(app, pilot)
+        app._open_drive(drive_b)
+        await settle(app, pilot)
+
+        view = app.query_one(ProjectTreeView)
+        assert view.source is not None
+        assert view.source.project == drive_b / "260604_SameName", "drive B's tree, not A's"
+
+        await pilot.press("u")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert "nothing to undo" in operation_text(app).lower()
+        assert (drive_b / "260604_SameName" / "11 Meetings" / "b.md").is_file()
+        assert not (drive_b / "260604_SameName" / "Meetings").exists()

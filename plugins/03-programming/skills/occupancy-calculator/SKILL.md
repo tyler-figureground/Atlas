@@ -221,6 +221,7 @@ After showing the inline report, ask: *"Want me to save this as files?"*
 
 **Markdown file** (`{slugified-project-name}-occupancy.md`):
 - Identical content to inline
+- First line of the body is the `<!-- architecture-studio:report -->` marker (see `rules/output-formatting.md`)
 
 **CSV file** (`{slugified-project-name}-occupancy.csv`):
 ```

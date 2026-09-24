@@ -66,6 +66,20 @@ Rules for the block:
 - **Blank means unknown, not a default.** Norma ignores blank fields and falls back to its own examples; it never assumes a value you didn't write. (So don't pre-fill `jurisdiction: other` on a project you haven't scoped — leave it blank.)
 - `jurisdiction` is canonical — write `nyc`, `california`, or `other`. Free-form forms ("New York City", "ca") are tolerated but normalize to those three.
 - This block carries **values only** — no source/date. Provenance lives in the matching table row.
+- **Quote ZIP codes:** `address_postal_code: "02134"`. Unquoted, a YAML reader turns `02134` into the number 1116 and drops the leading zero.
+
+### Atlas-owned keys and rows
+
+Atlas (the studio drive tool) creates the dossier at project intake and edits the intake facts later, so it shares this file with you. It parses only its own keys and rows, carries every other line through untouched, and refuses — naming the problem — any shape below it cannot rewrite safely. Keep these shapes:
+
+- **Front-matter keys Atlas owns:** `project` (or its alias `name`), `address`, `address_street`, `address_unit`, `address_city`, `address_state`, `address_postal_code`, `description`, `project_use_case`, `project_use_case_category`, `billing_contact_*`, `client_contact_*`. Each is a **flat scalar on one line**: plain, `'single'`- or `"double"`-quoted, optionally followed by ` # comment`. Never a list, a block, or a value continued on the next line. Every other key (`occupancy_group: [B, "S-1"]`, block lists, anchors) is yours to shape freely.
+- **One address, three places.** `address`, the `address_*` components, and the Identity → Address / BBL row must agree. When you correct the site address, update all three in the same pass; Atlas refuses to edit a dossier whose `address` or Address / BBL row disagrees with the components rather than guess which is right.
+- **Contact names** (`*_contact_name`) are `First Last`. `*_contact_id` is the shared-directory UUID; never invent one.
+- **Identity rows Atlas owns:** Project, Address / BBL, Project Use Case, Client, Billing Contact / Email / Phone / Company / Address, Client Contact / Email / Phone / Company / Address, Descriptor, Created. Keep the shape `| Field | value (source, date) |`: **the value first**, provenance after it. When Atlas changes a value it replaces only that leading value and keeps the provenance; rows whose value did not change are left byte-for-byte. One row per field. Table padding is fine.
+- **Created** starts with the date, `YYYY-MM-DD`; provenance may follow. Atlas never rewrites it.
+- **Client** is a human fact. Atlas seeds it with the client contact's name and keeps it in step only while it still holds that name; once you write something else there, Atlas leaves it alone.
+- **Top heading.** Atlas's heading is the folder name, and follows a folder rename. Any other heading (the template's `# Project Dossier — …`) is left alone.
+- **Encoding.** Atlas writes UTF-8, CRLF line endings, a trailing newline, no BOM. It reads LF and a missing final newline too, and writes its own form back on the next edit.
 
 **Round-trip check:** from a folder holding a filled `PROJECT.md`, `norma project active` returns that project's jurisdiction / occupancy / construction / sprinklered. That is the contract working.
 
@@ -99,7 +113,7 @@ address_street:              # physical numbered street; never a PO box
 address_unit:                # optional
 address_city:
 address_state:               # two-letter US state
-address_postal_code:         # ZIP or ZIP+4
+address_postal_code:         # ZIP or ZIP+4, quoted: "02134"
 description:                 # optional folder qualifier
 project_use_case:            # display label; custom value when category is Other
 project_use_case_category:   # Renovation | Addition | Renovation + Addition | Ground Up | Feasibility | Existing Conditions | Code Compliance | Other

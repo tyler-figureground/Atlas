@@ -236,6 +236,7 @@ After showing the inline report, ask: *"Want me to save this as files?"* — or 
 
 **Markdown file** (`{slugified-project-name}-program.md`):
 - Identical content to what was shown inline
+- First line of the body is the `<!-- architecture-studio:report -->` marker (see `rules/output-formatting.md`)
 
 **CSV file** (`{slugified-project-name}-program.csv`):
 ```

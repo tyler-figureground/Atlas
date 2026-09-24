@@ -239,7 +239,7 @@ Event-driven automations — they ship with the [Dispatcher plugin](./plugins/08
 | Hook | Event | What it does |
 |------|-------|-------------|
 | [post-write-disclaimer-check](./plugins/08-dispatcher/hooks/post-write-disclaimer-check.sh) | After Write | Warns if regulatory output is missing the professional disclaimer |
-| [post-output-metadata](./plugins/08-dispatcher/hooks/post-output-metadata.sh) | After Write | Stamps markdown reports with YAML front matter |
+| [post-output-metadata](./plugins/08-dispatcher/hooks/post-output-metadata.sh) | After Write | Stamps YAML front matter onto marked plugin reports; leaves other Markdown alone |
 | [pre-commit-spec-lint](./plugins/08-dispatcher/hooks/pre-commit-spec-lint.sh) | Before git commit | Flags malformed CSI section numbers |
 
 See the [hooks directory](./plugins/08-dispatcher/hooks) for details and customization.

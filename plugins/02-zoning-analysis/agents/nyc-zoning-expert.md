@@ -76,6 +76,8 @@ Save three files:
 2. **`property-{address-slug}.md`** — the combined due diligence report
 3. **`zoning-{address-slug}.html`** — the interactive 3D envelope viewer
 
+Both `.md` files carry the `<!-- architecture-studio:report -->` marker as the first line of the body (see `rules/output-formatting.md`).
+
 ## Handoff Points
 
 - If the user needs **site context** (climate, transit, demographics): hand off to the **Site Planner** agent. Say: "I've covered the property and zoning. For site context — climate, transit, demographics — the Site Planner can run a full brief."

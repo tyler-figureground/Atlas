@@ -102,6 +102,24 @@ def test_plan_from_dict_refuses_an_escaping_path():
             "note": "", "moved": [], "path_length": 0}]})
 
 
+@pytest.mark.parametrize("field", ["created", "prune"])
+@pytest.mark.parametrize("bad", ["../../outside", "C:/Windows", "/etc", ""])
+def test_plan_from_dict_refuses_an_escaping_created_or_prune(field, bad):
+    """Both name folders an undo will rmdir; they obey the same path rule."""
+    with pytest.raises(OpsError):
+        plan_from_dict({"project": "P", "actions": [{
+            "kind": "rename", "src": "a", "dst": "b", "file_count": 0, "status": "done",
+            "note": "", "moved": [], "path_length": 0, field: [bad]}]})
+
+
+def test_node_key_normalises_and_joins_as_one_function():
+    from atlas.core.conform import child_key, node_key
+
+    assert node_key("08 OUT\\Invoices/") == "08 OUT/Invoices"
+    assert node_key("", "Meetings") == "Meetings" == child_key("", "Meetings")
+    assert child_key("11 Meetings", "a.md") == "11 Meetings/a.md"
+
+
 def test_a_manifest_from_another_drive_is_refused(fixture_drive, capsys, tmp_path):
     project, manifest = _applied_manifest(fixture_drive, capsys, tmp_path)
     payload = json.loads(manifest.read_text(encoding="utf-8"))

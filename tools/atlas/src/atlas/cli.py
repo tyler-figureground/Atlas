@@ -443,6 +443,7 @@ def cmd_contacts_edit(args: argparse.Namespace) -> int:
             company=args.company if args.company is not None else current.company,
             address=address,
         ),
+        expected_updated_at=current.updated_at,
     )
     if args.json:
         print(json.dumps(_contact_to_dict(updated), ensure_ascii=False))
@@ -553,7 +554,7 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
     drive_map = load_map(find_map(root))
     project = _resolve_project(root, args.folder)
-    record = load_project_record(project)
+    record = load_project_record(project, project_file=drive_map.project_file)
     editable_values = (
         args.name,
         args.street,
@@ -599,11 +600,18 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
             args.other_use_case = _prompt_retain(
                 "Other Project Use Case", current.project_use_case.custom_label
             )
+        # Default to the stable contact ID, never the snapshot email: the
+        # email may have changed in the directory, or now belong to someone
+        # else (ADR 0003).
         args.billing_contact = _prompt_retain(
-            "Billing Contact ID or email", record.billing_contact.email
+            f"Billing Contact ID or email (now {record.billing_contact.full_name} "
+            f"<{record.billing_contact.email}>)",
+            current.billing_contact_id,
         )
         args.client_contact = _prompt_retain(
-            "Client Contact ID or email", record.client_contact.email
+            f"Client Contact ID or email (now {record.client_contact.full_name} "
+            f"<{record.client_contact.email}>)",
+            current.client_contact_id,
         )
         args.desc = _prompt_retain(
             "Description", current.description, clearable=True
@@ -663,7 +671,13 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         description=args.desc if args.desc is not None else current.description,
         created=current.created,
     )
-    plan = preview_project_update(root, project, intake)
+    plan = preview_project_update(
+        root,
+        project,
+        intake,
+        expected_digest=record.source_digest,
+        project_file=drive_map.project_file,
+    )
     if args.dry_run:
         if args.json:
             print(json.dumps(_project_update_plan_to_dict(plan), ensure_ascii=False))
@@ -702,6 +716,8 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         plan,
         allow_rename=allow_rename,
     )
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     if args.json:
         print(json.dumps(_project_update_to_dict(result), ensure_ascii=False))
     else:

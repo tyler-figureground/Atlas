@@ -30,6 +30,13 @@ These conventions govern how skill outputs are structured and presented.
 - Default to markdown (`.md`) for text reports
 - Use HTML only for interactive or visual outputs (3D viewers, slide decks, dashboards)
 - Include a YAML front matter block in markdown reports with: title, date, address/subject, skill name
+- Mark every markdown report with the report marker as the first line of its body (directly after the front matter block, or line 1 if the file has none):
+
+  ```markdown
+  <!-- architecture-studio:report -->
+  ```
+
+  The marker is invisible in rendered Markdown. The `post-output-metadata` hook stamps front matter only onto files that carry it, and only when the front matter is missing, so a report that forgot its block still gets one while every other Markdown file - notes, issue drafts, machine-read files, other repos - is left alone. Emit it once per report. It is independent of the `architecture-studio:requires-disclaimer` end-of-file sentinel; a regulatory report carries both.
 
 ## Lists
 

@@ -54,9 +54,10 @@ Search for information about the immediate surroundings:
 
 ## Output Format
 
-Write the analysis to a markdown file at `./history-[location-slug].md`.
+Write the analysis to a markdown file at `./history-[location-slug].md`. Keep the `<!-- architecture-studio:report -->` marker as the first line of the body (see `rules/output-formatting.md`).
 
 ```markdown
+<!-- architecture-studio:report -->
 # Neighborhood History — [Full Address or Location Name]
 
 > **Date:** [YYYY-MM-DD] | **Coordinates:** [lat, lon]

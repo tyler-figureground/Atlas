@@ -16,6 +16,7 @@ from .contacts import Contact, ContactError, find_contact, load_contacts
 from .intake import ContactSnapshot, IntakeError, ProjectAddress, ProjectIntake, ProjectUseCase
 from .mapfile import DriveMap
 from .naming import NamingError, build_folder_name, clean_name_part, validate_project_folder_path
+from .projectmd import table_cell, yaml_quote
 from .project_index import (
     INDEX_NAME,
     ProjectIndexError,
@@ -60,6 +61,7 @@ class ProjectUpdatePlan:
     contacts_digest: str | None
     index_digest: str | None
     _source: bytes = field(repr=False, compare=False)
+    project_file: str = "PROJECT.md"
 
     @property
     def rename_required(self) -> bool:
@@ -72,77 +74,328 @@ class ProjectUpdateResult:
     path: Path
     renamed: bool
     record: ProjectRecord
+    # Things that went wrong after the update committed: reported, not raised,
+    # because the edit itself succeeded.
+    warnings: tuple[str, ...] = ()
 
 
-def _read_source(project_path: Path) -> tuple[Path, Path, bytes]:
+def _read_source(project_path: Path, project_file: str) -> tuple[Path, Path, bytes]:
     project = Path(project_path)
-    dossier = project / "PROJECT.md"
+    dossier = project / project_file
     try:
         source = dossier.read_bytes()
     except OSError as error:
         raise ProjectDataError(f"cannot read project dossier {dossier}: {error}") from error
-    if source.startswith(b"\xef\xbb\xbf"):
-        raise ProjectDataError(f"{dossier} has a UTF-8 BOM; repair it before editing")
     try:
         source.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ProjectDataError(f"{dossier} is not UTF-8: {error}") from error
-    if not source.endswith(b"\r\n") or b"\n" in source.replace(b"\r\n", b""):
-        raise ProjectDataError(f"{dossier} must use CRLF line endings with a trailing newline")
     return project, dossier, source
 
 
-def _yaml_scalar(value: str, *, key: str, dossier: Path) -> str:
-    value = value.strip()
-    if not value:
-        return ""
-    if value.startswith('"'):
+def _lines(source: bytes) -> list[str]:
+    """The dossier's lines, whatever the writer's line endings or BOM.
+
+    Atlas writes CRLF, UTF-8, no BOM; `/project-dossier` and editors may write
+    LF, drop the final newline, or add a BOM. All read the same, and an edit
+    writes the file back in Atlas's form. Splits on CR/LF only: never on the
+    Unicode line breaks ``str.splitlines`` also honours.
+    """
+
+    text = source.decode("utf-8").removeprefix("\ufeff").replace("\r\n", "\n")
+    lines = text.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+# The front-matter keys Atlas reads and writes. Only these are parsed, and
+# only as flat scalars; every other line - the Norma keys a dossier may write
+# as a list or a block, comments, anything a newer skill adds - is carried
+# through byte-for-byte and never validated here (ADR 0001).
+_ATLAS_KEYS = frozenset(
+    (
+        "project",
+        "name",
+        "address",
+        "address_street",
+        "address_unit",
+        "address_city",
+        "address_state",
+        "address_postal_code",
+        "description",
+        "project_use_case",
+        "project_use_case_category",
+        *(
+            f"{role}_contact_{suffix}"
+            for role in ("billing", "client")
+            for suffix in ("id", "name", "email", "phone", "company", "address")
+        ),
+    )
+)
+_KEY_LINE = re.compile(r"([A-Za-z_][A-Za-z0-9_-]*):(?=[ \t]|$)")
+
+
+@dataclass(frozen=True)
+class _FrontMatter:
+    """Where the Atlas keys sit in the front matter, and what they hold."""
+
+    end: int
+    values: dict[str, str]
+    line_of: dict[str, int]
+    comment_at: dict[str, int]
+
+
+def _closing_double_quote(body: str) -> int:
+    index = 1
+    while index < len(body):
+        character = body[index]
+        if character == "\\":
+            index += 2
+            continue
+        if character == '"':
+            return index
+        index += 1
+    return -1
+
+
+def _yaml_scalar(rest: str, *, key: str, dossier: Path) -> tuple[str, int | None]:
+    """Parse the text after ``key:`` as one flat YAML scalar.
+
+    Returns the value and, when the line carries a trailing ``# comment``, the
+    comment's offset within ``rest`` so a rewrite can keep it. YAML's rule: a
+    ``#`` starts a comment only when whitespace precedes it, and a value that
+    is only a comment is empty (the dossier template writes
+    ``address_unit:  # optional``).
+    """
+
+    body = rest.lstrip(" \t")
+    offset = len(rest) - len(body)
+    if not body:
+        return "", None
+    if body.startswith("#"):
+        return "", offset
+    if body[0] == '"':
+        end = _closing_double_quote(body)
+        if end < 0:
+            raise ProjectDataError(f"{dossier} has invalid YAML value for '{key}'")
         try:
-            parsed = json.loads(value)
+            value = json.loads(body[: end + 1])
         except json.JSONDecodeError as error:
             raise ProjectDataError(f"{dossier} has invalid YAML value for '{key}'") from error
-        if not isinstance(parsed, str):
-            raise ProjectDataError(f"{dossier} '{key}' must be text")
-        return parsed
-    if value[0] in "'[{&*!>|%@`":
-        raise ProjectDataError(f"{dossier} uses unsupported YAML for '{key}'")
-    return value
+        tail_start = end + 1
+    elif body[0] == "'":
+        pieces: list[str] = []
+        index = 1
+        while True:
+            quote = body.find("'", index)
+            if quote < 0:
+                raise ProjectDataError(f"{dossier} has invalid YAML value for '{key}'")
+            if body[quote + 1 : quote + 2] == "'":
+                pieces.append(body[index : quote + 1])
+                index = quote + 2
+                continue
+            pieces.append(body[index:quote])
+            break
+        value = "".join(pieces)
+        tail_start = quote + 1
+    else:
+        if body[0] in "[{&*!>|%@`":
+            raise ProjectDataError(f"{dossier} uses unsupported YAML for '{key}'")
+        comment = re.search(r"[ \t]#", body)
+        if comment is None:
+            return body.rstrip(" \t"), None
+        return body[: comment.start()].rstrip(" \t"), offset + comment.start() + 1
+    tail = body[tail_start:]
+    after = tail.lstrip(" \t")
+    if not after:
+        return value, None
+    if after.startswith("#") and len(after) < len(tail):
+        return value, offset + tail_start + len(tail) - len(after)
+    raise ProjectDataError(f"{dossier} has invalid YAML value for '{key}'")
 
 
-def _front_matter(source: bytes, dossier: Path) -> dict[str, str]:
-    text = source.decode("utf-8")
-    lines = text.splitlines()
-    if not lines or lines[0] != "---":
+def _front_matter_bounds(lines: list[str], dossier: Path) -> int:
+    if not lines or lines[0].rstrip() != "---":
         raise ProjectDataError(f"{dossier} is missing Atlas YAML front matter")
-    try:
-        end = lines.index("---", 1)
-    except ValueError:
-        raise ProjectDataError(f"{dossier} has unterminated YAML front matter") from None
+    for index in range(1, len(lines)):
+        if lines[index].rstrip() == "---":
+            return index
+    raise ProjectDataError(f"{dossier} has unterminated YAML front matter")
+
+
+def _parse_front_matter(lines: list[str], dossier: Path) -> _FrontMatter:
+    end = _front_matter_bounds(lines, dossier)
     values: dict[str, str] = {}
-    for line in lines[1:end]:
+    line_of: dict[str, int] = {}
+    comment_at: dict[str, int] = {}
+    current: str | None = None
+    for index in range(1, end):
+        line = lines[index]
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        if line[:1].isspace() or ":" not in line:
-            raise ProjectDataError(f"{dossier} front matter is not flat YAML")
-        key, raw = line.split(":", 1)
-        if not key or key.strip() != key or key in values:
-            raise ProjectDataError(f"{dossier} has invalid or duplicate YAML key '{key}'")
-        values[key] = _yaml_scalar(raw, key=key, dossier=dossier)
+        if line[:1] in (" ", "\t"):
+            # A continuation line belongs to the key above it. Atlas keys are
+            # flat scalars, so one here is a shape Atlas cannot rewrite safely.
+            if current is not None:
+                raise ProjectDataError(f"{dossier} uses unsupported YAML for '{current}'")
+            continue
+        match = _KEY_LINE.match(line)
+        key = match.group(1) if match else None
+        if key not in _ATLAS_KEYS:
+            current = None
+            continue
+        if key in values:
+            raise ProjectDataError(f"{dossier} has duplicate YAML key '{key}'")
+        rest = line[match.end() :]
+        value, comment = _yaml_scalar(rest, key=key, dossier=dossier)
+        values[key] = value
+        line_of[key] = index
+        if comment is not None:
+            comment_at[key] = match.end() + comment
+        current = key
+    return _FrontMatter(end=end, values=values, line_of=line_of, comment_at=comment_at)
+
+
+def _front_matter(source: bytes, dossier: Path) -> dict[str, str]:
+    values = dict(_parse_front_matter(_lines(source), dossier).values)
+    if not values.get("project") and values.get("name"):
+        # SKILL.md: `name` is an accepted alias of `project`.
+        values["project"] = values["name"]
     return values
 
 
-def _identity_value(source: bytes, field_name: str, dossier: Path) -> str:
-    prefix = f"| {field_name} |"
-    matches = []
-    for line in source.decode("utf-8").splitlines():
-        if line.startswith(prefix) and line.endswith("|"):
-            matches.append(line[len(prefix) : -1].strip())
-    if len(matches) != 1:
+def _row_cells(line: str) -> list[str] | None:
+    """A Markdown table row's cells, still escaped; None when not a row.
+
+    Padding is ignored, so an aligned table a formatter wrote reads the same
+    as Atlas's own ``| Field | Value |``.
+    """
+
+    stripped = line.strip()
+    if len(stripped) < 2 or not stripped.startswith("|") or not stripped.endswith("|"):
+        return None
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for character in stripped[1:-1]:
+        if character == "|" and not escaped:
+            cells.append("".join(current).strip())
+            current = []
+        else:
+            current.append(character)
+        escaped = character == "\\" and not escaped
+    cells.append("".join(current).strip())
+    return cells
+
+
+@dataclass(frozen=True)
+class _Identity:
+    """The Identity table: each field's row line numbers, and where it ends."""
+
+    rows: dict[str, list[int]]
+    table_end: int | None
+
+
+def _identity(lines: list[str]) -> _Identity:
+    start = next(
+        (index for index, line in enumerate(lines) if line.strip() == "## Identity"), None
+    )
+    if start is None:
+        return _Identity(rows={}, table_end=None)
+    rows: dict[str, list[int]] = {}
+    table_end: int | None = None
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("## "):
+            break
+        cells = _row_cells(lines[index])
+        if cells is None:
+            continue
+        table_end = index + 1
+        if len(cells) >= 2:
+            rows.setdefault(cells[0], []).append(index)
+    return _Identity(rows=rows, table_end=table_end)
+
+
+def _identity_cell(lines: list[str], identity: _Identity, field_name: str) -> str | None:
+    """The escaped value cell of one Identity row; None when absent or ambiguous."""
+
+    indexes = identity.rows.get(field_name, [])
+    if len(indexes) != 1:
+        return None
+    cells = _row_cells(lines[indexes[0]])
+    assert cells is not None
+    return cells[1]
+
+
+def _unescape_cell(cell: str) -> str:
+    return re.sub(r"\\([\\|])", r"\1", cell)
+
+
+def _leads_with(cell: str, value: str) -> bool:
+    """Whether an escaped cell holds ``value`` followed only by provenance.
+
+    Rule 1 of the dossier skill: every entry carries a source and a date, so a
+    row reads ``100 Oak Street, ... · APN 000 (county GIS, 2026-09-01)``.
+    """
+
+    rendered = _table(value)
+    if not rendered or not cell.startswith(rendered):
+        return False
+    rest = cell[len(rendered) :]
+    return not rest or rest[0].isspace() or rest[0] in "·("
+
+
+_CREATED_PREFIX = re.compile(r"\s*(\d{4}-\d{2}-\d{2})(?!\d)")
+_FOLDER_STAMP = re.compile(r"(\d{2})(\d{2})(\d{2})_")
+
+
+def _created(lines: list[str], identity: _Identity, project: Path, dossier: Path) -> date:
+    if len(identity.rows.get("Created", [])) > 1:
+        raise ProjectDataError(f"{dossier} has more than one 'Created' Identity row")
+    cell = _identity_cell(lines, identity, "Created") or ""
+    match = _CREATED_PREFIX.match(cell)
+    try:
+        if match is not None:
+            return date.fromisoformat(match.group(1))
+        stamp = _FOLDER_STAMP.match(project.name)
+        if not cell.strip() and stamp is not None:
+            # No Created row: the folder's own YYMMDD stamp is the same fact.
+            return date(2000 + int(stamp.group(1)), int(stamp.group(2)), int(stamp.group(3)))
+    except ValueError as error:
+        raise ProjectDataError(f"{dossier} has an invalid 'Created' date: {error}") from error
+    raise ProjectDataError(
+        f"{dossier} 'Created' Identity row must start with a YYYY-MM-DD date"
+    )
+
+
+def _check_address_agreement(
+    values: dict[str, str],
+    lines: list[str],
+    identity: _Identity,
+    address: ProjectAddress,
+    dossier: Path,
+) -> None:
+    """Refuse when the formatted address or its Identity row say otherwise.
+
+    The address_* components used to win silently, so a ZIP corrected in
+    ``address`` and the Identity row came back wrong on the next edit.
+    """
+
+    formatted = address.formatted
+    disagreements = []
+    if values.get("address") and values["address"] != formatted:
+        disagreements.append(f"front matter 'address' says '{values['address']}'")
+    cell = _identity_cell(lines, identity, "Address / BBL")
+    if cell and not _leads_with(cell, formatted):
+        disagreements.append(f"the Identity 'Address / BBL' row says '{_unescape_cell(cell)}'")
+    if disagreements:
         raise ProjectDataError(
-            f"{dossier} must contain exactly one '{field_name}' Identity row"
+            f"{dossier} address disagrees: the address_* keys give '{formatted}', but "
+            f"{' and '.join(disagreements)}. The Identity table wins (/project-dossier "
+            "rule 5): reconcile the address_* keys to it, then retry."
         )
-    return matches[0].replace(r"\|", "|").replace(r"\\", "\\")
 
 
 def _required(values: dict[str, str], key: str, dossier: Path) -> str:
@@ -154,14 +407,14 @@ def _required(values: dict[str, str], key: str, dossier: Path) -> str:
 
 def _snapshot(values: dict[str, str], role: str, dossier: Path) -> ContactSnapshot:
     name = _required(values, f"{role}_contact_name", dossier)
+    # A snapshot is history, not a directory record: a one-word name ("Cher",
+    # a firm) reads as a first name rather than making the project uneditable.
     pieces = name.rsplit(maxsplit=1)
-    if len(pieces) != 2:
-        raise ProjectDataError(f"{dossier} {role} contact name must include first and last name")
     try:
         return ContactSnapshot(
             id=_required(values, f"{role}_contact_id", dossier),
             first_name=pieces[0],
-            last_name=pieces[1],
+            last_name=pieces[1] if len(pieces) == 2 else "",
             email=_required(values, f"{role}_contact_email", dossier),
             phone=values.get(f"{role}_contact_phone", ""),
             company=values.get(f"{role}_contact_company", ""),
@@ -212,13 +465,26 @@ def _project_address(values: dict[str, str], dossier: Path) -> ProjectAddress:
     )
 
 
-def load_project_record(project_path: Path) -> ProjectRecord:
-    """Load one Atlas 0.2 project dossier through its intake contract."""
+def load_project_record(
+    project_path: Path, *, project_file: str = "PROJECT.md"
+) -> ProjectRecord:
+    """Load one Atlas 0.2 project dossier through its intake contract.
 
-    project, dossier, source = _read_source(project_path)
+    ``project_file`` is the drive map's ``projectFile``.
+    """
+
+    project, dossier, source = _read_source(project_path, project_file)
+    return _record_from_source(project, dossier, source)
+
+
+def _record_from_source(project: Path, dossier: Path, source: bytes) -> ProjectRecord:
     values = _front_matter(source, dossier)
+    lines = _lines(source)
+    identity = _identity(lines)
     try:
         address = _project_address(values, dossier)
+        if "address_street" in values:
+            _check_address_agreement(values, lines, identity, address, dossier)
         category = _required(values, "project_use_case_category", dossier)
         display = _required(values, "project_use_case", dossier)
         use_case = ProjectUseCase(category, display if category == "Other" else "")
@@ -228,7 +494,7 @@ def load_project_record(project_path: Path) -> ProjectRecord:
             )
         billing = _snapshot(values, "billing", dossier)
         client = _snapshot(values, "client", dossier)
-        created = date.fromisoformat(_identity_value(source, "Created", dossier))
+        created = _created(lines, identity, project, dossier)
         intake = ProjectIntake(
             project_name=_required(values, "project", dossier),
             project_address=address,
@@ -273,12 +539,28 @@ def _contact_snapshot(contact: Contact) -> ContactSnapshot:
 
 
 def preview_project_update(
-    drive_root: Path, project_path: Path, intake: ProjectIntake
+    drive_root: Path,
+    project_path: Path,
+    intake: ProjectIntake,
+    *,
+    expected_digest: str | None = None,
+    project_file: str = "PROJECT.md",
 ) -> ProjectUpdatePlan:
-    """Validate an edit and return its deterministic, non-mutating plan."""
+    """Validate an edit and return its deterministic, non-mutating plan.
+
+    ``expected_digest`` is the ``source_digest`` of the record the edit form
+    was filled from. Without it, whatever changed while the operator typed
+    would be read here, baked into the plan, and overwritten by the form's
+    stale values.
+    """
 
     root = Path(drive_root).resolve(strict=True)
-    record = load_project_record(project_path)
+    record = load_project_record(project_path, project_file=project_file)
+    if expected_digest is not None and record.source_digest != expected_digest:
+        raise ProjectDataError(
+            f"{record.path / project_file} changed since you opened it; "
+            "reload the project and make your edit again"
+        )
     old_path = record.path.resolve(strict=True)
     if old_path.parent != root:
         raise ProjectDataError(f"project folder must be a direct child of drive root: {old_path}")
@@ -292,6 +574,14 @@ def preview_project_update(
         new_path = validate_project_folder_path(root, folder_name)
     except NamingError as error:
         raise ProjectDataError(str(error)) from error
+    if (
+        str(new_path) != str(old_path)
+        and new_path.exists()
+        and not _same_underlying_path(old_path, new_path)
+    ):
+        # Apply refuses this too; saying so here keeps --dry-run and the
+        # confirm modal from showing a clean plan that cannot be applied.
+        raise ProjectDataError(f"rename destination already exists: {new_path}")
     try:
         directory = load_contacts(root)
     except ContactError as error:
@@ -325,16 +615,14 @@ def preview_project_update(
         contacts_digest=directory._digest,
         index_digest=index_digest,
         _source=record._source,
+        project_file=project_file,
     )
 
 
-def _yaml(value: str) -> str:
-    return json.dumps(value, ensure_ascii=False)
+_yaml = yaml_quote
 
 
-def _table(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace("|", r"\|")
-    return " ".join(escaped.splitlines()).strip()
+_table = table_cell
 
 
 def _contact_values(role: str, contact: ContactSnapshot) -> dict[str, str]:
@@ -348,8 +636,38 @@ def _contact_values(role: str, contact: ContactSnapshot) -> dict[str, str]:
     }
 
 
+def _identity_values(
+    intake: ProjectIntake, billing: ContactSnapshot, client: ContactSnapshot
+) -> dict[str, str]:
+    """The Identity rows Atlas owns, and the value each mirrors.
+
+    ``Created`` is absent on purpose: an edit never changes it. ``Client`` is
+    a human fact the intake seeds with the client contact's name; it follows
+    a contact change only while it still holds that name (see below).
+    """
+
+    return {
+        "Project": intake.project_name,
+        "Address / BBL": intake.project_address.formatted,
+        "Project Use Case": intake.project_use_case.display,
+        "Client": client.full_name,
+        "Billing Contact": billing.full_name,
+        "Billing Email": billing.email,
+        "Billing Phone": billing.phone,
+        "Billing Company": billing.company,
+        "Billing Address": billing.address,
+        "Client Contact": client.full_name,
+        "Client Email": client.email,
+        "Client Phone": client.phone,
+        "Client Company": client.company,
+        "Client Address": client.address,
+        "Descriptor": intake.description,
+    }
+
+
 def _render_updated_dossier(plan: ProjectUpdatePlan) -> bytes:
     intake = plan.intake
+    dossier = plan.old_path / plan.project_file
     front_values = {
         "project": intake.project_name,
         "address": intake.project_address.formatted,
@@ -364,85 +682,76 @@ def _render_updated_dossier(plan: ProjectUpdatePlan) -> bytes:
         **_contact_values("billing", plan.billing_contact),
         **_contact_values("client", plan.client_contact),
     }
-    identity_values = {
-        "Project": intake.project_name,
-        "Address / BBL": intake.project_address.formatted,
-        "Project Use Case": intake.project_use_case.display,
-        "Client": plan.client_contact.full_name,
-        "Billing Contact": plan.billing_contact.full_name,
-        "Billing Email": plan.billing_contact.email,
-        "Billing Phone": plan.billing_contact.phone,
-        "Billing Company": plan.billing_contact.company,
-        "Billing Address": plan.billing_contact.address,
-        "Client Contact": plan.client_contact.full_name,
-        "Client Email": plan.client_contact.email,
-        "Client Phone": plan.client_contact.phone,
-        "Client Company": plan.client_contact.company,
-        "Client Address": plan.client_contact.address,
-        "Descriptor": intake.description,
-        "Created": intake.created.isoformat(),
-    }
 
-    lines = plan._source[:-2].split(b"\r\n")
     try:
-        front_end = lines.index(b"---", 1)
-    except ValueError:
-        raise ProjectDataError("project dossier front matter changed after preview") from None
-    seen_front: set[str] = set()
-    output: list[bytes] = [lines[0]]
-    for raw_line in lines[1:front_end]:
-        try:
-            line = raw_line.decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise ProjectDataError(f"project dossier is no longer UTF-8: {error}") from error
-        key = line.split(":", 1)[0] if ":" in line and not line[:1].isspace() else ""
-        if key in front_values:
-            if key in seen_front:
-                raise ProjectDataError(f"project dossier has duplicate YAML key '{key}'")
-            output.append(f"{key}: {_yaml(front_values[key])}".encode("utf-8"))
-            seen_front.add(key)
-        else:
-            output.append(raw_line)
-    for key, value in front_values.items():
-        if key not in seen_front:
-            output.append(f"{key}: {_yaml(value)}".encode("utf-8"))
-    output.append(lines[front_end])
+        lines = _lines(plan._source)
+    except UnicodeDecodeError as error:
+        raise ProjectDataError(f"project dossier is no longer UTF-8: {error}") from error
+    before = _record_from_source(plan.old_path, dossier, plan._source)
 
-    body = list(lines[front_end + 1 :])
-    heading_indexes = [index for index, line in enumerate(body) if line.startswith(b"# ")]
-    if not heading_indexes:
-        raise ProjectDataError("project dossier is missing its top heading")
-    body[heading_indexes[0]] = f"# {plan.new_path.name}".encode("utf-8")
-    seen_identity: set[str] = set()
-    in_identity = False
-    for index, raw_line in enumerate(body):
-        if raw_line == b"## Identity":
-            if in_identity:
-                raise ProjectDataError("project dossier has duplicate Identity sections")
-            in_identity = True
+    front = _parse_front_matter(lines, dossier)
+    if "project" not in front.line_of and "name" in front.line_of:
+        # Keep the alias the dossier chose rather than adding a second key.
+        front_values["name"] = front_values.pop("project")
+    output = list(lines)
+    appended: list[str] = []
+    for key, value in front_values.items():
+        index = front.line_of.get(key)
+        if index is None:
+            appended.append(f"{key}: {_yaml(value)}")
             continue
-        if in_identity and raw_line.startswith(b"## "):
-            in_identity = False
-        if not in_identity:
+        if front.values[key] == value:
+            continue  # unchanged: the line keeps its quoting and comment
+        rewritten = f"{key}: {_yaml(value)}"
+        comment_at = front.comment_at.get(key)
+        if comment_at is not None:
+            comment = lines[index][comment_at:]
+            rewritten += " " * max(1, comment_at - len(rewritten)) + comment
+        output[index] = rewritten
+
+    # The top heading is Atlas's only while it names the folder; the dossier
+    # template's "# Project Dossier - <name>" belongs to the skill.
+    heading = next(
+        (index for index in range(front.end + 1, len(output)) if output[index].startswith("# ")),
+        None,
+    )
+    if heading is not None and output[heading][2:].strip() == plan.old_path.name:
+        output[heading] = f"# {plan.new_path.name}"
+
+    # Identity rows: rewrite only a value that changed, and keep whatever
+    # follows it - the source and date the dossier skill requires (rule 1).
+    identity = _identity(output)
+    old_values = _identity_values(before.intake, before.billing_contact, before.client_contact)
+    new_values = _identity_values(intake, plan.billing_contact, plan.client_contact)
+    inserted: list[str] = []
+    for field_name, value in new_values.items():
+        old_value = old_values[field_name]
+        if value == old_value:
             continue
-        try:
-            line = raw_line.decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise ProjectDataError(f"project dossier is no longer UTF-8: {error}") from error
-        for field_name, value in identity_values.items():
-            if line.startswith(f"| {field_name} |") and line.endswith("|"):
-                if field_name in seen_identity:
-                    raise ProjectDataError(
-                        f"project dossier has duplicate '{field_name}' Identity rows"
-                    )
-                body[index] = f"| {field_name} | {_table(value)} |".encode("utf-8")
-                seen_identity.add(field_name)
-                break
-    missing_identity = set(identity_values) - seen_identity
-    if missing_identity:
-        names = ", ".join(sorted(missing_identity))
-        raise ProjectDataError(f"project dossier is missing Identity row(s): {names}")
-    return b"\r\n".join((*output, *body)) + b"\r\n"
+        indexes = identity.rows.get(field_name, [])
+        if len(indexes) > 1:
+            raise ProjectDataError(f"project dossier has duplicate '{field_name}' Identity rows")
+        if not indexes:
+            if value and identity.table_end is not None:
+                inserted.append(f"| {field_name} | {_table(value)} |")
+            continue
+        cells = _row_cells(output[indexes[0]])
+        assert cells is not None
+        cell = cells[1]
+        if _leads_with(cell, old_value):
+            new_cell = _table(value) + cell[len(_table(old_value)) :]
+        elif field_name == "Client" and cell:
+            continue  # a person wrote something else here; theirs to keep
+        else:
+            new_cell = _table(value)
+        cells[1] = new_cell.strip()
+        output[indexes[0]] = "| " + " | ".join(cells) + " |"
+    if inserted:
+        assert identity.table_end is not None
+        output[identity.table_end : identity.table_end] = inserted
+
+    output[front.end : front.end] = appended
+    return ("\r\n".join(output) + "\r\n").encode("utf-8")
 
 
 def _atomic_replace(path: Path, contents: bytes, expected: bytes) -> None:
@@ -510,14 +819,14 @@ def _rename_folder(source: Path, destination: Path) -> None:
 
 
 def _restore_after_index_failure(
-    old_path: Path, current_path: Path, original: bytes, updated: bytes
+    old_path: Path, current_path: Path, original: bytes, updated: bytes, project_file: str
 ) -> str | None:
     try:
         if str(current_path) != str(old_path):
             if old_path.exists() and not _same_underlying_path(current_path, old_path):
                 return f"cannot roll back rename because {old_path} now exists"
             _rename_folder(current_path, old_path)
-        _atomic_replace(old_path / "PROJECT.md", original, updated)
+        _atomic_replace(old_path / project_file, original, updated)
     except (OSError, ProjectDataError) as error:
         return str(error)
     return None
@@ -544,7 +853,7 @@ def apply_project_update(
         and not _same_underlying_path(old_path, plan.new_path)
     ):
         raise ProjectDataError(f"rename destination already exists: {plan.new_path}")
-    dossier = old_path / "PROJECT.md"
+    dossier = old_path / plan.project_file
     try:
         current_source = dossier.read_bytes()
     except OSError as error:
@@ -611,7 +920,7 @@ def apply_project_update(
         )
     except ProjectIndexError as error:
         rollback_error = _restore_after_index_failure(
-            old_path, current_path, current_source, updated
+            old_path, current_path, current_source, updated, plan.project_file
         )
         if rollback_error:
             raise ProjectDataError(
@@ -619,16 +928,21 @@ def apply_project_update(
             ) from error
         raise ProjectDataError(f"cannot update project index: {error}; project restored") from error
 
-    from .ops import append_log
+    from . import ops
 
-    append_log(
-        root,
-        f"[{current_path.name}] project update: folder {old_path.name} -> {current_path.name}",
-    )
-    record = load_project_record(current_path)
+    warnings: list[str] = []
+    try:
+        ops.append_log(
+            root,
+            f"[{current_path.name}] project update: folder {old_path.name} -> {current_path.name}",
+        )
+    except OSError as error:
+        warnings.append(f"project updated, but the Atlas log could not be written: {error}")
+    record = load_project_record(current_path, project_file=plan.project_file)
     return ProjectUpdateResult(
         old_path=old_path,
         path=current_path,
         renamed=plan.rename_required,
         record=record,
+        warnings=tuple(warnings),
     )

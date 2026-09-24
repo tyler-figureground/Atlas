@@ -13,7 +13,10 @@ US_STATES = frozenset(
 )
 ZIP_PATTERN = re.compile(r"^\d{5}(?:-\d{4})?$")
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-CONTROL_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
+# C0, DEL, C1 (which holds NEL, U+0085), and the Unicode line and paragraph
+# separators: every character a line-oriented reader may split on or a YAML
+# parser refuses as non-printable.
+CONTROL_PATTERN = re.compile("[\x00-\x1f\x7f-\x9f\u2028\u2029]")
 STREET_PATTERN = re.compile(r"^\d+(?:-\d+)?[A-Za-z]?\s+\S")
 USE_CASES = (
     "Renovation",
@@ -47,14 +50,14 @@ class ContactSnapshot:
         object.__setattr__(self, "email", self.email.casefold())
         if not self.id:
             raise IntakeError("contact ID is required")
-        if not self.first_name or not self.last_name:
-            raise IntakeError("contact first and last name are required")
+        if not self.first_name and not self.last_name:
+            raise IntakeError("contact name is required")
         if not EMAIL_PATTERN.fullmatch(self.email):
             raise IntakeError("contact email is invalid")
 
     @property
     def full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}"
+        return f"{self.first_name} {self.last_name}".strip()
 
 
 @dataclass(frozen=True)

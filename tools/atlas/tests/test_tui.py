@@ -137,6 +137,54 @@ async def test_edit_project_prepopulates_and_confirms_folder_rename(fixture_driv
     )
 
 
+async def test_new_project_refuses_pasted_control_characters_inline(fixture_drive):
+    # Two spreadsheet cells pasted into Project name used to leave "Next"
+    # enabled and then crash the app at review, losing every entry.
+    contact = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com"),
+    )
+    app = AtlasApp(fixture_drive)
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await pilot.press("n")
+        await pilot.pause()
+        for field, value in (
+            ("#name", "Oak House\tRenovation\r\n"),
+            ("#street", "1842 Oak Street"),
+            ("#city", "Oakland"),
+            ("#state", "CA"),
+            ("#postal-code", "94612"),
+        ):
+            app.screen.query_one(field, Input).value = value
+        app.screen.query_one("#use-case", Select).value = "Renovation"
+        await pilot.pause()
+
+        assert app.screen.query_one("#next-project", Button).disabled
+        assert "control characters" in str(
+            app.screen.query_one("#project-error", Static).render()
+        )
+
+        app.screen.query_one("#name", Input).value = "Oak House"
+        app.screen.query_one("#desc", Input).value = "Kitchen\u2028Bath"
+        await pilot.pause()
+        assert app.screen.query_one("#next-project", Button).disabled
+
+        # Even when a bad value reaches review, the error lands inline.
+        app.screen.query_one("#next-project", Button).disabled = False
+        app.screen.query_one("#next-project", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#billing-contact", Select).value = contact.id
+        await pilot.pause()
+        app.screen.query_one("#next-contacts", Button).press()
+        await pilot.pause()
+        assert isinstance(app.screen, NewProjectModal)
+        assert app.screen.query_one("#name", Input).value == "Oak House"
+        assert "control characters" in str(
+            app.screen.query_one("#project-error", Static).render()
+        )
+
+
 async def test_manage_contacts_edits_po_box_without_rewriting_projects(fixture_drive):
     contact = add_contact(
         fixture_drive,
@@ -163,6 +211,72 @@ async def test_manage_contacts_edits_po_box_without_rewriting_projects(fixture_d
     updated = load_contacts(fixture_drive).contacts[0]
     assert updated.id == contact.id
     assert updated.address["street"] == "PO Box 42"
+
+
+async def test_manage_contacts_refuses_to_revert_a_change_made_while_open(fixture_drive):
+    from atlas.core.contacts import update_contact
+
+    contact = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com"),
+    )
+    app = AtlasApp(fixture_drive)
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await pilot.press("m")
+        await pilot.pause()
+        app.screen.query_one("#manager-contact", Select).value = contact.id
+        await pilot.pause()
+        # Operator B saves a phone number while operator A's form is open.
+        update_contact(
+            fixture_drive,
+            contact.id,
+            ContactDraft(
+                first_name="Ada",
+                last_name="Lovelace",
+                email="ada@example.com",
+                phone="510 555 0100",
+            ),
+        )
+        app.screen.query_one("#manager-company", Input).value = "Engines Ltd"
+        app.screen.query_one("#manager-save", Button).press()
+        await pilot.pause()
+
+        assert isinstance(app.screen, ContactManagerModal)
+        assert "changed since you opened" in str(
+            app.screen.query_one("#manager-error", Static).render()
+        )
+
+    stored = load_contacts(fixture_drive).contacts[0]
+    assert (stored.phone, stored.company) == ("510 555 0100", None)
+
+
+async def test_edit_project_refuses_to_revert_a_dossier_change_made_while_open(fixture_drive):
+    intake = make_intake(fixture_drive, "Oak House", street="100 Oak Street")
+    created = new_project(fixture_drive, load_map(find_map(fixture_drive)), intake)
+    dossier = created.path / "PROJECT.md"
+    app = AtlasApp(fixture_drive)
+
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await pilot.press("e")
+        await pilot.pause()
+        assert isinstance(app.screen, NewProjectModal)
+        # Claude fixes the project name while the form is open.
+        dossier.write_bytes(
+            dossier.read_bytes().replace(b'project: "Oak House"', b'project: "Oak Street Residence"')
+        )
+        concurrent = dossier.read_bytes()
+        app.screen.query_one("#use-case", Select).value = "Addition"
+        await pilot.pause()
+        app.screen.query_one("#next-project", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#next-contacts", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#create-project", Button).press()
+        await settle(app, pilot)
+
+    assert dossier.read_bytes() == concurrent
 
 
 async def test_new_project_hides_custom_use_case_until_other_selected(fixture_drive):

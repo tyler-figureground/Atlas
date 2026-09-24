@@ -1,6 +1,6 @@
 {
   "name": "00-due-diligence",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "NYC property data skills — landmarks, DOB permits, violations, ACRIS records, HPD, and BSA variances from NYC Open Data.",
   "author": {
     "name": "ALPA",

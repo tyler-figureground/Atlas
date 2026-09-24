@@ -78,7 +78,10 @@ Add `--json` for the raw result dict. Both tools return `section`, `edition`, an
 
 ## Report shape
 
+The first line is the `<!-- architecture-studio:report -->` marker, so the marketplace's metadata hook recognises the file as a report.
+
 ```
+<!-- architecture-studio:report -->
 # Drawing Review - <sheet / project>
 Jurisdiction/edition · Occupancy · Sprinklered · Scale (source)
 

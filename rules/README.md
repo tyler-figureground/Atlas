@@ -17,6 +17,6 @@ Rules are always-on conventions that shape every skill output. Unlike skills (in
 Claude Code has no mechanism that auto-loads a `rules/` directory, so these bind at two different strengths:
 
 - **Hook-enforced (2):** `professional-disclaimer` and `csi-formatting` are checked mechanically by the hooks that ship with the Dispatcher plugin (`post-write-disclaimer-check`, `pre-commit-spec-lint`). The disclaimer check is marker-driven — skills emit `<!-- architecture-studio:requires-disclaimer -->` and the hook verifies the canonical block.
-- **Advisory (5):** the other five are conventions written into the skills and agents that need them — the skill bodies carry the relevant rules inline, and these files are the canonical reference they're kept consistent with. Nothing enforces them at runtime.
+- **Advisory (5):** the other five are conventions written into the skills and agents that need them — the skill bodies carry the relevant rules inline, and these files are the canonical reference they're kept consistent with. Nothing enforces them at runtime, with one backstop: `output-formatting`'s front-matter block is stamped by the `post-output-metadata` hook when a report forgets it. That hook is marker-driven too — it acts only on files carrying `<!-- architecture-studio:report -->` and leaves every other Markdown file alone.
 
 If a rule matters enough to your practice to enforce, the pattern is in the two hook-enforced rules: have skills emit a marker, check the marker in a hook. Rules are not invoked directly.

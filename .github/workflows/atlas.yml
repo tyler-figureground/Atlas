@@ -1,0 +1,40 @@
+name: Atlas
+
+# Atlas (tools/atlas) is a self-contained uv project with its own quality gate
+# (ADR 0002). scripts/lint.sh does not cover it, so this workflow runs its test
+# suite. Textual runs headless under pytest; no display is needed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/atlas/**"
+      - ".github/workflows/atlas.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/atlas/**"
+      - ".github/workflows/atlas.yml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tools/atlas
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: "tools/atlas/uv.lock"
+
+      # --locked fails if uv.lock is out of date with pyproject.toml.
+      # pytest-timeout gives each test a ceiling, so a hang in run_test() or
+      # event-loop setup fails one test instead of stalling the whole run.
+      - name: Run Atlas tests
+        run: uv run --locked --with pytest-timeout pytest -q --timeout=120

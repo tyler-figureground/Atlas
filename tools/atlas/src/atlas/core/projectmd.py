@@ -10,9 +10,10 @@ idempotently.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
-from .intake import ContactSnapshot, ResolvedProjectIntake
+from .intake import CONTROL_PATTERN, ContactSnapshot, ResolvedProjectIntake
 from .mapfile import DriveMap
 
 MAP_BEGIN = "<!-- atlas:map-begin -->"
@@ -66,13 +67,32 @@ def create_crlf_no_bom(path: Path, lines: list[str]) -> bool:
     return True
 
 
-def _yaml(value: str) -> str:
-    return json.dumps(value, ensure_ascii=False)
+# json.dumps escapes C0 but writes these raw. Raw, U+2028/U+2029/U+0085 split a
+# line for any reader that uses str.splitlines(), and DEL/C1/BOM are
+# non-printable to PyYAML - either way the dossier stops loading.
+_UNSAFE_IN_YAML = re.compile("[\x7f-\x9f\u2028\u2029\ufeff\ufffe\uffff]")
 
 
-def _table(value: str) -> str:
+def yaml_quote(value: str) -> str:
+    """One YAML double-quoted scalar, safe on a single physical line."""
+
+    return _UNSAFE_IN_YAML.sub(
+        lambda match: f"\\u{ord(match.group()):04x}",
+        json.dumps(value, ensure_ascii=False),
+    )
+
+
+_yaml = yaml_quote
+
+
+def table_cell(value: str) -> str:
+    """One Markdown table cell on one line, pipes and backslashes escaped."""
+
     escaped = value.replace("\\", "\\\\").replace("|", r"\|")
-    return " ".join(escaped.splitlines()).strip()
+    return CONTROL_PATTERN.sub(" ", " ".join(escaped.splitlines())).strip()
+
+
+_table = table_cell
 
 
 def blank_intake_front_matter(project: str) -> list[str]:

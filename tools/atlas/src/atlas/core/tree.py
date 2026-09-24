@@ -17,7 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .conform import DONE, Plan, parent_key
+from .conform import CONFLICT, DONE, SWEEP, Plan, parent_key
 from .doctor import ProjectReport
 from .mapfile import DriveMap
 from .scan import READ, UNREAD, Listing, ProjectInventory, list_entries
@@ -241,18 +241,26 @@ class ProjectTree:
         """
         touched: list[str] = []
         for action in applied.actions:
-            if action.status != DONE:
+            # A conflicted merge still moved what its manifest says it moved.
+            if action.status != DONE and not (action.status == CONFLICT and action.moved):
                 continue
             keys = [parent_key(mv.src) for mv in action.moved]
             keys += [parent_key(mv.dst) for mv in action.moved]
-            # The Action's own endpoints, not only its manifest's. A merge moves
+            # The Action's own endpoints, not only its manifest's, and for every
+            # applied action whether or not it moved anything. A merge moves
             # children one at a time, so every Move names a child and the parents
             # of those children are the two merged folders - never the folder
-            # that just lost the source from its own listing. Leaving that one
-            # cached draws a row for a folder that is no longer on disk, which
-            # ADR 0004 rules out. `follow` already relies on the same fact.
-            if action.moved:
-                keys += [parent_key(action.src), parent_key(action.dst)]
+            # that just lost the source from its own listing. A backfill and a
+            # removed empty duplicate have no manifest at all. Leaving any of
+            # those cached draws a row for something not on disk, or none for
+            # something that is, which ADR 0004 rules out.
+            if action.src:
+                keys.append(parent_key(action.src))
+            dst = action.dst.replace("\\", "/").rstrip("/")
+            keys.append(dst if action.kind == SWEEP else parent_key(dst))
+            # Folders the write created on the way, and those an undo pruned:
+            # their parents gained or lost a child no Move names.
+            keys += [parent_key(key) for key in action.created + action.prune]
             for key in keys:
                 if key not in touched:
                     touched.append(key)

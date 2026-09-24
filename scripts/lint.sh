@@ -238,6 +238,20 @@ else
   [ "$NORMA_DRIFT" -eq 0 ] && pass_check "clean (norma CLI only)"
 fi
 
+# 8. post-output-metadata hook behavior — marker-driven, never stamps foreign
+#    Markdown. Pipes Write-tool JSON into the hook against temp files only.
+echo "→ post-output-metadata hook (marker-driven stamping)"
+if POM_OUT=$(python3 plugins/08-dispatcher/hooks/tests/check_post_output_metadata.py 2>&1); then
+  POM_LAST=$(printf '%s\n' "$POM_OUT" | tail -n 1)
+  case "$POM_LAST" in
+    *"!"*) echo "$POM_LAST" ;;
+    *) pass_check "${POM_LAST#"${POM_LAST%%[![:space:]]*}"}" ;;
+  esac
+else
+  printf '%s\n' "$POM_OUT"
+  fail_check "post-output-metadata hook check failed"
+fi
+
 echo
 if [ "$FAIL" -ne 0 ]; then
   echo "lint failed"

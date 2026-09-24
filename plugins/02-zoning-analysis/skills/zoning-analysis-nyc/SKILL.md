@@ -209,10 +209,12 @@ Use the output format below to present a structured, comprehensive analysis.
 Write the analysis to a markdown file in the current working directory:
 - Filename: `zoning-analysis-[address-slug].md`
 - Example: `zoning-analysis-123-main-st-brooklyn.md`
+- Keep the `<!-- architecture-studio:report -->` marker as the first line of the body (see `rules/output-formatting.md`)
 
 ## Output Format
 
 ```markdown
+<!-- architecture-studio:report -->
 # Zoning Analysis — [Address], [Borough]
 
 ## Lot Summary
