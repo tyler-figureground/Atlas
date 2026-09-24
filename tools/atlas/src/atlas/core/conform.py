@@ -289,9 +289,14 @@ def invert_plan(plan: Plan) -> Plan:
                 f"{action.kind} {action.src or action.dst} moved nothing Atlas can "
                 f"put back; the plan cannot be reversed"
             )
+    # Last applied, first undone. One action's destination can contain another's
+    # (rename `10 Legal Business` -> `10 Legal`, then relocate into `10 Legal`),
+    # and undoing the outer move first carries the inner one away with it. The
+    # applied Plan is already in apply order, so reversing it is the whole rule;
+    # apply_plan keeps an inverse Plan's order rather than re-sorting by kind.
     actions: list[Action] = []
-    for action in plan.actions:
-        for mv in action.moved:
+    for action in reversed(plan.actions):
+        for mv in reversed(action.moved):
             if mv.is_dir:
                 actions.append(Action(kind=RELOCATE, src=mv.dst, dst=mv.src))
             else:
@@ -441,7 +446,8 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
         raise OpsError(f"project folder is no longer available: {project}")
     applied: list[Action] = []
     order = {BACKFILL: 0, RENAME: 1, RELOCATE: 2, SWEEP: 3}
-    for action in sorted(plan.actions, key=lambda a: order[a.kind]):
+    ordered = plan.actions if plan.inverse else sorted(plan.actions, key=lambda a: order[a.kind])
+    for action in ordered:
         if only and action.kind not in only:
             applied.append(replace(action, status=SKIPPED, note="filtered by --only"))
             continue

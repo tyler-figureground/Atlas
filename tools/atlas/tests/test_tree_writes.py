@@ -178,6 +178,27 @@ def test_inverting_a_merge_sends_each_child_back_and_leaves_the_rest(fixture_dri
     assert not (inv.path / "11 Meetings" / "Agendas").exists()
 
 
+def test_undo_runs_last_first_so_a_nested_move_comes_back_out(fixture_drive):
+    """Issue #21. Conform renames `10 Legal Business` -> `10 Legal`, then
+    relocates `08 OUT/Invoices` into it. Undone in forward order, the rename
+    back carried Invoices away and the relocate back was skipped."""
+    project = make_project(
+        fixture_drive, "260334_Nested",
+        sections=["01 Model", "10 Legal Business", "08 OUT/Invoices"],
+        files={"08 OUT/Invoices/INV-1.pdf": "i", "10 Legal Business/c.pdf": "c"},
+    )
+    plan, inv, m = plan_for(fixture_drive, "260334_Nested")
+    applied = apply_plan(fixture_drive, inv.path, m, plan, only={"rename", "relocate"})
+    assert (project / "10 Legal" / "Invoices" / "INV-1.pdf").is_file()
+
+    undone = apply_plan(fixture_drive, inv.path, m, invert_plan(applied))
+
+    assert all(a.status == "done" for a in undone.actions), undone.actions
+    assert (project / "08 OUT" / "Invoices" / "INV-1.pdf").is_file()
+    assert (project / "10 Legal Business" / "c.pdf").is_file()
+    assert not (project / "10 Legal Business" / "Invoices").exists()
+
+
 def test_a_backfill_cannot_be_inverted(fixture_drive):
     """Backfill creates; it never moves. There is no manifest to reverse, and
     Atlas refuses the whole Plan rather than performing a partial undo."""
