@@ -883,6 +883,9 @@ class AtlasApp(App):
         # that Undo pops. Both are session state and neither reaches the CLI.
         self._armed: _ArmedRepair | None = None
         self._undo = UndoStack()
+        # Which drive the tree cache and the undo stack describe. Both are keyed
+        # by project name, and the same project folder can sit on two drives.
+        self._drive_root: Path | None = None
         self._follow_debounce = follow_debounce
         self._follow_timer = None
         self._workspace_project = ""
@@ -1142,7 +1145,20 @@ class AtlasApp(App):
         if index is not None and 0 <= index < len(self._drives):
             self._open_drive(self._drives[index])
 
+    def _forget_drive(self) -> None:
+        """Drop everything that describes the drive being left (ADR 0006: the
+        undo stack is discarded on drive switch). A same-named project on the
+        next drive must never inherit this one's tree, history or armed write."""
+        self._armed = None
+        self._undo = UndoStack()
+        self._trees.clear()
+        self._workspace_project = ""
+        self.query_one(ProjectTreeView).set_source(None)
+
     def _open_drive(self, root: Path, *, announce: bool = True) -> None:
+        if root != self._drive_root:
+            self._forget_drive()
+            self._drive_root = root
         self._busy = True
         self._work_kind = "scan"
         self._inventory_fresh = False
@@ -1307,10 +1323,13 @@ class AtlasApp(App):
         """The tree handle for one project, built once and kept."""
         if self._inventory is None:
             return None
-        if row.key not in self._trees:
-            inv = next((p for p in self._inventory.projects if p.name == row.key), None)
-            if inv is None:
-                return None
+        inv = next((p for p in self._inventory.projects if p.name == row.key), None)
+        if inv is None:
+            return None
+        cached = self._trees.get(row.key)
+        # Keyed by name, so check the folder too: a tree for the same name on
+        # another drive is not this project's tree.
+        if cached is None or cached.project != inv.path:
             self._trees[row.key] = open_project_tree(inv, self._inventory.map, row.report)
         return self._trees[row.key]
 

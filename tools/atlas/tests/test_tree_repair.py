@@ -15,7 +15,7 @@ from textual.widgets import Static
 from atlas.tui.app import OPERATION_MARGIN, AtlasApp
 from atlas.tui.treeview import ProjectTreeView
 
-from conftest import make_project
+from conftest import make_project, write_map
 
 
 async def settle(app: AtlasApp, pilot) -> None:
@@ -164,3 +164,56 @@ async def test_the_confirm_is_not_clipped_by_the_operation_line_padding(fixture_
         line = operation_text(app)
         assert "Esc cancel" in line, line
         assert len(line) <= 46 - OPERATION_MARGIN, line
+
+
+# ------------------------------------------------------ the drive switch
+
+
+def two_drives(tmp_path):
+    """The same project folder on two drives - an active and an archive copy."""
+    drives = []
+    for letter in ("A", "B"):
+        drive = tmp_path / letter
+        drive.mkdir()
+        write_map(drive)
+        drives.append(drive)
+    make_project(drives[0], "260604_SameName", sections=["01 Model", "Meetings"],
+                 files={"Meetings/a.md": "a"})
+    make_project(drives[1], "260604_SameName", sections=["01 Model", "11 Meetings"],
+                 files={"11 Meetings/b.md": "b"})
+    return drives
+
+
+async def test_undo_does_not_follow_the_operator_to_another_drive(tmp_path, monkeypatch):
+    """Issue #8. The stack and the tree cache were keyed by project name and
+    outlived a drive switch, so drive A's undo renamed drive B's folder."""
+    drive_a, drive_b = two_drives(tmp_path)
+    monkeypatch.setattr("atlas.tui.app.discover_drives", lambda: [drive_a, drive_b])
+    app = AtlasApp(drive_a, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        await pilot.press("f")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert (drive_a / "260604_SameName" / "11 Meetings" / "a.md").is_file()
+
+        app._show_drives(auto_open=False)
+        await settle(app, pilot)
+        app._open_drive(drive_b)
+        await settle(app, pilot)
+
+        view = app.query_one(ProjectTreeView)
+        assert view.source is not None
+        assert view.source.project == drive_b / "260604_SameName", "drive B's tree, not A's"
+
+        await pilot.press("u")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert "nothing to undo" in operation_text(app).lower()
+        assert (drive_b / "260604_SameName" / "11 Meetings" / "b.md").is_file()
+        assert not (drive_b / "260604_SameName" / "Meetings").exists()
