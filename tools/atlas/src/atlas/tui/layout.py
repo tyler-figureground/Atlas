@@ -138,17 +138,25 @@ def next_mode(current: str) -> str:
 # What the footer keeps when there is no room for the rest: the keys that move.
 # Everything else stays one `?` away, which is why `?` is one of the three.
 NAVIGATION_ACTIONS = ("show_help_panel", "next_region", "drill")
+# What the chrome adds once the terminal is Split but still too narrow for
+# Textual's footer, which needs 118 columns for every shown key and the palette
+# hint - measured, the audit found `? Help` and `f Conform` clipped at 100-117.
+ACTION_KEYS = ("conform", "filter_projects", "add_section", "new_project")
+FULL_FOOTER_COLUMNS = 120
 
 
 def footer_actions(width: int) -> tuple[str, ...] | None:
-    """Which bindings the footer may show; ``None`` means all of them.
+    """Which bindings the chrome may name; ``None`` means Textual's full footer.
 
-    Reuses the Split breakpoint rather than introducing a third width constant.
-    The cost is real - at 87 columns the action keys drop out of the footer even
-    though the terminal is not tiny - and it is the price of not having a third
-    set of numbers to keep in agreement.
+    Below the Split breakpoint only the keys that move fit. Between it and the
+    width the full footer needs, the chrome names the moving keys and the main
+    actions, so nothing is clipped off the end - `?` above all.
     """
-    return NAVIGATION_ACTIONS if width < SPLIT_COLUMNS else None
+    if width < SPLIT_COLUMNS:
+        return NAVIGATION_ACTIONS
+    if width < FULL_FOOTER_COLUMNS:
+        return NAVIGATION_ACTIONS + ACTION_KEYS
+    return None
 
 
 # ------------------------------------------------------ the Project List

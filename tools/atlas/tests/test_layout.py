@@ -158,7 +158,8 @@ def test_a_narrow_footer_keeps_only_the_keys_that_move():
     navigation and nothing else. The full list stays one keypress away in help."""
     assert footer_actions(46) == ("show_help_panel", "next_region", "drill")
     assert footer_actions(87) == ("show_help_panel", "next_region", "drill")
-    assert footer_actions(100) is None
+    assert footer_actions(100)[:3] == ("show_help_panel", "next_region", "drill")
+    assert footer_actions(120) is None
     assert footer_actions(179) is None
 
 

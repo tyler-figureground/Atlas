@@ -12,7 +12,8 @@ from pathlib import Path
 
 from atlas.tui.app import AtlasApp
 
-SIZES = [(120, 51), (87, 51), (77, 51), (59, 51), (46, 51)]
+SIZES = [(179, 51), (153, 51), (120, 51), (87, 51), (77, 51), (59, 51), (46, 51),
+         (120, 30), (120, 29), (46, 29)]
 
 
 async def render(drive: Path, width: int, height: int) -> str:

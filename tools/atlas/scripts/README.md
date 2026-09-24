@@ -27,7 +27,8 @@ fixture first.
 cd tools/atlas
 PYTHONUTF8=1 uv run python scripts/build_fixture_drive.py /tmp/testdrive
 
-# the tree at the measured widths - 120, 87, 77, 59, 46
+# the tree at the measured widths - 179, 153, 120, 87, 77, 59, 46 - and either
+# side of the 30-row boundary where summary and operation merge
 PYTHONUTF8=1 uv run python scripts/render_tree.py /tmp/testdrive
 
 # the whole repair flow, keys only, operation line after each step

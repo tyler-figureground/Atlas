@@ -145,6 +145,10 @@ KEY_HINTS = {
     "show_help_panel": "? Help",
     "next_region": "Tab Region",
     "drill": "Enter Open",
+    "conform": "f Conform",
+    "filter_projects": "/ Filter",
+    "add_section": "a Add folders",
+    "new_project": "n New project",
 }
 
 
@@ -836,8 +840,8 @@ class AtlasApp(App):
     #companion-title { height: auto; }
     #companion-body { height: auto; }
     #refusal { height: 1fr; padding: 1 2; }
-    #summary { height: 1; padding: 0 2; }
-    #operation { height: 1; padding: 0 2; }
+    #summary { height: 1; padding: 0 2; text-wrap: nowrap; text-overflow: ellipsis; }
+    #operation { height: 1; padding: 0 2; text-wrap: nowrap; text-overflow: ellipsis; }
     #keys { dock: bottom; height: 1; padding: 0 2; }
     Footer { dock: bottom; }
     """

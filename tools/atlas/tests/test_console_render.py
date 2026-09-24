@@ -224,6 +224,55 @@ async def test_the_split_list_keeps_its_columns_on_screen(fixture_drive):
         app = AtlasApp(fixture_drive, follow_debounce=0)
 
 
+# ------------------------------------------------- narrow clipping (#57)
+
+
+def first_line(widget) -> str:
+    return "".join(seg.text for seg in widget.render_line(0))
+
+
+async def test_the_merged_status_line_keeps_the_summary_on_its_one_row(fixture_drive):
+    """Below 30 rows the summary and operation share one row. The Static used to
+    word-wrap onto a hidden second row and drop the summary entirely."""
+    make_project(fixture_drive, "260813_A", sections=["01 Model"])
+    make_project(fixture_drive, "260813_B", sections=["01 Model"])
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(46, 29)) as pilot:
+        await settle(app, pilot)
+        line = first_line(app.query_one("#operation", Static))
+        assert "Scan complete" in line
+        assert "|  2 proj" in line, line
+        assert line.rstrip().endswith("…"), "a clipped line says it is clipped"
+
+
+async def test_the_footer_names_help_and_conform_between_100_and_119_columns(fixture_drive):
+    make_project(fixture_drive, "260813_A", sections=["01 Model"])
+    for width in (100, 110, 117):
+        app = AtlasApp(fixture_drive, follow_debounce=0)
+        async with app.run_test(size=(width, 51)) as pilot:
+            await settle(app, pilot)
+            keys = app.query_one("#keys", Static)
+            assert keys.display, width
+            shown = first_line(keys)
+            assert "? Help" in shown and "f Conform" in shown, (width, shown)
+
+
+def test_the_confirm_line_is_measured_in_cells_not_characters():
+    """Wide characters in the kept prefix pushed `Esc cancel` onto a hidden
+    second line: len() counts one per character, a terminal two per CJK one."""
+    from rich.cells import cell_len
+
+    from atlas.core.conform import Action, Plan, RELOCATE
+    from atlas.tui.repair import confirm_line
+
+    plan = Plan(project="p", actions=(
+        Action(kind=RELOCATE, src="会議資料/打合せ記録/二〇二六年", dst="11 Meetings/Minutes"),))
+    line = confirm_line(plan, 40)
+    assert cell_len(line) <= 40, line
+    assert line.endswith("Enter confirm  Esc cancel")
+
+
 # ------------------------------------------------------------- resize (#18)
 
 

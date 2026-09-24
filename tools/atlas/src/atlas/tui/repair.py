@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from rich.cells import cell_len, set_cell_size
+
 from ..core.conform import (
     BACKFILL,
     RELOCATE,
@@ -112,9 +114,11 @@ def confirm_line(plan: Plan, width: int = 0) -> str:
         body += f"  [path {action.path_length} > {WINDOWS_MAX_PATH}]"
 
     line = f"{body}   {_KEYS}"
-    if width and len(line) > width:
+    # Cells, not characters: a CJK character is one len() and two cells, and the
+    # overflow pushed the cancel key onto a hidden second line.
+    if width and cell_len(line) > width:
         room = max(0, width - len(_KEYS) - 4)
-        body = body[: max(0, room - 1)] + "\u2026" if room else ""
+        body = set_cell_size(body, max(0, room - 1)).rstrip() + "\u2026" if room else ""
         line = f"{body}   {_KEYS}".strip()
     return line
 
