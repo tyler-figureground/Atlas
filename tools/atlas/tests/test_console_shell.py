@@ -256,6 +256,25 @@ async def test_the_palette_switches_the_companion_instead_of_pushing_a_modal(fix
         assert "ATLAS CAN FIX" in str(app.query_one("#companion-body", Static).content)
 
 
+async def test_the_palette_names_the_key_for_every_console_verb(fixture_drive):
+    """The palette is where an operator who opens Atlas twice a month finds a key
+    (#43). Each console verb has an entry, the entry names its key, and the entry
+    runs the same action the key does."""
+    two_projects(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(179, 51)) as pilot:
+        await settle(app, pilot)
+        commands = {command.title: command for command in app.get_system_commands(app.screen)}
+        keys = {command.help.split(" - ", 1)[0] for command in commands.values()}
+        assert {"/", "d", "[", "]", "z", "f", "u", "o", "y", "c"} <= keys
+
+        before = app._companion_mode
+        commands["Switch Companion mode"].callback()
+        await pilot.pause()
+        assert app._companion_mode != before
+
+
 async def test_a_cursor_passing_through_never_enumerates_what_it_passed(fixture_drive):
     """The cancellation path. Holding the cursor key down walks the list; only
     where it comes to rest is worth an enumeration."""

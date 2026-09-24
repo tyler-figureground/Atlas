@@ -1182,20 +1182,38 @@ class AtlasApp(App):
         if screen is not self.screen_stack[0] or self._busy:
             return
         if self._inventory is not None:
-            yield SystemCommand("Filter projects", "Find a project or health state", self.action_filter_projects)
+            yield SystemCommand("Filter projects",
+                                "/ - the focused Region: projects by name or health, the tree by opened names",
+                                self.action_filter_projects)
             yield SystemCommand("Refresh drive", "Rescan project health", self.action_refresh)
             if self._inventory_fresh:
                 yield SystemCommand("New project", "Create a mapped project", self.action_new_project)
                 yield SystemCommand("Manage contacts", "Edit shared contact details", self.action_manage_contacts)
+        if self._showing == "projects":
+            yield SystemCommand("Switch Companion mode", "d - unmet Expectations, health, or dossier",
+                                self.action_cycle_companion)
+            yield SystemCommand("Collapse or restore project list", "[ - give the Workspace the width",
+                                self.action_collapse_list)
+            yield SystemCommand("Collapse or restore Companion", "] - give the tree the rows",
+                                self.action_collapse_companion)
+            yield SystemCommand("Zoom focused Region", "z - one Region at any width; again to restore",
+                                self.action_zoom_region)
         if self._selected_row() is not None:
             yield SystemCommand("Project health", "Show exact findings in the Companion", self.action_show_health)
             yield SystemCommand("Edit project", "Correct project intake fields", self.action_edit_project)
-            yield SystemCommand("Open project folder", "Open in the default file manager", self.action_open_folder)
+            yield SystemCommand("Open project folder", "o - the tree node under the cursor, or the project",
+                                self.action_open_folder)
+            yield SystemCommand("Copy path", "y - the tree node under the cursor, or the project",
+                                self.action_copy_path)
+            yield SystemCommand("Undo last repair", "u - preview putting the last repair in this project back",
+                                self.action_undo)
             yield SystemCommand("Mark or unmark project", "Build a batch selection", self.action_toggle_mark)
             if self._inventory_fresh:
                 yield SystemCommand("Add project folders", "Create map-approved folders", self.action_add_section)
-                yield SystemCommand("Clean empty folders", "Preview removable empty folders", self.action_clean)
-                yield SystemCommand("Conform project", "Preview mapped repairs", self.action_conform)
+                yield SystemCommand("Clean folders with no files",
+                                    "c - preview folders with no file anywhere beneath", self.action_clean)
+                yield SystemCommand("Conform project",
+                                    "f - the focused project, tree node, or unmet Expectation", self.action_conform)
         if self._marked and self._inventory_fresh:
             yield SystemCommand(
                 "Conform marked projects",
@@ -2348,7 +2366,7 @@ class AtlasApp(App):
         drive_map = self._inventory.map
         self._busy = True
         self._work_kind = "prepare"
-        self._set_operation(f"Finding removable empty folders in {name}...")
+        self._set_operation(f"Finding folders with no files in {name}...")
         self.refresh_bindings()
         self._prepare_clean_worker(project_path, name, drive_map)
 
@@ -2357,7 +2375,7 @@ class AtlasApp(App):
         try:
             empties = find_empty_dirs(project_path, drive_map)
         except Exception as error:
-            self.call_from_thread(self._preparation_failed, "inspect empty folders", error)
+            self.call_from_thread(self._preparation_failed, "inspect folders with no files", error)
             return
         self.call_from_thread(self._show_clean_plan, project_path, name, empties)
 
@@ -2379,25 +2397,25 @@ class AtlasApp(App):
                         title="Clean plan changed",
                         summary=f"{name} changed since preview - nothing removed",
                         lines=(
-                            "Empty-folder state changed while the preview was open.",
+                            "Folders with no files changed while the preview was open.",
                             "Run Clean again to review the current plan.",
                         ),
                         severity="warning",
                     )
                 removed = remove_empty_dirs(root, project_path, fresh_empties)
                 return OperationOutcome(
-                    title="Empty folders cleaned",
-                    summary=f"Removed {len(removed)} empty folder(s) from {name}",
+                    title="Folders with no files cleaned",
+                    summary=f"Removed {len(removed)} folder(s) with no files from {name}",
                     lines=tuple(f"Removed: {item}" for item in removed) or ("Nothing changed.",),
                 )
 
-            self._start_operation("Removing empty folders", root, clean)
+            self._start_operation("Removing folders with no files", root, clean)
 
         self.push_screen(
             ConfirmListModal(
-                f"Clean empty folders - {name}",
+                f"Clean folders with no files - {name}",
                 [f"Remove {item}" for item in empties],
-                f"Remove {len(empties)} empty folder(s)",
+                f"Remove {len(empties)} folder(s) with no files",
             ),
             done,
         )

@@ -10,7 +10,8 @@ The drive's `_tools\<drive>-map.json` is the only folder-structure brain - Atlas
 
 Atlas diagnoses and safely repairs mapped project-folder differences. Every mutation uses the
 same core plan as the CLI. Conform previews exact changes, never overwrites destinations, and
-leaves conflicts in place. Clean removes file-empty folders only.
+leaves conflicts in place. Clean removes only folders with no file anywhere beneath them
+(**Fileless** in `/CONTEXT.md`) - not merely folders with nothing directly inside.
 
 | Command | Does |
 |---|---|
@@ -23,17 +24,33 @@ leaves conflicts in place. Clean removes file-empty folders only.
 | `atlas contacts edit ID_OR_EMAIL [--yes] [...]` | Edit a shared contact; stable ID retained |
 | `atlas project edit FOLDER [--yes] [...]` | Edit project intake; safely preview/confirm folder rename |
 | `atlas add --project NAME --section SECTION` | Add map-approved project folders |
-| `atlas clean --project NAME [--apply]` | Preview or remove empty folders |
+| `atlas clean --project NAME [--apply]` | Preview or remove folders with no files anywhere beneath |
 | `atlas tree NAME [--depth N] [--json]` | One project's folders and files below the root: Filing State, Load State, child counts, and unmet Expectations as a separate list. Read-only |
 | `atlas conform --project NAME [--apply]` | Preview or apply mapped repairs |
 | `atlas conform --project NAME --node PATH [--apply]` | Preview or apply the repair for one node, by project-relative path |
 | `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
 
-TUI keys: `n` new project, `e` edit selected project, `m` manage contacts, `/` filter the
-focused Region (projects by name or health; the tree by the names it has opened, never reading more),
-`Enter` drill in or confirm, `Escape` back, `Tab` next Region, `Space` mark or open a folder,
-`x` conform marked, `a` add folders, `f` conform, `u` undo, `?` help, `Ctrl+P` command palette.
-Additional actions remain searchable in the palette.
+TUI keys:
+
+| Key | Does |
+|---|---|
+| `Enter` | Drill one Region in (list, tree, Companion), or confirm an armed repair or undo |
+| `Escape` | Back one Region, clear a filter, or cancel an armed repair |
+| `Tab` | Next Region |
+| `/` | Filter the focused Region: projects by name or health, the tree by the names it has opened (never reading more). In the Companion it says what it can filter |
+| `space` | Open or close a folder in the tree; mark a project in the list |
+| `d` | Cycle the Companion: unmet Expectations, project health, dossier |
+| `[` / `]` | Collapse or restore the project list / the Companion |
+| `z` | Zoom the focused Region to full width; press again to restore |
+| `f` | Conform what has focus (below) |
+| `u` | Preview undoing the last repair in this project; `Enter` confirms |
+| `o` | Open what has focus (below) |
+| `y` | Copy the full path of what has focus |
+| `n` / `e` / `m` | New project / edit selected project / manage contacts |
+| `a` / `c` | Add map-approved folders / clean folders with no files |
+| `x` | Conform marked projects |
+| `s` / `r` / `l` | Sort / rescan / last result |
+| `?` / `Ctrl+P` / `q` | Help / command palette / quit. Palette entries name their key for `/`, `d`, `[`, `]`, `z`, `f`, `u`, `o`, `y` and `c` |
 
 `f` acts on whatever has focus: the whole project from the list, one folder or file from the
 tree, one unmet control-plane Expectation (a missing `decisions`, `AGENTS.md`...) from the
@@ -41,11 +58,18 @@ Companion. A missing section says to use `a` instead - conform never creates sec
 
 `o` opens what has focus - the project folder from the list, the file or folder under the
 cursor in the tree. An Unfiled node is revealed in Explorer instead of opened. `y` copies the
-full path. Neither writes. On the CLI, node paths are a fact `atlas tree --json` will carry
-(ticket 24). A single repair previews on the operation line and waits for `Enter`; nothing is written
-until then. `u` undoes the last repair in that project.
+full path, Unfiled nodes included. Neither writes. On the CLI, a node's path is its Node Key in
+`atlas tree --json`, relative to the project folder.
 
-Exit codes: `0` clean, `1` findings/pending work, `2` error. `--json` is the agent interface.
+A single repair previews on the operation line and waits for `Enter`; nothing is written
+until then. `u` previews the undo the same way - inline for one move, in a modal for a
+merge's several - and the repair stays on the undo stack until the undo actually moves
+something. The stack holds 50 per project, in memory for this session; a project-wide or
+batch conform clears that project's, and switching drives clears all of it.
+
+Exit codes: `0` clean, `1` findings/pending work, `2` error - every CLI error, including a
+bad map, a missing drive and an unknown project, exits `2`. `--project` takes one folder name
+from the drive root, never a path. `--json` is the agent interface.
 
 ## Filing loose files by rule
 
@@ -128,6 +152,10 @@ Within the console, colour reinforces a distinction and never carries one alone.
 
 ## Install
 
+Two installs, for two audiences. An editable install is for whoever develops Atlas; it never reaches studio staff, who run a pinned wheel from the shared drive.
+
+### Developer: editable
+
 Install once as an editable uv tool. The `atlas` command then works from any directory, and local source changes take effect without reinstalling.
 
 ```bash
@@ -141,6 +169,22 @@ If `atlas` is not found after installation, add uv's tool directory to `PATH`:
 ```bash
 uv tool update-shell
 ```
+
+### Staff: pinned wheel on the drive
+
+Staff launch Atlas through `Atlas.bat`, a launcher on the ARCHITECTURE drive pinned to one wheel version. The wheel lives in the drive's `_tools\atlas\` folder - 0.3.0 went to `G:\Shared drives\ARCHITECTURE\_tools\atlas\studio_atlas-0.3.0-py3-none-any.whl`. Rebuilding from `HEAD` without a version bump produces a second, different wheel under the same number, so bump `version` in `pyproject.toml` first; `atlas --version` reads it from the installed package.
+
+A redeploy writes to the production drive. Do it only with the user's go-ahead. What the deploy records (`.agent/handoff/atlas-editing-plan.md`, `atlas-project-intake-plan.md`) show each release doing:
+
+1. Tests green (`uv run pytest`) and repo lint green.
+2. Build: `uv build` in `tools/atlas` writes `dist/studio_atlas-<version>-py3-none-any.whl`.
+3. Back up the drive's `_tools` launchers, map and instructions to `_tools\logs\atlas-<version>-deploy-<YYYYMMDD-HHMMSS>\`.
+4. Copy the wheel to `_tools\atlas\` and record its SHA-256.
+5. Repin `Atlas.bat` to the new version.
+6. Verify: the deployed launcher reports `atlas <version>`, and `atlas lint` on the production map shows no new errors.
+7. Update the drive's `HOW-TO.md` for any key or command that changed.
+
+Not recorded in the repo: the body of `Atlas.bat` - how it installs or runs the pinned wheel. Read it on the drive before changing it.
 
 ## Dev
 
