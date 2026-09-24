@@ -401,3 +401,23 @@ def test_a_node_cannot_hold_a_load_state_adr_0004_forbids():
 
     assert TreeNode(key="01 Model", name="01 Model", is_dir=True).load == UNREAD
     assert TreeNode(key="a.md", name="a.md", is_dir=False, load=READ).load == ""
+
+
+def test_filing_state_is_decided_by_the_first_rule_conform_applies(fixture_drive):
+    """Drift, then relocations, then sweeps: the first match wins (#60), so the
+    tree's word agrees with the action conform will actually take."""
+    import json
+
+    from conftest import FIXTURE_MAP, write_map
+
+    data = json.loads(json.dumps(FIXTURE_MAP))
+    data["driftMap"]["Stuff"] = "11 Meetings"
+    data["relocations"]["Stuff"] = "10 Legal/Stuff"
+    write_map(fixture_drive, data)
+    make_project(fixture_drive, "260402_Both", sections=["01 Model"],
+                 files={"Stuff/a.txt": "x"})
+    tree = tree_for(fixture_drive, "260402_Both")
+
+    assert tree.filing_state("Stuff") == DRIFTED
+    plan = build_repair_plan(tree.report, tree.drive_map, "Stuff")
+    assert plan.actions[0].kind == "rename"

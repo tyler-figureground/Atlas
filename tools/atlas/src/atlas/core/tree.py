@@ -92,16 +92,21 @@ class Expectation:
 
 
 def _root_filing_states(report: ProjectReport) -> dict[str, str]:
-    """Every node the report has an opinion about, by Node Key."""
+    """Every node the report has an opinion about, by Node Key.
+
+    The first rule that matches decides, in the order conform applies them -
+    drift, relocations, sweeps - so a name two rules claim reads as the action
+    conform will actually take, not the last one listed (ADR 0004).
+    """
     states: dict[str, str] = {}
     for found, _canonical in report.drift:
-        states[found] = DRIFTED
+        states.setdefault(found, DRIFTED)
     for hit in report.relocations:
-        states[hit.source] = MISPLACED
+        states.setdefault(hit.source, MISPLACED)
     for name, _target in report.sweeps:
-        states[name] = LOOSE
+        states.setdefault(name, LOOSE)
     for name in report.unfiled:
-        states[name] = UNFILED
+        states.setdefault(name, UNFILED)
     return states
 
 
