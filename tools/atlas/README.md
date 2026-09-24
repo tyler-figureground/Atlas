@@ -116,7 +116,7 @@ Atlas has not been validated with assistive technology and makes no accessibilit
 
 Every capability that writes, and every fact the console can show, is also reachable from the CLI with `--json`. That path is plain text and is the supported one for automation - and for anyone the console does not serve.
 
-Within the console, colour reinforces a distinction and never carries one alone. A folder or file with something wrong with it names what is wrong in words; when the terminal is too narrow for the full phrase the word abbreviates - `NAME`, `PLACE`, `LOOSE`, `UNMAPPED` - rather than leaving the glyph and its colour to say it.
+Within the console, colour reinforces a distinction and never carries one alone. A folder or file with something wrong with it names what is wrong in words; when the terminal is too narrow for the full phrase the word abbreviates - `NAME`, `PLACE`, `LOOSE`, `UNMAPPED`, `unread` - rather than leaving the glyph and its colour to say it. A long name shortens in the middle so the word always stays on screen.
 
 ## Install
 

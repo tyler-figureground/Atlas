@@ -24,11 +24,69 @@ from ..core.tree import ProjectTree, TreeNode
 from . import tokens
 
 
+ELLIPSIS = "…"
+# The fewest cells of a name a row keeps, however little room there is.
+MIN_NAME = 3
+
+
+def middle_ellipsis(text: str, width: int) -> str:
+    """``text`` shortened to ``width`` cells by cutting its middle.
+
+    The middle, not the end: studio names put what tells two things apart at
+    the end (``YYMMDD_<ShortAddress>-<Description>``), and right-clipping is
+    exactly what removes it. Measured in cells, not characters.
+    """
+    if width <= 0 or cell_len(text) <= width:
+        return text
+    if width == 1:
+        return ELLIPSIS
+    room = width - 1
+    head_cells = (room + 1) // 2
+    head = ""
+    for char in text:
+        if cell_len(head + char) > head_cells:
+            break
+        head += char
+    tail = ""
+    for char in reversed(text[len(head):]):
+        if cell_len(head) + cell_len(char + tail) > room:
+            break
+        tail = char + tail
+    return f"{head}{ELLIPSIS}{tail}"
+
+
 def _detail(node: TreeNode, narrow: bool) -> str:
     """What follows the disclosure marker: a count, or why there is not one."""
     if node.load == READ:
         return tokens.child_count(node.folders, node.files, narrow=narrow)
-    return tokens.load_style(node.load).label
+    style = tokens.load_style(node.load)
+    return style.short if narrow else style.label
+
+
+def _suffix_width(node: TreeNode, narrow: bool, expanded: bool) -> int:
+    """Everything a row draws after the name, in cells."""
+    width = 0
+    fault = _fault_word(node, narrow)
+    if fault:
+        width += 2 + cell_len(fault)
+    if node.is_dir:
+        width += 2 + cell_len(tokens.disclosure(node.load, expanded=expanded))
+        width += 2 + cell_len(_detail(node, narrow))
+    return width
+
+
+def _fitted_name(node: TreeNode, narrow: bool, expanded: bool, room: int) -> str:
+    """The name, shortened so what follows it stays inside ``room`` cells.
+
+    The Fault Word and the Load State come after a name of any length. At 46
+    columns a long name pushed them out of the viewport, leaving hue alone to
+    tell Loose from Unfiled - ADR 0008 rules that out. So the suffix is
+    reserved and the name gives way. ``room`` of 0 means unbounded.
+    """
+    if room <= 0:
+        return node.name
+    budget = max(MIN_NAME, room - 2 - _suffix_width(node, narrow, expanded))
+    return middle_ellipsis(node.name, budget)
 
 
 def _fault_word(node: TreeNode, narrow: bool) -> str:
@@ -46,8 +104,9 @@ def _fault_word(node: TreeNode, narrow: bool) -> str:
     return style.short if narrow else style.label
 
 
-def node_label(node: TreeNode, *, narrow: bool = False, expanded: bool = False) -> Text:
-    """One tree row, as Text.
+def node_label(node: TreeNode, *, narrow: bool = False, expanded: bool = False,
+               room: int = 0) -> Text:
+    """One tree row, as Text, fitted to ``room`` cells when that is given.
 
     Never a ``str``. ``Tree.process_label`` runs ``Text.from_markup`` on anything
     it is handed, so a folder genuinely named ``[2024] Survey`` would lose its
@@ -58,7 +117,7 @@ def node_label(node: TreeNode, *, narrow: bool = False, expanded: bool = False) 
     label = Text()
     label.append(filing.glyph, style=filing.colour)
     label.append(" ")
-    label.append(node.name, style=tokens.PALETTE.ink)
+    label.append(_fitted_name(node, narrow, expanded, room), style=tokens.PALETTE.ink)
     # A file says what is wrong with it too. It has no disclosure marker and no
     # count, but a Loose file and an Unfiled file are otherwise the same hatch
     # in two hues, which is the whole thing ticket 10 rules out.
@@ -75,7 +134,8 @@ def node_label(node: TreeNode, *, narrow: bool = False, expanded: bool = False) 
     return label
 
 
-def label_width(node: TreeNode, *, narrow: bool = False, expanded: bool = False) -> int:
+def label_width(node: TreeNode, *, narrow: bool = False, expanded: bool = False,
+                room: int = 0) -> int:
     """How wide that row will be, without building it.
 
     Ticket 05 measured the median rebuild at 5000 expanded nodes falling from
@@ -84,15 +144,8 @@ def label_width(node: TreeNode, *, narrow: bool = False, expanded: bool = False)
     right number and none of the saving, so this adds the parts up instead - and
     a test holds the two in agreement.
     """
-    width = 2 + cell_len(node.name)
-    fault = _fault_word(node, narrow)
-    if fault:
-        width += 2 + cell_len(fault)
-    if not node.is_dir:
-        return width
-    width += 2 + cell_len(tokens.disclosure(node.load, expanded=expanded))
-    width += 2 + cell_len(_detail(node, narrow))
-    return width
+    name = _fitted_name(node, narrow, expanded, room)
+    return 2 + cell_len(name) + _suffix_width(node, narrow, expanded)
 
 
 class ProjectTreeView(Tree):
@@ -267,7 +320,8 @@ class ProjectTreeView(Tree):
         facts = self._facts.get(str(node.data or ""))
         if facts is None:
             return super().render_label(node, base_style, style)
-        label = node_label(facts, narrow=self.narrow, expanded=node.is_expanded)
+        label = node_label(facts, narrow=self.narrow, expanded=node.is_expanded,
+                           room=self._room(node))
         # Textual delivers the cursor and hover highlight only through `style`.
         # Dropping it drew every row the same, so the operator could not see
         # which node `f` would repair. The row's own colours sit under it; the
@@ -282,4 +336,22 @@ class ProjectTreeView(Tree):
         facts = self._facts.get(str(node.data or ""))
         if facts is None:
             return super().get_label_width(node)
-        return label_width(facts, narrow=self.narrow, expanded=node.is_expanded)
+        return label_width(facts, narrow=self.narrow, expanded=node.is_expanded,
+                           room=self._room(node))
+
+    def _room(self, node: TreeNodeWidget) -> int:
+        """The cells a node's label may use: the viewport less its guides.
+
+        With the root hidden, a top-level node draws no guide; each level below
+        it adds one ``guide_depth``-wide column. 0 while the widget has no size,
+        which leaves the label unbounded.
+        """
+        width = self.scrollable_content_region.width
+        if width <= 0:
+            return 0
+        depth = 0
+        parent = node.parent
+        while parent is not None and parent is not self.root:
+            depth += 1
+            parent = parent.parent
+        return max(1, width - depth * self.guide_depth)

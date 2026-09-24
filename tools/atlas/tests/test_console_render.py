@@ -62,6 +62,57 @@ async def test_the_tree_cursor_row_draws_differently_from_its_neighbours(fixture
         assert cursor_ground == {Color.parse(tokens.PALETTE.ember[2])}
 
 
+# ------------------------------------------------ words stay on screen (#19)
+
+
+def visible_lines(tree: ProjectTreeView) -> list[str]:
+    return ["".join(seg.text for seg in tree.render_line(y))
+            for y in range(len(tree.root.children))]
+
+
+async def test_the_fault_word_and_load_state_survive_a_long_name_at_46_columns(fixture_drive):
+    """ADR 0008: colour may reinforce a distinction, never carry it alone. The
+    word came after an unbounded name, so at 46 columns it was scrolled out of
+    view and the hue was all that told Loose from Unfiled."""
+    make_project(
+        fixture_drive, "260813_Long", sections=["01 Model", "Random Stuff From The Old Server"],
+        files={
+            "HANDOFF-2026-08-13-client-kickoff-notes.md": "x",
+            "HANDOFF_2026-08-13-client-kickoff-notes.md": "x",
+        },
+    )
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(46, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        tree = app.query_one(ProjectTreeView)
+        lines = visible_lines(tree)
+        random = next(line for line in lines if "Random" in line)
+
+        assert "UNMAPPED" in random and "unread" in random, lines
+        loose = next(line for line in lines if "HANDOFF-" in line or "LOOSE" in line)
+        unfiled = next(line for line in lines if line is not loose and "HANDOFF" in line)
+        assert "LOOSE" in loose, lines
+        assert "UNMAPPED" in unfiled, lines
+        for line in lines:
+            assert len(line.rstrip()) <= tree.scrollable_content_region.width
+        # Names shorten in the middle, so both ends survive.
+        assert "notes" in loose and "HANDOFF" in loose
+
+
+def test_unread_has_a_short_form_and_cannot_read_never_shortens():
+    from atlas.core.tree import TreeNode
+    from atlas.core.scan import UNREADABLE
+    from atlas.tui.treeview import node_label
+
+    unread = TreeNode(key="a", name="a", is_dir=True)
+    assert str(node_label(unread, narrow=True)).endswith("unread")
+    denied = TreeNode(key="b", name="b", is_dir=True, load=UNREADABLE)
+    assert str(node_label(denied, narrow=True)).endswith("!  cannot read")
+
+
 # ------------------------------------------------------------- resize (#18)
 
 

@@ -100,6 +100,10 @@ class FilingStyle:
 class LoadStyle:
     label: str
     suffix: str
+    # What the row says when the width runs out. Never shortened into
+    # ambiguity: "cannot read" keeps every word, because unreadable must never
+    # read as empty (ticket 16).
+    short: str = ""
 
 
 _SOLID = "█"
@@ -130,10 +134,10 @@ _FILING: dict[str, FilingStyle] = {
 # Never blank, and never a zero: an Unread folder showing "0 files" would be the
 # same false negative as an unreadable folder showing as empty.
 _LOAD: dict[str, LoadStyle] = {
-    UNREAD: LoadStyle("not opened yet", "▸"),
-    READ: LoadStyle("", "▾"),
-    UNREADABLE: LoadStyle("cannot read", "!"),
-    PARTIAL: LoadStyle("partial", "…"),
+    UNREAD: LoadStyle("not opened yet", "▸", "unread"),
+    READ: LoadStyle("", "▾", ""),
+    UNREADABLE: LoadStyle("cannot read", "!", "cannot read"),
+    PARTIAL: LoadStyle("partial", "…", "partial"),
 }
 
 
