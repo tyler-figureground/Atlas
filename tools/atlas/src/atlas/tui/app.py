@@ -14,8 +14,9 @@ import os
 from pathlib import Path
 
 from rich.text import Text
-from textual import work
+from textual import events, work
 from textual.app import App, ComposeResult, SystemCommand
+from textual.geometry import Size
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
@@ -871,6 +872,7 @@ class AtlasApp(App):
         # Region state. Collapse is sticky for the session and outranks the
         # breakpoint default; the width overrides it only when it cannot carry it.
         self._focus_region = PROJECT_LIST
+        self._screen_size: Size | None = None
         self._collapsed: set[str] = set()
         self._zoomed: str | None = None
         self._companion_mode = DEFAULT_MODE
@@ -938,14 +940,34 @@ class AtlasApp(App):
         Called on mount, on resize, and whenever the inventory changes, so the
         mark collapses as the window narrows instead of clipping.
         """
-        width = self.size.width or mark_width(BAR)
+        width = self._terminal_size().width or mark_width(BAR)
         mark = render_mark(composition_for(width))
         mark.append(self._identity(), style=tokens.PALETTE.muted)
         self.query_one("#mark", Static).update(mark)
 
-    def on_resize(self, _: object) -> None:
+    def _terminal_size(self) -> Size:
+        """The terminal size, as of the latest resize event.
+
+        Not ``self.size`` alone: Atlas's resize handler runs before Textual's
+        stores the new size, so reading it there draws for the previous one -
+        a snap from 120 to 46 columns stayed Split.
+        """
+        return self._screen_size or self.size
+
+    def on_resize(self, event: events.Resize) -> None:
+        self._screen_size = event.size
         self._refresh_mark()
         self._apply_layout()
+        # The tree abbreviates by width; the flag used to be set only when a
+        # project was assigned, so it kept the old width's words.
+        self.query_one(ProjectTreeView).set_narrow(
+            (event.size.width or 80) < ABBREVIATE_COLUMNS)
+        # An armed confirm was sized once, when armed. Re-size it so the keys
+        # that commit or cancel the write are never the part clipped off.
+        armed = self._armed
+        if armed is not None:
+            room = (event.size.width or 0) - OPERATION_MARGIN
+            self._set_operation(confirm_line(armed.plan, max(0, room)))
 
     # ------------------------------------------------------------- the shell
 
@@ -956,8 +978,9 @@ class AtlasApp(App):
         and hidden rather than shrunk, because a Region too narrow to read is
         worse than one that is not there.
         """
+        size = self._terminal_size()
         layout = layout_for(
-            self.size.width or 80, self.size.height or 24,
+            size.width or 80, size.height or 24,
             focus=self._focus_region, collapsed=self._collapsed, zoomed=self._zoomed,
         )
         refusing = layout.composition == REFUSED
@@ -991,7 +1014,7 @@ class AtlasApp(App):
         well as hiding it, so a narrow terminal would have lost the actions rather
         than only their labels.
         """
-        permitted = None if refusing else footer_actions(self.size.width or 80)
+        permitted = None if refusing else footer_actions(self._terminal_size().width or 80)
         narrow = permitted is not None
         self.query_one(Footer).display = not narrow and not refusing
         keys = self.query_one("#keys", Static)

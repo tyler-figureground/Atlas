@@ -148,6 +148,14 @@ class ProjectTreeView(Tree):
         if source is not None:
             self._load("")
 
+    def set_narrow(self, narrow: bool) -> None:
+        """Abbreviate or spell out the rows, after a resize. Redraws, never reads."""
+        if narrow == self.narrow:
+            return
+        self.narrow = narrow
+        # Row widths are cached by the Tree; they depend on the words chosen.
+        self._invalidate()
+
     def _fill(self, parent: TreeNodeWidget, key: str) -> None:
         """Draw one folder's children from the seam, and remember their facts."""
         if self.source is None:
