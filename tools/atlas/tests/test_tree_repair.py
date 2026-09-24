@@ -166,6 +166,179 @@ async def test_the_confirm_is_not_clipped_by_the_operation_line_padding(fixture_
         assert len(line) <= 46 - OPERATION_MARGIN, line
 
 
+# ------------------------------------------- an armed repair and its context
+
+
+def alpha_and_bravo(drive):
+    """Two projects with the same drift, so a write to the wrong one is visible."""
+    alpha = make_project(drive, "260601_Alpha", sections=["01 Model", "Meetings"],
+                         files={"Meetings/a.md": "a"})
+    bravo = make_project(drive, "260602_Bravo", sections=["01 Model", "Meetings"],
+                         files={"Meetings/b.md": "b"})
+    return alpha, bravo
+
+
+async def arm_on_alpha(app, pilot):
+    await settle(app, pilot)
+    await open_tree_on(app, pilot, "Meetings")
+    await pilot.press("f")
+    await settle(app, pilot)
+    assert "Enter confirm" in operation_text(app)
+
+
+def untouched(*projects):
+    return all((p / "Meetings").is_dir() and not (p / "11 Meetings").exists()
+               for p in projects)
+
+
+async def test_the_confirm_line_names_the_project(fixture_drive):
+    """Issue #2. The confirm named a path, and every project has a Meetings."""
+    alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        assert "260601_Alpha" in operation_text(app)
+
+
+async def test_switching_project_disarms_the_repair(fixture_drive):
+    """Issue #2. Arm in Alpha, move to Bravo, press Enter to open Bravo: that
+    Enter renamed Alpha's folder."""
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        app._move_to_region("projects")
+        await pilot.press("down")
+        await settle(app, pilot)
+        assert app._workspace_project == "260602_Bravo"
+        assert "Enter confirm" not in operation_text(app)
+
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert untouched(alpha, bravo)
+
+
+async def test_a_refresh_disarms_the_repair(fixture_drive):
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        await pilot.press("r")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert untouched(alpha, bravo)
+
+
+async def test_opening_the_filter_disarms_the_repair(fixture_drive):
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        await pilot.press("slash")
+        await pilot.press("B", "r", "a", "v", "o")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert untouched(alpha, bravo)
+
+
+async def test_a_modal_disarms_the_repair_behind_it(fixture_drive):
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        app.action_add_section()
+        await settle(app, pilot)
+        assert app.screen is not app.screen_stack[0], "the modal is up"
+        app.action_drill()
+        await settle(app, pilot)
+
+        assert untouched(alpha, bravo)
+
+
+async def test_escape_during_a_rescan_disarms_the_repair(fixture_drive):
+    """Escape took the scan branch before the cancel, so the repair survived the
+    trip to the drive picker and committed on the next Enter."""
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        app.action_refresh()
+        app.action_back()
+        await settle(app, pilot)
+        app._open_drive(fixture_drive)
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "01 Model")
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert app._armed is None
+        assert untouched(alpha, bravo)
+
+
+async def test_a_write_to_another_project_does_not_repaint_the_tree(fixture_drive):
+    """Issue #3. Reconciling after a write pointed the widget at the written
+    project's tree even when another project was on screen, so the Tree Region
+    showed Alpha under Bravo's title and the next repair wrote to Bravo."""
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await arm_on_alpha(app, pilot)
+        armed = app._armed
+        app._move_to_region("projects")
+        await pilot.press("down")
+        await settle(app, pilot)
+        assert app._workspace_project == "260602_Bravo"
+
+        app._apply_repair(armed.project, armed.plan, armed.guard, armed.node,
+                          remember=True)
+        await settle(app, pilot)
+
+        assert (alpha / "11 Meetings").is_dir()
+        view = app.query_one(ProjectTreeView)
+        assert view.source.project == bravo, "Bravo's title, Bravo's tree"
+
+
+async def test_the_repair_key_refuses_when_the_tree_is_not_the_selected_project(fixture_drive):
+    """Issue #3's second half: the Plan is built for the list's project, the node
+    comes from the widget. When they disagree, nothing is armed."""
+    alpha, bravo = alpha_and_bravo(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        alpha_tree = app._trees["260601_Alpha"]
+        app._move_to_region("projects")
+        await pilot.press("down")
+        await settle(app, pilot)
+        app._move_to_region("tree")
+        view = app.query_one(ProjectTreeView)
+        view.set_source(alpha_tree)
+        await settle(app, pilot)
+        view.select_key("Meetings")
+        await settle(app, pilot)
+
+        await pilot.press("f")
+        await settle(app, pilot)
+
+        assert app._armed is None
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert untouched(alpha, bravo)
+
+
 # ------------------------------------------------------ the drive switch
 
 

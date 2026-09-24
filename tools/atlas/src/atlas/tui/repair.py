@@ -96,8 +96,12 @@ def confirms_inline(plan: Plan) -> bool:
     return len(plan.actions) == 1
 
 
-def confirm_line(plan: Plan, width: int = 0) -> str:
+def confirm_line(plan: Plan, width: int = 0, *, project: str = "") -> str:
     """What the operation line reads while a repair is armed.
+
+    Names the project as well as the path: every project has a ``Meetings``, and
+    a confirm that does not say whose is one the operator cannot check (issue
+    #2). The project goes last, so a narrow terminal clips it before the path.
 
     Truncates to ``width`` when one is given, keeping the keys: an operator who
     cannot see what commits the write is worse off than one who cannot see the
@@ -110,6 +114,8 @@ def confirm_line(plan: Plan, width: int = 0) -> str:
     body = f"{verb} {subject} -> {action.dst}" if action.src else f"{verb} {action.dst}"
     if action.path_length > WINDOWS_MAX_PATH:
         body += f"  [path {action.path_length} > {WINDOWS_MAX_PATH}]"
+    if project:
+        body += f"  in {project}"
 
     line = f"{body}   {_KEYS}"
     if width and len(line) > width:

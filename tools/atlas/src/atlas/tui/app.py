@@ -947,8 +947,16 @@ class AtlasApp(App):
         self.query_one("#mark", Static).update(mark)
 
     def on_resize(self, _: object) -> None:
+        # The armed line was cut to the old width; re-arming is one key.
+        self._cancel_repair()
         self._refresh_mark()
         self._apply_layout()
+
+    def push_screen(self, *args, **kwargs):
+        """Every modal and the command palette arrive here. An armed repair does
+        not survive one: Enter inside the modal is meant for the modal (#2)."""
+        self._cancel_repair()
+        return super().push_screen(*args, **kwargs)
 
     # ------------------------------------------------------------- the shell
 
@@ -1105,6 +1113,7 @@ class AtlasApp(App):
     # ------------------------------------------------------------- drives and scans
 
     def _show_drives(self, *, auto_open: bool) -> None:
+        self._cancel_repair()
         self._scan_generation += 1
         self._busy = False
         self._work_kind = None
@@ -1156,6 +1165,8 @@ class AtlasApp(App):
         self.query_one(ProjectTreeView).set_source(None)
 
     def _open_drive(self, root: Path, *, announce: bool = True) -> None:
+        # A rescan replaces the facts the armed Plan was built from.
+        self._cancel_repair()
         if root != self._drive_root:
             self._forget_drive()
             self._drive_root = root
@@ -1344,6 +1355,8 @@ class AtlasApp(App):
             self._follow_timer.stop()
             self._follow_timer = None
         changed = row.key != self._workspace_project
+        if changed:
+            self._cancel_repair()
         self._workspace_project = row.key
         self.query_one("#workspace-title", Static).update(row.key)
         if changed:
@@ -1498,15 +1511,17 @@ class AtlasApp(App):
     def action_back(self) -> None:
         """Escape unwinds: out of the filter, out through the Regions, out to the
         drive picker. One key, one direction, the same in both Compositions."""
+        if self._cancel_repair():
+            # Escape unwinds, and the innermost thing to unwind out of is an
+            # armed write. Nothing has happened on disk, so this costs nothing.
+            # First, before the scan branch: that one leaves the screen, and an
+            # armed write must never ride along to the drive picker.
+            return
         if self._busy and self._work_kind != "scan":
             self.notify("Wait for the current operation to finish", title="Atlas is working")
             return
         if self._work_kind == "scan":
             self._show_drives(auto_open=False)
-            return
-        if self._cancel_repair():
-            # Escape unwinds, and the innermost thing to unwind out of is an
-            # armed write. Nothing has happened on disk, so this costs nothing.
             return
         filter_input = self.query_one("#filter", Input)
         if filter_input.display:
@@ -1526,6 +1541,8 @@ class AtlasApp(App):
             self._show_drives(auto_open=False)
 
     def _move_to_region(self, region: str) -> None:
+        if region != self._focus_region:
+            self._cancel_repair()
         self._focus_region = region
         if self._zoomed is not None:
             self._zoomed = region
@@ -1549,8 +1566,12 @@ class AtlasApp(App):
         if self._busy or self._showing != "projects":
             return
         if self._armed is not None:
-            self._commit_repair()
-            return
+            if self._armed_is_current():
+                self._commit_repair()
+                return
+            # Armed for a context the operator has left. This Enter was meant
+            # for where they are now, not for the write they walked away from.
+            self._cancel_repair()
         self._move_to_region(drill(self._focus_region))
 
     def action_show_health(self) -> None:
@@ -1602,6 +1623,7 @@ class AtlasApp(App):
     def action_filter_projects(self) -> None:
         if self._busy or self._inventory is None:
             return
+        self._cancel_repair()
         filter_input = self.query_one("#filter", Input)
         filter_input.display = True
         filter_input.focus()
@@ -2120,8 +2142,17 @@ class AtlasApp(App):
         """Offer a repair for the Tree Node under the cursor, or say why not."""
         row = self._selected_row()
         tree = self._trees.get(self._workspace_project)
-        facts = self.query_one(ProjectTreeView).selected_facts()
+        view = self.query_one(ProjectTreeView)
+        facts = view.selected_facts()
         if row is None or tree is None or self._inventory is None:
+            return
+        if (row.key != self._workspace_project or view.source is not tree
+                or tree.project != self._inventory.root / row.key):
+            # The Plan is built for the list's project and the node comes from
+            # the widget. If those are not the same project, a repair would
+            # write to a folder the operator is not looking at (#3).
+            self._set_operation(f"The tree is not showing {row.key} yet - try again",
+                                "warning")
             return
         if facts is None:
             # The cursor is on nothing - an empty project, or a tree still
@@ -2158,15 +2189,31 @@ class AtlasApp(App):
             node=offer.target,
         )
         room = (self.size.width or 0) - OPERATION_MARGIN
-        self._set_operation(confirm_line(plan, max(0, room)))
+        self._set_operation(confirm_line(plan, max(0, room), project=row.key))
 
     def _cancel_repair(self) -> bool:
-        """Abandon an armed repair. True if there was one to abandon."""
+        """Abandon an armed repair. True if there was one to abandon.
+
+        Called on every context change - project, filter, rescan, drive, Region,
+        modal, resize - as well as on Escape. The line is overwritten either
+        way: a confirm still on screen after its repair is gone is a lie.
+        """
         if self._armed is None:
             return False
         self._armed = None
         self._set_operation("Repair cancelled")
         return True
+
+    def _armed_is_current(self) -> bool:
+        """Whether the armed repair is still for what is on screen: the same
+        project in the Workspace, the tree focused, no modal over it."""
+        armed = self._armed
+        if armed is None or armed.project != self._workspace_project:
+            return False
+        if self._focus_region != TREE or self.screen is not self.screen_stack[0]:
+            return False
+        tree = self._trees.get(armed.project)
+        return tree is not None and self.query_one(ProjectTreeView).source is tree
 
     def _commit_repair(self) -> None:
         """Apply the armed repair, after the scoped Guard agrees it is still
@@ -2260,6 +2307,10 @@ class AtlasApp(App):
             report = report_project(fresh, self._inventory.map)
         landed = tree.follow(node, applied)
         tree.reconcile(applied, report)
+        if project_name != self._workspace_project:
+            # The cached tree is reconciled for when it is next shown; the widget
+            # keeps drawing the project whose title is above it (#3).
+            return
         view = self.query_one(ProjectTreeView)
         view.set_source(tree, narrow=(self.size.width or 80) < ABBREVIATE_COLUMNS)
         view.select_key(landed)
