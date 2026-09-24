@@ -120,21 +120,36 @@ def _deepest_tail(src: Path) -> int:
     after a move is not the folder's own path but the deepest thing under it,
     re-hung beneath a destination that may be longer than where it sits now.
     """
-    base = long_path(src)
+    # scan.walk prefixes every level, not only the top: a short source with a
+    # deep subtree is otherwise under-measured on a machine without
+    # LongPathsEnabled, exactly where the warning matters.
+    base = os.fspath(src)
     root_len = len(base)
     deepest = 0
-    for root, _dirs, files in os.walk(base, followlinks=False):
+    for root, _dirs, files, links in walk(base):
         tail = len(root) - root_len
         deepest = max(deepest, tail)
-        for name in files:
+        for name in (*files, *links):
             deepest = max(deepest, tail + 1 + len(name))
     return deepest
+
+
+def measure_plan(plan: Plan, project: Path) -> Plan:
+    """The Plan with every Action's path length measured against ``project``.
+
+    For Plans ``build_plan`` did not make - an inverse above all. Undo moves
+    things too, and can push them past MAX_PATH just as a repair can.
+    """
+    return replace(plan, actions=tuple(
+        replace(a, path_length=_path_length(project, a)) for a in plan.actions))
 
 
 def _path_length(project: Path | None, action: Action) -> int:
     """Longest absolute path the action would leave behind, or 0 if unmeasured."""
     if project is None:
         return 0
+    # Absolute, always: a relative --drive measured 40 where Windows sees 220.
+    project = Path(os.path.abspath(project))
     dst = action.dst.replace("\\", "/").rstrip("/")
     if action.kind == BACKFILL:
         return len(str(project / dst))

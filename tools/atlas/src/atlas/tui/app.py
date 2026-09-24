@@ -145,6 +145,12 @@ KEY_HINTS = {
 }
 
 
+def _path_warning(action) -> str:
+    """The MAX_PATH warning for one line of a multi-action preview. ADR 0006
+    makes the warning the only safeguard, so the modal must carry it too."""
+    return f"  [path {action.path_length} > 260]" if action.path_warning else ""
+
+
 def _project_token(project: ProjectInventory) -> tuple[tuple[str, bool], ...]:
     """Shallow project state reviewed by plans without hydrating remote file contents."""
 
@@ -1640,7 +1646,8 @@ class AtlasApp(App):
             for action in plan.actions:
                 source = f"{action.src} -> " if action.src else ""
                 files = f" ({action.file_count} files)" if action.file_count else ""
-                lines.append(f"  {action.kind.title()}: {source}{action.dst}{files}")
+                lines.append(f"  {action.kind.title()}: {source}{action.dst}{files}"
+                             + _path_warning(action))
 
         def done(confirmed: bool) -> None:
             if not confirmed:
@@ -2295,6 +2302,7 @@ class AtlasApp(App):
         lines = [
             f"{action.kind.title()}: {action.src + ' -> ' if action.src else ''}{action.dst}"
             + (f" ({action.file_count} files)" if action.file_count else "")
+            + _path_warning(action)
             for action in plan.actions
         ]
 

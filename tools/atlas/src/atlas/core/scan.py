@@ -39,14 +39,21 @@ PARTIAL = "partial"
 # disables all path normalisation, so it is not safe to apply blindly.
 _MAX_PATH = 240
 _LONG_PREFIX = "\\\\?\\"
+# Already-extended or device paths, in either slash form. Prefixing one again
+# would turn it into a bogus UNC path.
+_DEVICE_PREFIXES = (_LONG_PREFIX, "\\\\.\\", "//?/", "//./")
 
 
 def long_path(path: Path | str) -> str:
     """Path as a string Windows will accept, even past MAX_PATH."""
     raw = os.fspath(path)
-    if sys.platform != "win32" or len(raw) < _MAX_PATH or raw.startswith(_LONG_PREFIX):
+    if sys.platform != "win32" or raw.startswith(_DEVICE_PREFIXES):
         return raw
+    # Measure what Windows will see, not the string given: a 41-character
+    # relative path can be 308 once the working directory is in front of it.
     absolute = os.path.abspath(raw)
+    if len(absolute) < _MAX_PATH:
+        return raw
     if absolute.startswith("\\\\"):  # UNC
         return _LONG_PREFIX + "UNC" + absolute[1:]
     return _LONG_PREFIX + absolute

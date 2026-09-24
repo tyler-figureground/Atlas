@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from .core.conform import (
     build_plan,
     build_repair_plan,
     invert_plan,
+    measure_plan,
     node_key,
     plan_from_dict,
 )
@@ -73,7 +75,9 @@ class UsageError(Exception):
 
 def _resolve_drive(arg: str | None) -> Path:
     if arg:
-        root = Path(arg)
+        # Absolute: path lengths are measured on it, and Windows sees the
+        # absolute path whatever was typed (ADR 0006).
+        root = Path(os.path.abspath(arg))
         if not find_map(root):
             raise UsageError(f"no _tools/*-map.json under {root}")
         return root
@@ -792,6 +796,8 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
                 print(f"error: {inverse.project}/{action.src} is no longer where the "
                       f"repair left it; nothing moved", file=sys.stderr)
                 return 2
+    # Undo moves things too: its preview carries the MAX_PATH warning.
+    inverses = [measure_plan(inverse, root / inverse.project) for inverse in inverses]
 
     if not args.apply:
         _print_plans(inverses, args, m.drive, applied=False)
