@@ -1094,6 +1094,13 @@ class AtlasApp(App):
         if action in {"open_folder", "toggle_mark"}:
             return True if has_project and not self._busy else None
         if action in {"drill", "next_region", "cycle_companion"}:
+            # Enter and Tab are priority bindings, so they reach the App before
+            # any widget - including a modal's buttons, the filter box and the
+            # command palette. They are the console's keys only while the
+            # console is what the operator is typing at; anywhere else they
+            # fall through to the widget that owns them.
+            if self.screen is not self.screen_stack[0] or isinstance(self.focused, Input):
+                return False
             return True if self._showing == "projects" else None
         if action == "show_last_result":
             return True if self._last_result is not None else False
