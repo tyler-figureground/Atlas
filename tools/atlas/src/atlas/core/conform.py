@@ -251,6 +251,15 @@ def parent_key(rel: str) -> str:
     return normalised.rpartition("/")[0]
 
 
+def child_key(parent: str, name: str) -> str:
+    """The Node Key of ``name`` inside ``parent``; the root's key is "".
+
+    One join for every manifest path. A plain f-string turns a root parent into
+    ``/name``, which is not a Node Key, and on Windows ``project / "/name"``
+    resolves against the drive root rather than the project.
+    """
+    return "/".join(part for part in (parent, name) if part)
+
 
 def invert_plan(plan: Plan) -> Plan:
     """The Plan that reverses an applied one, built from the Move Manifests.
@@ -715,4 +724,4 @@ def _apply_sweep(project: Path, action: Action) -> Action:
         return replace(action, status=CONFLICT, note="name exists at target")
     src.rename(target)
     return replace(action, status=DONE,
-                   moved=(Move(src=action.src, dst=f"{dst_rel}/{src.name}", is_dir=False),))
+                   moved=(Move(src=action.src, dst=child_key(dst_rel, src.name), is_dir=False),))

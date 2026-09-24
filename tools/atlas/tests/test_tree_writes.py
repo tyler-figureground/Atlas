@@ -94,6 +94,26 @@ def test_sweep_records_the_file_it_filed(fixture_drive):
     ]
 
 
+def test_undoing_a_sweep_records_a_root_destination_without_a_leading_slash(fixture_drive):
+    """Issue #51. The inverse of a sweep files back to the project root, whose
+    Node Key is the empty string. Joining it naively gave `/HANDOFF-roof-01.md`,
+    which on Windows resolves against the drive root, not the project."""
+    make_project(
+        fixture_drive, "260303_SweepBack", sections=["01 Model"],
+        files={"HANDOFF-roof-01.md": "x"},
+    )
+    plan, inv, m = plan_for(fixture_drive, "260303_SweepBack")
+    applied = apply_plan(fixture_drive, inv.path, m, plan, only={"sweep"})
+
+    undone = apply_plan(fixture_drive, inv.path, m, invert_plan(applied))
+
+    (action,) = [a for a in undone.actions if a.status == "done"]
+    assert [(mv.src, mv.dst) for mv in action.moved] == [
+        (".agent/handoff/HANDOFF-roof-01.md", "HANDOFF-roof-01.md")
+    ]
+    assert (inv.path / "HANDOFF-roof-01.md").is_file()
+
+
 def test_case_only_rename_records_its_move(fixture_drive):
     """The two-step-via-temp branch is still a move and still reversible."""
     write_map(fixture_drive, {**FIXTURE_MAP, "driftMap": {"01 model": "01 Model"}})
