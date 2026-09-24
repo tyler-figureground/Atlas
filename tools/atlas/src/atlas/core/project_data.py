@@ -82,15 +82,27 @@ def _read_source(project_path: Path) -> tuple[Path, Path, bytes]:
         source = dossier.read_bytes()
     except OSError as error:
         raise ProjectDataError(f"cannot read project dossier {dossier}: {error}") from error
-    if source.startswith(b"\xef\xbb\xbf"):
-        raise ProjectDataError(f"{dossier} has a UTF-8 BOM; repair it before editing")
     try:
         source.decode("utf-8")
     except UnicodeDecodeError as error:
         raise ProjectDataError(f"{dossier} is not UTF-8: {error}") from error
-    if not source.endswith(b"\r\n") or b"\n" in source.replace(b"\r\n", b""):
-        raise ProjectDataError(f"{dossier} must use CRLF line endings with a trailing newline")
     return project, dossier, source
+
+
+def _lines(source: bytes) -> list[str]:
+    """The dossier's lines, whatever the writer's line endings or BOM.
+
+    Atlas writes CRLF, UTF-8, no BOM; `/project-dossier` and editors may write
+    LF, drop the final newline, or add a BOM. All read the same, and an edit
+    writes the file back in Atlas's form. Splits on CR/LF only: never on the
+    Unicode line breaks ``str.splitlines`` also honours.
+    """
+
+    text = source.decode("utf-8").removeprefix("﻿").replace("\r\n", "\n")
+    lines = text.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 # The front-matter keys Atlas reads and writes. Only these are parsed, and
@@ -243,7 +255,7 @@ def _parse_front_matter(lines: list[str], dossier: Path) -> _FrontMatter:
 
 
 def _front_matter(source: bytes, dossier: Path) -> dict[str, str]:
-    values = dict(_parse_front_matter(source.decode("utf-8").split("\r\n"), dossier).values)
+    values = dict(_parse_front_matter(_lines(source), dossier).values)
     if not values.get("project") and values.get("name"):
         # SKILL.md: `name` is an accepted alias of `project`.
         values["project"] = values["name"]
@@ -391,14 +403,14 @@ def _required(values: dict[str, str], key: str, dossier: Path) -> str:
 
 def _snapshot(values: dict[str, str], role: str, dossier: Path) -> ContactSnapshot:
     name = _required(values, f"{role}_contact_name", dossier)
+    # A snapshot is history, not a directory record: a one-word name ("Cher",
+    # a firm) reads as a first name rather than making the project uneditable.
     pieces = name.rsplit(maxsplit=1)
-    if len(pieces) != 2:
-        raise ProjectDataError(f"{dossier} {role} contact name must include first and last name")
     try:
         return ContactSnapshot(
             id=_required(values, f"{role}_contact_id", dossier),
             first_name=pieces[0],
-            last_name=pieces[1],
+            last_name=pieces[1] if len(pieces) == 2 else "",
             email=_required(values, f"{role}_contact_email", dossier),
             phone=values.get(f"{role}_contact_phone", ""),
             company=values.get(f"{role}_contact_company", ""),
@@ -458,7 +470,7 @@ def load_project_record(project_path: Path) -> ProjectRecord:
 
 def _record_from_source(project: Path, dossier: Path, source: bytes) -> ProjectRecord:
     values = _front_matter(source, dossier)
-    lines = source.decode("utf-8").split("\r\n")
+    lines = _lines(source)
     identity = _identity(lines)
     try:
         address = _project_address(values, dossier)
@@ -638,11 +650,9 @@ def _render_updated_dossier(plan: ProjectUpdatePlan) -> bytes:
     }
 
     try:
-        lines = plan._source.decode("utf-8").split("\r\n")
+        lines = _lines(plan._source)
     except UnicodeDecodeError as error:
         raise ProjectDataError(f"project dossier is no longer UTF-8: {error}") from error
-    if lines and lines[-1] == "":
-        lines.pop()
     before = _record_from_source(plan.old_path, dossier, plan._source)
 
     front = _parse_front_matter(lines, dossier)

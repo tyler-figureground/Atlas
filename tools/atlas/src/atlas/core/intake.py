@@ -50,14 +50,14 @@ class ContactSnapshot:
         object.__setattr__(self, "email", self.email.casefold())
         if not self.id:
             raise IntakeError("contact ID is required")
-        if not self.first_name or not self.last_name:
-            raise IntakeError("contact first and last name are required")
+        if not self.first_name and not self.last_name:
+            raise IntakeError("contact name is required")
         if not EMAIL_PATTERN.fullmatch(self.email):
             raise IntakeError("contact email is invalid")
 
     @property
     def full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}"
+        return f"{self.first_name} {self.last_name}".strip()
 
 
 @dataclass(frozen=True)

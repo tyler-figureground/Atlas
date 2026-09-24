@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -360,3 +361,176 @@ def test_heading_the_dossier_skill_wrote_is_not_replaced_by_the_folder(fixture_d
     assert plan.rename_required
     raw = (result.path / "PROJECT.md").read_bytes()
     assert "\r\n# Project Dossier — Oak House\r\n".encode("utf-8") in raw
+
+
+# ---------------------------------------------------------------- #36 shapes
+
+
+@pytest.mark.parametrize(
+    "reshape",
+    [
+        pytest.param(lambda raw: raw.replace(b"\r\n", b"\n"), id="LF"),
+        pytest.param(lambda raw: raw[:-2], id="no-trailing-newline"),
+        pytest.param(lambda raw: raw.replace(b"\r\n", b"\n")[:-1], id="LF-no-trailing-newline"),
+        pytest.param(lambda raw: b"\xef\xbb\xbf" + raw, id="BOM"),
+    ],
+)
+def test_line_endings_and_bom_read_the_same_and_write_back_crlf(fixture_drive, reshape):
+    drive_map, _, project = _project(fixture_drive)
+    dossier = project / "PROJECT.md"
+    dossier.write_bytes(reshape(dossier.read_bytes()))
+
+    assert load_project_record(project).intake.project_name == "Oak House"
+    _, result = _edit(fixture_drive, drive_map, project, project_name="Pine House")
+
+    raw = (result.path / "PROJECT.md").read_bytes()
+    assert not raw.startswith(b"\xef\xbb\xbf")
+    assert raw.endswith(b"\r\n")
+    assert b"\n" not in raw.replace(b"\r\n", b"")
+    assert load_project_record(result.path).intake.project_name == "Pine House"
+
+
+def test_aligned_identity_table_reads_and_keeps_its_padding(fixture_drive):
+    drive_map, _, project = _project(fixture_drive)
+    _replace_line(project, b"| Created |", b"| Created          | 2026-08-13                  |")
+    _replace_line(project, b"| Descriptor |", b"| Descriptor       |                             |")
+    _replace_line(project, b"| Project |", b"| Project          | Oak House                   |")
+
+    assert load_project_record(project).intake.created == CREATED
+    _, result = _edit(fixture_drive, drive_map, project, description="Kitchen")
+
+    lines = _identity_lines(result.path)
+    assert "| Created          | 2026-08-13                  |" in lines
+    assert "| Project          | Oak House                   |" in lines
+    assert "| Descriptor | Kitchen |" in lines
+
+
+def test_one_word_contact_name_is_editable(fixture_drive):
+    drive_map, _, project = _project(fixture_drive)
+    _replace_line(project, b"billing_contact_name:", b'billing_contact_name: "Cher"')
+
+    record = load_project_record(project)
+    assert record.billing_contact.full_name == "Cher"
+
+    _edit(fixture_drive, drive_map, project, project_name="Pine House")
+
+
+def test_missing_identity_rows_are_tolerated(fixture_drive):
+    drive_map, _, project = _project(fixture_drive)
+    for field in (b"| Created |", b"| Billing Phone |", b"| Descriptor |"):
+        _replace_line(project, field)
+
+    assert load_project_record(project).intake.created == CREATED
+    _, result = _edit(fixture_drive, drive_map, project, description="Kitchen")
+
+    lines = _identity_lines(result.path)
+    assert "| Descriptor | Kitchen |" in lines
+    assert not any(line.startswith("| Billing Phone |") for line in lines)
+
+
+# ------------------------------------------------- parity with the dossier skill
+
+SKILL = (
+    Path(__file__).resolve().parents[3]
+    / "plugins"
+    / "09-project-dossier"
+    / "skills"
+    / "project-dossier"
+    / "SKILL.md"
+)
+
+
+def _skill_template() -> list[str]:
+    text = SKILL.read_text(encoding="utf-8")
+    template = text.split("## Template", 1)[1].split("```markdown\n", 1)[1]
+    return template.split("\n```", 1)[0].split("\n")
+
+
+def _fill_key(lines: list[str], key: str, value: str) -> None:
+    # Claude filling the template: the value goes after the key and the
+    # template's own comment stays where it was.
+    index = next(i for i, line in enumerate(lines) if line.startswith(f"{key}:"))
+    line = lines[index]
+    comment = line.find("#")
+    head = f"{key}: {value}"
+    if comment < 0:
+        lines[index] = head
+    else:
+        lines[index] = head + " " * max(1, comment - len(head)) + line[comment:]
+
+
+def _fill_row(lines: list[str], field: str, value: str) -> None:
+    index = next(i for i, line in enumerate(lines) if line.startswith(f"| {field} |"))
+    lines[index] = f"| {field} | {value} |"
+
+
+def test_dossier_written_from_the_skill_template_round_trips_an_edit(fixture_drive):
+    drive_map = load_map(fixture_drive / "_tools" / "testdrive-map.json")
+    ada = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com"),
+    )
+    lines = _skill_template()
+    for key, value in (
+        ("project", "Oak House"),
+        ("address", "100 Oak Street, Oakland, CA 02134"),
+        ("address_street", "100 Oak Street"),
+        ("address_city", "Oakland"),
+        ("address_state", "CA"),
+        ("address_postal_code", '"02134"'),
+        ("project_use_case", "Renovation"),
+        ("project_use_case_category", "Renovation"),
+        ("jurisdiction", "california"),
+        ("occupancy_group", '[B, "S-1"]'),
+        ("edition", "'2025 CBC'"),
+    ):
+        _fill_key(lines, key, value)
+    for role in ("billing", "client"):
+        _fill_key(lines, f"{role}_contact_id", ada.id)
+        _fill_key(lines, f"{role}_contact_name", "Ada Lovelace")
+        _fill_key(lines, f"{role}_contact_email", "ada@example.com")
+    for field, value in (
+        ("Project", "Oak House (client, 2026-08-13)"),
+        ("Address / BBL", "100 Oak Street, Oakland, CA 02134 · APN 000-0000-000 (county GIS, 2026-08-13)"),
+        ("Project Use Case", "Renovation (client, 2026-08-13)"),
+        ("Client", "Ada Lovelace (client, 2026-08-13)"),
+        ("Created", "2026-08-13 (Atlas intake, 2026-08-13)"),
+        ("Jurisdiction", "california (client, 2026-08-13)"),
+    ):
+        _fill_row(lines, field, value)
+    project = fixture_drive / "260813_100 Oak Street"
+    project.mkdir()
+    source = "\n".join(lines).replace("{project name}", "Oak House") + "\n"
+    (project / "PROJECT.md").write_bytes(source.encode("utf-8"))
+
+    record = load_project_record(project)
+    assert record.intake.project_address.postal_code == "02134"
+    assert record.intake.project_address.unit == ""
+    assert record.intake.description == ""
+
+    plan, result = _edit(
+        fixture_drive,
+        drive_map,
+        project,
+        project_name="Oak House Annex",
+        project_address=replace(record.intake.project_address, unit="Unit 2"),
+    )
+
+    assert plan.rename_required is False
+    raw = (result.path / "PROJECT.md").read_bytes()
+    text = raw.decode("utf-8")
+    assert b"\n" not in raw.replace(b"\r\n", b"")
+    assert 'occupancy_group: [B, "S-1"]' in text
+    assert "edition: '2025 CBC'" in text
+    assert "| Project | Oak House Annex (client, 2026-08-13) |" in text
+    assert (
+        "| Address / BBL | 100 Oak Street, Unit 2, Oakland, CA 02134 · APN 000-0000-000 "
+        "(county GIS, 2026-08-13) |"
+    ) in text
+    assert "| Created | 2026-08-13 (Atlas intake, 2026-08-13) |" in text
+    assert "# Project Dossier — Oak House\r\n" in text
+    unchanged = [line for line in source.split("\n") if "occupancy_group" in line]
+    assert unchanged[0] in text
+    again = load_project_record(result.path)
+    assert again.intake.project_name == "Oak House Annex"
+    assert again.intake.project_address.unit == "Unit 2"
