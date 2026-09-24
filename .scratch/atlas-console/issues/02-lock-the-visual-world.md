@@ -5,12 +5,18 @@ Status: resolved
 Blocked by: -
 Parent: ../map.md
 
+> **2026-09-23:** the design sheet this ticket cites no longer resolves (found in
+> session 9; audit #61). It was already out of date - it drew missing folders
+> inline, which ticket 14 ruled out, and rendered only at 132x38, a width ticket 03
+> showed is not used. The decisions below stand; the renders are gone. Re-render
+> from `tools/atlas` if they are needed.
+
 ## Question
 
 Three visual worlds were built as real Textual renders, headless at 132x38, and
 published for comparison:
 
-https://claude.ai/code/artifact/4a9756ec-d166-44d0-b76d-ddd9979fbbc6
+https://claude.ai/code/artifact/4a9756ec-d166-44d0-b76d-ddd9979fbbc6 (gone - see the note above)
 
 - **A - POCHE.** Solid is mass, void is space; the firm's name is the interface
   metaphor. Filled blocks for folders on disk, hatched void for folders the map
@@ -48,7 +54,7 @@ folder state. The console body is settled and is not reopened by anything below.
 which the original A did not have. Five treatments built and published on the same
 sheet:
 
-https://claude.ai/code/artifact/4a9756ec-d166-44d0-b76d-ddd9979fbbc6
+https://claude.ai/code/artifact/4a9756ec-d166-44d0-b76d-ddd9979fbbc6 (gone - see the note above)
 
 - H1 OUTRUN - yellow through orange, magenta, violet. Vertical ramp, depth 2.
 - H2 CHROME - cyan, forced white specular row, steel, magenta, violet.
@@ -130,7 +136,7 @@ not decoration - ticket 14 should confirm it when it writes the kind table.
 - extrusion shade `#1E0803`, lightened 30% toward `#E2452A` on the near layer
 - ACTION `#E2452A` &middot; REVIEW `#D9A441` &middot; READY `#8AA37A` &middot; SETUP `#A8845C`
 
-Sheet: https://claude.ai/code/artifact/4a9756ec-d166-44d0-b76d-ddd9979fbbc6
+Sheet: https://claude.ai/code/artifact/4a9756ec-d166-44d0-b76d-ddd9979fbbc6 (gone - see the note above)
 
 The prototype renderer stays throwaway. Ticket 17 writes this into Atlas properly,
 under test.

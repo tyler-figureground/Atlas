@@ -1,9 +1,3 @@
----
-title: "Console layout and navigation model"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 # Console layout and navigation model
 
 Type: grilling
@@ -254,3 +248,23 @@ Existing bindings untouched: `q r n e m a c f o s l x space ?`.
 - Ticket 20 graduates: the console shell as Atlas code.
 
 Vocabulary in `/CONTEXT.md`. Decision in `docs/adr/0005`.
+
+## Deviation, 2026-09-23: what Enter and space do in the tree
+
+Built differently from the Navigation section above, and never recorded until the
+2026-09 audit (#61):
+
+- **Enter drills Regions, not nodes.** Enter on a project row moves focus into the
+  tree; Enter in the tree moves focus to the Companion. It never toggles a folder or
+  opens a file. While a repair is armed, Enter confirms it instead (ticket 23).
+- **`space` toggles a folder** when the tree has focus - Textual's own Tree binding -
+  and marks a project when the list does.
+- **`o` opens a file or folder** under the tree cursor, and reveals an Unfiled node
+  in Explorer rather than opening it (#45).
+
+No session recorded why Enter stopped short of the node. What holds today: Enter
+is a priority App binding, so it reaches the console before the Tree's own
+`select_cursor`, and it is also the inline confirm for an armed repair. The `space`
+meaning was never argued either - the session 9 handoff flags it - and is left
+open to revisit in use. `g` from the key map above was not built; it belongs to
+ticket 08 (global search), still open.

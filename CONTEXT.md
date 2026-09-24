@@ -120,13 +120,6 @@ Free, because it is the length of the enumeration already held. Never recursive:
 a recursive count is a walk of the whole subtree, and Atlas does not spend that to
 draw a label.
 
----
-title: "context-append.md"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
-
 ## Atlas Console Layout
 
 **Region**
@@ -170,12 +163,6 @@ The console arrangement showing exactly one Region at a time, the others hidden
 rather than shrunk. The arrangement at narrow terminal widths, and the common one
 rather than the degraded one. The navigation model is identical in both
 Compositions; only what is on screen differs.
----
-title: "context-append-2.md"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 
 ## Atlas Writes
 
@@ -188,12 +175,8 @@ other way to change a drive.
 One write inside a Plan. Exactly one of Backfill (create a folder the drive map
 expects), Rename (a Drifted Tree Node to its canonical name), Relocate (a
 Misplaced Tree Node to its mapped path), or Sweep (a Loose file into its target
-folder).
-
-**Repair**
-The single Action a Tree Node's Filing State earns: Drifted earns a Rename,
-Misplaced a Relocate, Loose a Sweep. Mapped and Unfiled earn none - the first
-because nothing is wrong, the second because only a person can decide.
+folder). The one-Action slice a single Tree Node earns is a Repair, defined under
+Atlas Tree Repairs.
 
 **Move Manifest**
 The record of every source-and-destination pair an Action actually moved, filled
@@ -205,11 +188,6 @@ already there.
 A Plan whose preview no longer describes the drive, because something changed
 between the preview and the confirmation. A Stale Plan is never applied - Atlas
 abandons it and says what changed.
-
-**Undo Stack**
-The Plans applied to one Project during this session, most recent first. Undoing
-one applies its inverse, which is itself a Plan and is previewed, confirmed, and
-checked for staleness like any other.
 
 **Guard**
 What a preview saw, and what has to still be true before Atlas writes. Guard
@@ -294,10 +272,12 @@ stripped, at either width, rather than by pinning any colour value.
 
 **Repair**
 The one-Action write the tree offers for a single Tree Node: RENAME for a Drifted
-node, RELOCATE for a Misplaced one, SWEEP for a Loose one. Never a new action kind
+node, RELOCATE for a Misplaced one, SWEEP for a Loose one - and, from the
+Companion, BACKFILL for an unmet control-plane Expectation. Never a new action kind
 - a Repair is a slice of the Plan conform already builds. A Mapped node earns none
 because nothing is wrong; an Unfiled node earns none because only a person can
-decide where it belongs.
+decide where it belongs; a missing section earns none because conform never
+creates sections.
 
 **Offer**
 What the repair key would do on the node under the cursor. An Offer that is not
@@ -315,17 +295,24 @@ Confirmation weight follows plan size, so a longer Plan still gets the modal, wh
 is the surface that can show a list.
 
 **Undo Stack**
-The applied Plans for one Project, in memory, most recent first, with no redo. Undo
-restores the precondition that offered the Repair, so re-pressing the repair key is
-redo. A Plan that cannot be inverted is refused when it is pushed, never when it is
-popped - a stack that cannot honour a depth it advertised is worse than one that
-never advertised it.
+The applied Plans for one Project, in memory for this session, most recent first,
+with no redo, capped at 50. Each entry holds its inverse Plan and its Undo Guard,
+both built when the write applies. Undoing previews the inverse and applies it only
+on confirm - inline for one Action, the modal for several - so an undo is a write
+like any other; the entry leaves the stack only once the undo has moved something,
+so a refused undo can be retried. Undo restores the precondition that offered the
+Repair, so re-pressing the repair key is redo. A Plan that cannot be inverted is
+refused when it is pushed, never when it is popped - a stack that cannot honour a
+depth it advertised is worse than one that never advertised it. A project-wide or
+batch conform forgets that Project's history; a drive switch forgets all of it.
 
 **Undo Guard**
 The check that runs before an undo: the drive map, and the folders the inverse
-touches. Distinct from the guard on a Repair, which additionally re-derives the
-Plan from the map and compares. An undo's Plan reverses the map rather than
-following it, so re-deriving it can only ever disagree.
+touches, as they stood when the Repair applied - so it sees anything changed after
+the repair, not only after the undo was pressed. Distinct from the guard on a
+Repair, which additionally re-derives the Plan from the map and compares. An undo's
+Plan reverses the map rather than following it, so re-deriving it can only ever
+disagree.
 
 ## Atlas File Rules
 

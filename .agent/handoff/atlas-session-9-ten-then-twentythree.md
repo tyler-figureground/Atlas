@@ -1,9 +1,3 @@
----
-title: "Atlas session 9: ticket 10, then ticket 23"
-date: 2026-09-04
-generated_by: skills-for-architects
----
-
 # Atlas session 9: ticket 10, then ticket 23
 
 Effort: `atlas-console`. Two tickets, in this order, on the user's instruction.

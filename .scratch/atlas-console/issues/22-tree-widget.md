@@ -1,9 +1,3 @@
----
-title: "The tree widget, as Atlas code"
-date: 2026-09-04
-generated_by: skills-for-architects
----
-
 # The tree widget, as Atlas code
 
 Type: task

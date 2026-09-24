@@ -1,9 +1,3 @@
----
-title: "The console shell, as Atlas code"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 # The console shell, as Atlas code
 
 Type: task

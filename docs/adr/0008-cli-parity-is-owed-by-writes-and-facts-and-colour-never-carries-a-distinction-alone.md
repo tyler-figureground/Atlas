@@ -1,9 +1,3 @@
----
-title: "8. CLI parity is owed by writes and facts, and colour never carries a distinction alone"
-date: 2026-09-04
-generated_by: skills-for-architects
----
-
 # 8. CLI parity is owed by writes and facts, and colour never carries a distinction alone
 
 Date: 2026-09-04

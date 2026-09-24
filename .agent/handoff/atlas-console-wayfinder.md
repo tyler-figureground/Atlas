@@ -1,9 +1,3 @@
----
-title: "Atlas console redesign - wayfinder continuity"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 # Atlas console redesign - wayfinder continuity
 
 Status: layout and write contract settled; nothing is blocked; the tree is what remains
@@ -131,12 +125,6 @@ designing:
   one word, and one of them deletes. Now named **Fileless** and **Empty Folder** in
   `CONTEXT.md`.
 
----
-title: "handoff-tail.md"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 ## Session 7 - the console has a shape
 
 Ticket 03 resolved. No code this session: 03 is a grilling ticket and Wayfinder
@@ -170,12 +158,6 @@ modal both become Companion Modes. That reclaims Enter, which the tree needs.
 Recorded in `docs/adr/0005`, vocabulary in `CONTEXT.md` under Atlas Console
 Layout. Ticket 20 graduated - the console shell as Atlas code, the frame without
 the tree in it.
-
----
-title: "handoff-tail-2.md"
-date: 2026-09-03
-generated_by: skills-for-architects
----
 
 ## Session 7 continued - the write contract
 
@@ -408,9 +390,9 @@ session scratchpad and are deliberately throwaway. They are not Atlas code. When
 the wordmark ships, its glyph table, extrusion compositor and ramp sampler get
 written fresh into `tools/atlas` under test - do not lift the prototype.
 
-The published design sheet at
-https://claude.ai/code/artifact/4a9756ec-d166-44d0-b76d-ddd9979fbbc6 is now out of
-date in **two** ways, not one. It still draws missing folders inline in the tree,
+Before it went (see above), the published design sheet at
+https://claude.ai/code/artifact/4a9756ec-d166-44d0-b76d-ddd9979fbbc6 was already out
+of date in **two** ways, not one. It still draws missing folders inline in the tree,
 which ticket 14 ruled out. And its renders are all 132x38, a width that ticket 03
 established is not one the user actually works at. It has not been re-rendered and
 the user has not said whether to.

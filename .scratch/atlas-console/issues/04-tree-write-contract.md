@@ -1,9 +1,3 @@
----
-title: "What the folder tree is allowed to write"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 # What the folder tree is allowed to write
 
 Type: grilling

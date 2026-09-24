@@ -1,9 +1,3 @@
----
-title: "Do File Rules reach below the project root"
-date: 2026-09-10
-generated_by: skills-for-architects
----
-
 # Do File Rules reach below the project root
 
 Type: grilling

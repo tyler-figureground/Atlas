@@ -2,7 +2,7 @@
 
 Type: grilling
 Status: resolved
-Blocked by: 14
+Blocked by: - (14, resolved)
 Parent: ../map.md
 
 ## Question

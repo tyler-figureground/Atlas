@@ -1,9 +1,3 @@
----
-title: "The tree's write keys, the inline confirm, and the undo stack"
-date: 2026-09-04
-generated_by: skills-for-architects
----
-
 # The tree's write keys, the inline confirm, and the undo stack
 
 Type: task

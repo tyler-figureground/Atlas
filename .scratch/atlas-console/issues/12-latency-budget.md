@@ -109,3 +109,12 @@ ever marked empty. The failure is false reporting, not destruction. Opened ticke
 floor, not a worst case. One machine, one network, one moment. This drive is small
 at 7,956 folders; a much larger drive may exceed what Drive keeps cached. Mutation
 cost was not measured because writes were not permitted.
+
+## Built, 2026-09-23 (#46)
+
+The measurement resolved this ticket; the budgets were only recorded until #46.
+They now live where the tree reads them, in `core/tree.py`: `LOADING_DELAY` 120 ms,
+`CONCURRENCY_CAP` 4, `COUNT_CAP` 500 (a larger folder lists as Partial), and
+`DEFAULT_TTL` 60 s. `PREFETCH_CAP` 50 is recorded but moot: the tree reads a folder
+only when it is opened (ADR 0007), so nothing is prefetched. The scoped Guard walks
+nothing, and arming and committing a tree repair run off the UI thread.

@@ -1,9 +1,3 @@
----
-title: "9. File Rules file Loose root files by name and content, and emit nothing but Sweeps"
-date: 2026-09-10
-generated_by: skills-for-architects
----
-
 # 9. File Rules file Loose root files by name and content, and emit nothing but Sweeps
 
 Date: 2026-09-10

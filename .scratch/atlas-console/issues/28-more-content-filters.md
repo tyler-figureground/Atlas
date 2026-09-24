@@ -1,9 +1,3 @@
----
-title: "More content filters: DXF title blocks, and files whose extension lies"
-date: 2026-09-10
-generated_by: skills-for-architects
----
-
 # More content filters: DXF title blocks, and files whose extension lies
 
 Type: task

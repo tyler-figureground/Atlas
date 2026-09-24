@@ -1,9 +1,3 @@
----
-title: "File Rules - the map files a loose file by what it is"
-date: 2026-09-10
-generated_by: skills-for-architects
----
-
 # File Rules - the map files a loose file by what it is
 
 Type: task

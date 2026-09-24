@@ -1,9 +1,3 @@
----
-title: "7. The project tree is a lazily-expanding handle, Filing State below the root is containment, and a write reconciles by its manifest"
-date: 2026-09-04
-generated_by: skills-for-architects
----
-
 # 7. The project tree is a lazily-expanding handle, Filing State below the root is containment, and a write reconciles by its manifest
 
 Date: 2026-09-04

@@ -127,7 +127,9 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   loading state at 120 ms, prefetch one level capped at 50, concurrency cap 4,
   count cap 500, cache TTL 60 s. Found two live `MAX_PATH` failures, one of which
   Atlas reports as an empty folder that is not empty. Report:
-  `docs/research/atlas-drive-latency-measurement.md`.
+  `docs/research/atlas-drive-latency-measurement.md`. **Budgets built** (#46) in
+  `core/tree.py`; prefetch is moot because the tree reads only what is opened, and
+  tree repairs arm and commit off the UI thread.
 - [What the folder tree is allowed to write](issues/04-tree-write-contract.md) -
   **the tree invents no new action kinds.** Every write it offers is a one-action
   slice of the Plan conform already builds: Drifted earns RENAME, Misplaced
@@ -142,11 +144,14 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   **Revalidation scopes to the action:** the existing guard is a full 4.24-second
   `scan_drive` and `_project_token` only covers the project root, so a one-action
   Plan re-reads the map and re-enumerates two parent folders instead. The same
-  guard runs on every undo pop, which is what lets the stack be optimistic. Path
+  guard runs on every undo pop, which is what lets the stack be optimistic
+  (*corrected in ticket 23: an undo has its own Undo Guard*). Path
   length **warns and obeys**, computed in `build_plan`, and `long_path()` is never
   applied on the write side - a warning is only honest if Atlas cannot silently
   exceed the limit. No CLI equivalents; ticket 10 settles parity for all three new
-  surfaces at once. Vocabulary in `/CONTEXT.md`, decision in `docs/adr/0006`.
+  surfaces at once (*it did: `conform --node` and `conform --revert`*). Non-writes:
+  `o` opens, `y` copies the path, an Unfiled node is revealed (#45). Vocabulary in
+  `/CONTEXT.md`, decision in `docs/adr/0006`.
 - [The core write surface for the tree](issues/21-core-write-surface.md) -
   **built.** `Move` and `Action.moved` give every applied action a manifest;
   `build_repair_plan` slices one Action out of the Plan conform already builds;
@@ -168,6 +173,7 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   the scoped Guard already watched, and the cursor follows what it repaired. One
   correction to ADR 0006: **only control-plane Expectations are repairable** -
   conform has never created a mapped section and would skip it. `docs/adr/0007`.
+  This cleared the cache-and-invalidation fog item.
 - [The console shell, as Atlas code](issues/20-console-shell-in-atlas.md) -
   **built.** The layout rules are a pure module the tests cross without Textual;
   `app.py` applies them and owns none of the rule. Three Regions, two
@@ -195,7 +201,9 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   ~87/77 and 46, and **eight of twelve measured widths are Single-Region** - the
   narrow arrangement is the common case, not the degraded one. Navigation is
   identical in both: Enter drills, Escape unwinds, Tab is next-Region, `/` filters
-  the focused Region. Explicit collapse outranks the breakpoint default. The
+  the focused Region (*as built, Enter drills Regions only and `space` toggles a
+  folder - deviation recorded on the ticket and ADR 0005*). Explicit collapse
+  outranks the breakpoint default. The
   Workspace follows the list cursor, debounced 150 ms, cache hits exempt, so the
   tree is populated at first paint. `#detail` and the health modal are both
   replaced by Companion Modes; unmet Expectations is the privileged default
@@ -261,25 +269,47 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   last, only for `*.pdf`, never past 64 MB, cached by path+size+mtime, and silent on a
   damaged file. Decision in `docs/adr/0009`, vocabulary in `/CONTEXT.md`, survey in
   `docs/research/atlas-file-management-oss.md`. Tickets 26, 27, 28 graduated.
+- [atlas tree - the tree's facts on the CLI](issues/24-atlas-tree-cli.md) -
+  **built** (#30). `atlas tree PROJECT [--depth N] [--json]` is a thin wrapper over
+  `core.tree`: Filing State, Load State and child counts below a project root, and
+  unmet Expectations as a separate list. Never a zero count on an Unread folder;
+  `--depth` reads one enumeration per folder, never a walk. Discharges ADR 0008's
+  fact obligation for the tree.
+- **2026-09 audit (#62), released as Atlas 0.6.0.** ~55 issues fixed across core,
+  CLI and console: undo previews and confirms, `conform --revert` needs `--apply`
+  and trusts nothing in the manifest, an OS error mid-apply fails one action and
+  keeps its manifest, unreadable never reads as empty or zero, junctions are never
+  walked, every CLI error exits 2, `f` in the Companion backfills one control-plane
+  Expectation, `/` filters the tree, and the Load State label abbreviates to
+  `unread` at narrow widths (`cannot read` never shortens). `CHANGELOG.md` has the
+  full list.
+
+## Open tickets
+
+- [Global search scope](issues/08-global-search-scope.md) - grilling. What the
+  one-keystroke drive search searches. Ticket 12 removed the cost objection: a full
+  walk is 4.24 s.
+- [Dossier panel](issues/09-dossier-panel.md) - grilling. How `PROJECT.md` reads
+  inside Atlas; a Companion Mode slot exists.
+- [An authenticated Drive API read path](issues/11-drive-api-read-path.md) -
+  grilling. Whether Atlas reads through the Drive API rather than the mount.
+- [Do File Rules reach below the project root](issues/26-file-rules-below-the-root.md)
+  - grilling.
+- [The same file in four folders, as a doctor finding](issues/27-duplicate-files-as-a-doctor-finding.md)
+  - task.
+- [More content filters](issues/28-more-content-filters.md) - task. DXF title
+  blocks, and files whose extension lies.
 
 ## Not yet specified
 
 Fog toward the destination. Graduates into tickets as the frontier clears it.
 
-- **File-level action set.** Which actions the tree offers, what core plan each
-  builds, and how each previews. Depends on the write contract. *Partly cleared:*
-  ticket 25 gave the map a way to make a root file Loose by name or content, and the
-  tree already offers its Sweep. Ticket 04's non-writes are built (#45): `o` opens
-  the node under the cursor (an Unfiled node is revealed in Explorer instead), `y`
-  copies its path - on Unfiled nodes too, since it is not a write (ticket 04 note). What is still fog is rename, delete, and whether a file the
-  operator picks can be moved anywhere the map has not named. Ticket 26 asks the
-  narrowest version of the last one.
-- **Load State labels do not abbreviate.** Ticket 10 gave the Fault Word a short
-  form; the Load State label beside it kept its long one, so `not opened yet` runs
-  past the viewport at 46 columns and the row scrolls. Same principle, different
-  vocabulary, and `cannot read` is the one that must not be shortened into
-  ambiguity - ticket 16's rule is that an unreadable folder never reads as empty.
-  Deliberately out of scope at ticket 10; small, and visible on screen.
+- **File-level actions beyond the repair set.** *Decided* by ticket 04: the tree
+  offers the four repairs plus the non-writes (reveal, open, copy path), all built;
+  delete, rename-to-arbitrary and create-arbitrary are **not offered**. Ticket 25
+  lets the map make a root file Loose by name or content. What remains fog is only
+  whether that decision should ever be reopened - moving a file the operator picks
+  anywhere the map has not named. Ticket 26 asks the narrowest version.
 - **Selection and focus rendering everywhere else.** Ticket 02 settled the cursor
   for the project list and the tree. Modals, the filter input, the command palette,
   and the search overlay all still show default Textual focus, which no longer
@@ -292,15 +322,18 @@ Fog toward the destination. Graduates into tickets as the frontier clears it.
   does not surface paths already over the limit that nobody is currently moving.
   Considered and deferred once already as a new finding type; still deferred, now
   for a narrower reason.
-- **Deep unreadable detection.** `doctor` checks the project root only, because
-  that is all `scan_drive` enumerates. A folder three levels down that cannot be
-  read is invisible until the tree lands. Ticket 07 inherits it.
-- **Tree states.** Loading, empty project, permission error, a folder too large to
-  walk, a stale tree after an external change. Ticket 06 adds two that must be
-  designed distinctly: **enumeration error**, which must never look like empty, and
-  **truncated or partial**, because a count cap can be hit and because CPython
-  issue 102993 shows `os.listdir` returning a partial result on a synced mount
-  while Explorer reads it fine.
+- **Deep unreadable detection in `doctor`.** *Mostly cleared.* The tree and
+  `atlas tree` show an Unreadable folder at any depth they read, and `doctor` now
+  lists an unreadable folder inside a relocation source instead of counting it as
+  zero files (#24). What remains: `doctor` itself still enumerates only the project
+  root, so a deep unreadable folder nobody opens is still invisible to it.
+- **Tree states.** *Mostly built.* Loading (after 120 ms, never on a warm read),
+  Unreadable (never drawn as empty, including a `cannot read` row for an unreadable
+  project root), Partial (a folder over the 500-entry count cap), and a stale tree
+  after a rescan (every cached tree takes the fresh report). Left: an external
+  change reaches an open tree only through the 60 s TTL or `r`, and a Partial
+  listing the filesystem itself truncates (CPython 102993) is not distinguishable
+  from a complete one.
 - **Test strategy for the new surface.** The current three-happy-path TUI coverage
   will not hold a tree, a search overlay, and a dossier panel. Ticket 05 shows the
   shape that works: probe scripts driving real widgets through `App.run_test()`
@@ -311,11 +344,12 @@ Fog toward the destination. Graduates into tickets as the frontier clears it.
   change. Ticket 05 measured 20-30ms at 5000 expanded nodes and cut the median from
   25.4ms to 6.4ms by overriding `get_label_width`. Whether Atlas needs that, and
   what caps expansion depth, is unspecified.
-- **Docs and release.** README, CHANGELOG, any ADR the seam decisions earn, and the
-  `uv tool install --editable` redeploy.
-- **Cache and invalidation layer.** Ticket 06 prescribes TTL plus explicit refresh
-  plus subtree invalidation on Atlas's own mutations, in the shape rclone uses.
-  Where that layer lives, what it keys on, and how conform and clean signal it.
+- **Staff redeploy of 0.6.0.** README, CHANGELOG and version are current as of
+  0.6.0 (#43). An editable install never reaches staff: they run the pinned wheel
+  on the drive through `Atlas.bat`, and the last build the repo records reaching the
+  drive is 0.4.0. Rebuilding the
+  wheel, repinning the launcher and updating the drive's `HOW-TO.md` is a
+  production write that needs the user's go-ahead. Steps in `tools/atlas/README.md`.
 
 ## Out of scope
 

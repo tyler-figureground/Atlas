@@ -1,9 +1,3 @@
----
-title: "5. The console is three Regions in two Compositions, and the narrow one is the common case"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 # 5. The console is three Regions in two Compositions, and the narrow one is the common case
 
 Date: 2026-09-03
@@ -130,3 +124,11 @@ filtered the hidden Project List - is the failure this ADR's navigation rule
 exists to prevent. This is a deliberate narrowing of "`/` filters whichever Region
 has focus", not an oversight; revisit it if a Companion Mode grows long enough to
 need one.
+
+## Note, 2026-09-23: Enter drills Regions, and `space` toggles a folder
+
+"Enter drills toward the tree" was built as Enter drilling Regions: list to tree,
+tree to Companion. Ticket 03 had Enter toggle a folder and open a file inside the
+tree; that was not built. `space` toggles a folder when the tree has focus, and `o`
+opens the file or folder under the cursor. The deviation is recorded in ticket 03.
+Nothing here changes with width, so the constant-navigation rule stands.

@@ -49,7 +49,9 @@ Architecture Studio
 │   ├── 09-project-dossier               2 skills · PROJECT.md + decisions/
 │   └── 10-norma                         6 skills · building-code analysis (norma engine)
 │
-└── rules/                               7 rules · 2 hook-enforced, 5 advisory
+├── rules/                               7 rules · 2 hook-enforced, 5 advisory
+├── tools/atlas/                         studio drive TUI/CLI · Python, own tests, not a plugin
+└── docs/adr/                            architecture decision records
 ```
 
 **Agents** orchestrate skills across plugins — they assess your input, choose a path, and exercise judgment; each ships inside the plugin it orchestrates and registers as a native Claude Code subagent. **Skills** are single-purpose tools invoked with a slash command. **Rules** are cross-cutting conventions (two hook-enforced, five advisory). **Hooks** are event-driven automations that ship with the Dispatcher plugin and register automatically. Skills are grouped into **plugins** (installable bundles organized by project lifecycle).

@@ -1,9 +1,3 @@
----
-title: "atlas tree - the tree's facts on the CLI"
-date: 2026-09-04
-generated_by: skills-for-architects
----
-
 # atlas tree - the tree's facts on the CLI
 
 Type: task

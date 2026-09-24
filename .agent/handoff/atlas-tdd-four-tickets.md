@@ -1,9 +1,3 @@
----
-title: "Atlas: four tickets driven test-first"
-date: 2026-09-04
-generated_by: skills-for-architects
----
-
 # Atlas: four tickets driven test-first
 
 Session 8. Effort: `atlas-console`. Tickets 21, 07, 15, 20, in that order.

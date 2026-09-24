@@ -1,9 +1,3 @@
----
-title: "6. Tree writes are one-action Plans, revalidated at their own scope, and reversible from a per-project undo stack"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 # 6. Tree writes are one-action Plans, revalidated at their own scope, and reversible from a per-project undo stack
 
 Date: 2026-09-03
@@ -121,8 +115,9 @@ to hide the consequence.
 
 ## Corrections
 
-Two claims in this ADR were wrong. Both were written before the code existed and
-both were found by pressing the key rather than by reading the design.
+Three claims in this ADR were wrong, all written before the code existed. The first
+two were found by pressing the key rather than by reading the design; the third by
+ADR 0007, reading what `_apply_backfill` actually creates.
 
 **"The same guard runs on every undo pop."** It cannot. `Guard.for_action.check`
 re-derives the Plan from the drive map and compares - which is the strongest check
@@ -146,3 +141,11 @@ so it cannot hold the per-Project stack this ADR specifies; what it can do is ta
 back what it printed, which is what makes `invert_plan` reachable from outside.
 That needed `plan_from_dict` - `action_to_dict` had no inverse, so the Move
 Manifest was write-only.
+
+**"Creating a missing folder is the existing BACKFILL."** Only for the control
+plane. ADR 0007 corrects this: conform backfills `PROJECT.md`, `decisions`,
+`AGENTS.md`, `CLAUDE.md` and the analysis directory, and has never created a mapped
+section. An unmet Expectation therefore carries its kind, and only a control-plane
+one offers a Repair - `f` in the Companion arms it (#42). A missing section keeps
+the add-folders path, `a`. The Decision section above, and the "empty mapped
+folder" example under it, should be read with that limit.

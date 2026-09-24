@@ -1,9 +1,3 @@
----
-title: "The core write surface for the tree, as Atlas code"
-date: 2026-09-03
-generated_by: skills-for-architects
----
-
 # The core write surface for the tree, as Atlas code
 
 Type: task
