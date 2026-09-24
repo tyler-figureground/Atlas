@@ -92,43 +92,160 @@ def _read_source(project_path: Path) -> tuple[Path, Path, bytes]:
     return project, dossier, source
 
 
-def _yaml_scalar(value: str, *, key: str, dossier: Path) -> str:
-    value = value.strip()
-    if not value:
-        return ""
-    if value.startswith('"'):
+# The front-matter keys Atlas reads and writes. Only these are parsed, and
+# only as flat scalars; every other line - the Norma keys a dossier may write
+# as a list or a block, comments, anything a newer skill adds - is carried
+# through byte-for-byte and never validated here (ADR 0001).
+_ATLAS_KEYS = frozenset(
+    (
+        "project",
+        "name",
+        "address",
+        "address_street",
+        "address_unit",
+        "address_city",
+        "address_state",
+        "address_postal_code",
+        "description",
+        "project_use_case",
+        "project_use_case_category",
+        *(
+            f"{role}_contact_{suffix}"
+            for role in ("billing", "client")
+            for suffix in ("id", "name", "email", "phone", "company", "address")
+        ),
+    )
+)
+_KEY_LINE = re.compile(r"([A-Za-z_][A-Za-z0-9_-]*):(?=[ \t]|$)")
+
+
+@dataclass(frozen=True)
+class _FrontMatter:
+    """Where the Atlas keys sit in the front matter, and what they hold."""
+
+    end: int
+    values: dict[str, str]
+    line_of: dict[str, int]
+    comment_at: dict[str, int]
+
+
+def _closing_double_quote(body: str) -> int:
+    index = 1
+    while index < len(body):
+        character = body[index]
+        if character == "\\":
+            index += 2
+            continue
+        if character == '"':
+            return index
+        index += 1
+    return -1
+
+
+def _yaml_scalar(rest: str, *, key: str, dossier: Path) -> tuple[str, int | None]:
+    """Parse the text after ``key:`` as one flat YAML scalar.
+
+    Returns the value and, when the line carries a trailing ``# comment``, the
+    comment's offset within ``rest`` so a rewrite can keep it. YAML's rule: a
+    ``#`` starts a comment only when whitespace precedes it, and a value that
+    is only a comment is empty (the dossier template writes
+    ``address_unit:  # optional``).
+    """
+
+    body = rest.lstrip(" \t")
+    offset = len(rest) - len(body)
+    if not body:
+        return "", None
+    if body.startswith("#"):
+        return "", offset
+    if body[0] == '"':
+        end = _closing_double_quote(body)
+        if end < 0:
+            raise ProjectDataError(f"{dossier} has invalid YAML value for '{key}'")
         try:
-            parsed = json.loads(value)
+            value = json.loads(body[: end + 1])
         except json.JSONDecodeError as error:
             raise ProjectDataError(f"{dossier} has invalid YAML value for '{key}'") from error
-        if not isinstance(parsed, str):
-            raise ProjectDataError(f"{dossier} '{key}' must be text")
-        return parsed
-    if value[0] in "'[{&*!>|%@`":
-        raise ProjectDataError(f"{dossier} uses unsupported YAML for '{key}'")
-    return value
+        tail_start = end + 1
+    elif body[0] == "'":
+        pieces: list[str] = []
+        index = 1
+        while True:
+            quote = body.find("'", index)
+            if quote < 0:
+                raise ProjectDataError(f"{dossier} has invalid YAML value for '{key}'")
+            if body[quote + 1 : quote + 2] == "'":
+                pieces.append(body[index : quote + 1])
+                index = quote + 2
+                continue
+            pieces.append(body[index:quote])
+            break
+        value = "".join(pieces)
+        tail_start = quote + 1
+    else:
+        if body[0] in "[{&*!>|%@`":
+            raise ProjectDataError(f"{dossier} uses unsupported YAML for '{key}'")
+        comment = re.search(r"[ \t]#", body)
+        if comment is None:
+            return body.rstrip(" \t"), None
+        return body[: comment.start()].rstrip(" \t"), offset + comment.start() + 1
+    tail = body[tail_start:]
+    after = tail.lstrip(" \t")
+    if not after:
+        return value, None
+    if after.startswith("#") and len(after) < len(tail):
+        return value, offset + tail_start + len(tail) - len(after)
+    raise ProjectDataError(f"{dossier} has invalid YAML value for '{key}'")
 
 
-def _front_matter(source: bytes, dossier: Path) -> dict[str, str]:
-    text = source.decode("utf-8")
-    lines = text.splitlines()
-    if not lines or lines[0] != "---":
+def _front_matter_bounds(lines: list[str], dossier: Path) -> int:
+    if not lines or lines[0].rstrip() != "---":
         raise ProjectDataError(f"{dossier} is missing Atlas YAML front matter")
-    try:
-        end = lines.index("---", 1)
-    except ValueError:
-        raise ProjectDataError(f"{dossier} has unterminated YAML front matter") from None
+    for index in range(1, len(lines)):
+        if lines[index].rstrip() == "---":
+            return index
+    raise ProjectDataError(f"{dossier} has unterminated YAML front matter")
+
+
+def _parse_front_matter(lines: list[str], dossier: Path) -> _FrontMatter:
+    end = _front_matter_bounds(lines, dossier)
     values: dict[str, str] = {}
-    for line in lines[1:end]:
+    line_of: dict[str, int] = {}
+    comment_at: dict[str, int] = {}
+    current: str | None = None
+    for index in range(1, end):
+        line = lines[index]
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        if line[:1].isspace() or ":" not in line:
-            raise ProjectDataError(f"{dossier} front matter is not flat YAML")
-        key, raw = line.split(":", 1)
-        if not key or key.strip() != key or key in values:
-            raise ProjectDataError(f"{dossier} has invalid or duplicate YAML key '{key}'")
-        values[key] = _yaml_scalar(raw, key=key, dossier=dossier)
+        if line[:1] in (" ", "\t"):
+            # A continuation line belongs to the key above it. Atlas keys are
+            # flat scalars, so one here is a shape Atlas cannot rewrite safely.
+            if current is not None:
+                raise ProjectDataError(f"{dossier} uses unsupported YAML for '{current}'")
+            continue
+        match = _KEY_LINE.match(line)
+        key = match.group(1) if match else None
+        if key not in _ATLAS_KEYS:
+            current = None
+            continue
+        if key in values:
+            raise ProjectDataError(f"{dossier} has duplicate YAML key '{key}'")
+        rest = line[match.end() :]
+        value, comment = _yaml_scalar(rest, key=key, dossier=dossier)
+        values[key] = value
+        line_of[key] = index
+        if comment is not None:
+            comment_at[key] = match.end() + comment
+        current = key
+    return _FrontMatter(end=end, values=values, line_of=line_of, comment_at=comment_at)
+
+
+def _front_matter(source: bytes, dossier: Path) -> dict[str, str]:
+    values = dict(_parse_front_matter(source.decode("utf-8").split("\r\n"), dossier).values)
+    if not values.get("project") and values.get("name"):
+        # SKILL.md: `name` is an accepted alias of `project`.
+        values["project"] = values["name"]
     return values
 
 
@@ -385,27 +502,30 @@ def _render_updated_dossier(plan: ProjectUpdatePlan) -> bytes:
 
     lines = plan._source[:-2].split(b"\r\n")
     try:
-        front_end = lines.index(b"---", 1)
-    except ValueError:
-        raise ProjectDataError("project dossier front matter changed after preview") from None
-    seen_front: set[str] = set()
-    output: list[bytes] = [lines[0]]
-    for raw_line in lines[1:front_end]:
-        try:
-            line = raw_line.decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise ProjectDataError(f"project dossier is no longer UTF-8: {error}") from error
-        key = line.split(":", 1)[0] if ":" in line and not line[:1].isspace() else ""
-        if key in front_values:
-            if key in seen_front:
-                raise ProjectDataError(f"project dossier has duplicate YAML key '{key}'")
-            output.append(f"{key}: {_yaml(front_values[key])}".encode("utf-8"))
-            seen_front.add(key)
-        else:
-            output.append(raw_line)
+        text_lines = [line.decode("utf-8") for line in lines]
+    except UnicodeDecodeError as error:
+        raise ProjectDataError(f"project dossier is no longer UTF-8: {error}") from error
+    front = _parse_front_matter(text_lines, plan.old_path / "PROJECT.md")
+    front_end = front.end
+    if "project" not in front.line_of and "name" in front.line_of:
+        # Keep the alias the dossier chose rather than adding a second key.
+        front_values["name"] = front_values.pop("project")
+    output: list[bytes] = list(lines[: front_end])
+    appended: list[bytes] = []
     for key, value in front_values.items():
-        if key not in seen_front:
-            output.append(f"{key}: {_yaml(value)}".encode("utf-8"))
+        index = front.line_of.get(key)
+        if index is None:
+            appended.append(f"{key}: {_yaml(value)}".encode("utf-8"))
+            continue
+        if front.values[key] == value:
+            continue  # unchanged: the line keeps its quoting and comment
+        rewritten = f"{key}: {_yaml(value)}"
+        comment_at = front.comment_at.get(key)
+        if comment_at is not None:
+            comment = text_lines[index][comment_at:]
+            rewritten += " " * max(1, comment_at - len(rewritten)) + comment
+        output[index] = rewritten.encode("utf-8")
+    output.extend(appended)
     output.append(lines[front_end])
 
     body = list(lines[front_end + 1 :])
