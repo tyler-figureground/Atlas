@@ -803,7 +803,26 @@ def cmd_conform(args: argparse.Namespace) -> int:
     return 1 if pending else 0
 
 
+def _utf8_streams() -> None:
+    """Write UTF-8 whatever the pipe's default encoding.
+
+    A redirected stdout on Windows is cp1252, and a project or contact name with
+    a character outside it would crash the print - after the command had
+    already written to the drive, so the retry fails as a duplicate. Only the
+    encoding changes; a stream that cannot be reconfigured is left alone.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        encoding = (getattr(stream, "encoding", "") or "").lower().replace("-", "")
+        if encoding == "utf8":
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_streams()
     parser = argparse.ArgumentParser(prog="atlas", description="Map-driven studio drive tooling.")
     parser.add_argument("--version", action="version", version=f"atlas {__version__}")
     sub = parser.add_subparsers(dest="command")
