@@ -282,7 +282,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
             self.query_one("#manager-error", Static).update(str(error))
             return
         self.query_one("#manager-contact", Select).set_options([
-            (f"{contact.first_name} {contact.last_name} · {contact.email}", contact.id)
+            (Text(f"{contact.first_name} {contact.last_name} · {contact.email}"), contact.id)
             for contact in self._contacts
         ])
         self.query_one("#manager-contact", Select).focus()
@@ -471,7 +471,7 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
 
     def _options(self) -> list[tuple[str, str]]:
         options = [
-            (f"{contact.first_name} {contact.last_name} · {contact.email}", contact.id)
+            (Text(f"{contact.first_name} {contact.last_name} · {contact.email}"), contact.id)
             for contact in self._contacts
         ]
         options.append(("Add new contact…", self.ADD_NEW))
@@ -714,7 +714,7 @@ class AddSectionModal(ModalScreen[list[str] | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog", classes="selection-dialog"):
-            yield Label(f"Add folders - {self._project}", classes="dialog-title")
+            yield Label(f"Add folders - {self._project}", classes="dialog-title", markup=False)
             yield Static(
                 "Only folders approved by the drive map appear here.",
                 classes="supporting",
@@ -731,11 +731,13 @@ class AddSectionModal(ModalScreen[list[str] | None]):
         self.query_one(SelectionList).focus()
 
     @staticmethod
-    def _option_label(option: str) -> str:
+    def _option_label(option: str) -> Text:
+        # Text, never str: an option list parses a str as markup, and a folder
+        # named "[old] Archive" is a real folder name, not a style.
         if "/" not in option:
-            return f"{option}  (section)"
+            return Text(f"{option}  (section)")
         section, child = option.split("/", 1)
-        return f"  {section} / {child}"
+        return Text(f"  {section} / {child}")
 
     def on_selection_list_selected_changed(self, _: SelectionList.SelectedChanged) -> None:
         selected = self.query_one(SelectionList).selected
@@ -764,7 +766,7 @@ class ConfirmListModal(ModalScreen[bool]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label(self._title, classes="dialog-title")
+            yield Label(self._title, classes="dialog-title", markup=False)
             yield Static(
                 "Move destinations are never replaced. Concurrent control-file changes stop the plan.",
                 classes="supporting",
@@ -796,7 +798,7 @@ class ResultModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Label(self._title, classes="dialog-title")
+            yield Label(self._title, classes="dialog-title", markup=False)
             with VerticalScroll(id="plan"):
                 yield Static("\n".join(self._lines), markup=False)
             with Horizontal(classes="actions"):
@@ -922,6 +924,17 @@ class AtlasApp(App):
         yield Static("Ready", id="operation", markup=False)
         yield Static("", id="keys", markup=False)
         yield Footer()
+
+    def notify(self, message: str, *, title: str = "", severity: str = "information",
+               timeout: float | None = None, markup: bool = False) -> None:
+        """Textual's notify, with markup off by default.
+
+        Every toast Atlas raises carries a project name, a path or an error, and
+        any of those can hold brackets: `260813_Loft [draft]` would toast as
+        `260813_Loft`. Labels are text, not markup (ticket 05).
+        """
+        super().notify(message, title=title, severity=severity, timeout=timeout,
+                       markup=markup)
 
     def _identity(self) -> str:
         """The line under the mark: which drive, which map, what needs attention."""
@@ -1269,7 +1282,7 @@ class AtlasApp(App):
             table.add_row(
                 "*" if row.key in self._marked else "",
                 Text(row.health, style=STATUS_STYLES.get(row.health, "bold")),
-                row.report.name,
+                Text(row.report.name),
                 row.sections,
                 str(row.fixes) if row.fixes else "-",
                 str(row.review) if row.review else "-",

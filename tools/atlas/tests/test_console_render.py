@@ -8,10 +8,10 @@ called it drew something else. These tests read what reaches the screen.
 from __future__ import annotations
 
 from rich.color import Color
-from textual.widgets import Static
+from textual.widgets import DataTable, Label, Static
 
 from atlas.tui import tokens
-from atlas.tui.app import OPERATION_MARGIN, AtlasApp
+from atlas.tui.app import OPERATION_MARGIN, AtlasApp, ConfirmListModal
 from atlas.tui.wordmark import composition_for, render_mark
 from atlas.tui.layout import TREE
 from atlas.tui.treeview import ProjectTreeView
@@ -111,6 +111,53 @@ def test_unread_has_a_short_form_and_cannot_read_never_shortens():
     assert str(node_label(unread, narrow=True)).endswith("unread")
     denied = TreeNode(key="b", name="b", is_dir=True, load=UNREADABLE)
     assert str(node_label(denied, narrow=True)).endswith("!  cannot read")
+
+
+# ------------------------------------------------ names are never markup (#37)
+
+
+def rendered(widget) -> str:
+    """What a Label, Static or cell shows, as plain text."""
+    value = widget.render()
+    return getattr(value, "plain", str(value))
+
+
+async def test_a_bracketed_project_name_survives_the_list_modals_and_toasts(fixture_drive):
+    """`clean_name_part` allows brackets, so Atlas's own New project form can
+    make `260813_Loft [draft]`. Rich markup ate `[draft]`, and the destructive
+    Clean confirm named the wrong project."""
+    make_project(fixture_drive, "260813_Loft [draft]", sections=["01 Model", "08 OUT"])
+    make_project(fixture_drive, "260813_Loft", sections=["01 Model"])
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        table = app.query_one("#projects", DataTable)
+        names = [table.get_row_at(index)[2] for index in range(table.row_count)]
+        assert any(getattr(name, "plain", name) == "260813_Loft [draft]" for name in names)
+        assert all(not isinstance(name, str) for name in names), "a str cell is parsed as markup"
+
+        draft = next(index for index, row in enumerate(app._visible_rows)
+                     if row.key == "260813_Loft [draft]")
+        table.move_cursor(row=draft)
+        await settle(app, pilot)
+        await pilot.press("c")
+        await settle(app, pilot)
+        assert isinstance(app.screen, ConfirmListModal)
+        title = app.screen.query_one(".dialog-title", Label)
+        assert "260813_Loft [draft]" in rendered(title)
+        await pilot.press("escape")
+        await settle(app, pilot)
+
+        app.notify("[draft] kept", title="t")
+        await pilot.pause()
+        assert all(not n.markup for n in app._notifications), "a toast parsed markup"
+
+
+def test_option_lists_do_not_parse_markup():
+    from atlas.tui.app import AddSectionModal
+
+    assert not isinstance(AddSectionModal._option_label("[old] Archive"), str)
 
 
 # ------------------------------------------------------------- resize (#18)
