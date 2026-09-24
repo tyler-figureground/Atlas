@@ -153,7 +153,14 @@ def _dir_exists_exact(base: Path, rel: str) -> bool:
     return True
 
 
-def report_project(inv: ProjectInventory, m: DriveMap) -> ProjectReport:
+def report_project(inv: ProjectInventory, m: DriveMap, *,
+                   count_files: bool = True) -> ProjectReport:
+    """One project's conformance facts.
+
+    ``count_files=False`` skips the one walk here - the file count under each
+    relocation source - leaving ``file_count`` None (unknown). For the scoped
+    Guard, which needs to know what work is due, not how big it is (#46).
+    """
     if not inv.root_entries.readable:
         # Nothing below is knowable. Every check would run against the failed
         # listing's empty names and report a present control plane as missing,
@@ -222,6 +229,9 @@ def report_project(inv: ProjectInventory, m: DriveMap) -> ProjectReport:
                     sweeps.append((e.name, dst))
             continue
         if _dir_exists_exact(inv.path, src):
+            if not count_files:
+                reloc_hits.append(RelocationHit(source=src, target=dst, file_count=None))
+                continue
             tally = tally_files(inv.path / src)
             unreadable.extend(
                 f"{src}/{rel}  {why}" if rel != "." else f"{src}  {why}"

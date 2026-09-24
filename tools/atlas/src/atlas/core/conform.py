@@ -204,12 +204,17 @@ def build_repair_plan(report: ProjectReport, m: DriveMap, path: str,
     "what does this node need" would eventually disagree.
     """
     path = node_key(path)
-    full = build_plan(report, m, project=project)
+    # Unmeasured first, then only the match: measuring walks each source's
+    # subtree, and a one-node repair has no business walking the others (#46).
+    full = build_plan(report, m, project=None)
     match = next(
         (a for a in full.actions if a.src == path),
         next((a for a in full.actions if not a.src and a.dst == path), None),
     )
-    return Plan(project=report.name, actions=(match,) if match else ())
+    if match is None:
+        return Plan(project=report.name, actions=())
+    return Plan(project=report.name,
+                actions=(replace(match, path_length=_path_length(project, match)),))
 
 
 def action_to_dict(action: Action) -> dict:
@@ -370,6 +375,11 @@ def _watched_dirs(plan: Plan) -> tuple[str, ...]:
     return tuple(sorted(dirs))
 
 
+def _identity(action: Action) -> tuple[str, str, str]:
+    """What an action does, without what it costs to describe."""
+    return action.kind, action.src, action.dst
+
+
 def _snapshot(project: Path, dirs: tuple[str, ...]) -> tuple[_Snapshot, ...]:
     """Enumerate the watched directories, carrying Load State so that a folder
     that became unreadable reads as a change rather than as an empty one."""
@@ -465,14 +475,20 @@ class Guard:
         if self.derived:
             inv = ProjectInventory(path=project_path, name=self.project,
                                    root_entries=list_entries(project_path))
-            report = report_project(inv, fresh_map)
             if self.whole_project:
+                report = report_project(inv, fresh_map)
                 fresh = build_plan(report, fresh_map, project=project_path).actions
+                if fresh != self.actions:
+                    return f"{self.project} no longer needs the same work"
             else:
-                fresh = build_repair_plan(report, fresh_map, self.node,
-                                          project=project_path).actions
-            if fresh != self.actions:
-                return f"{self.project} no longer needs the same work"
+                # What ADR 0006 promised and the first version did not do: no
+                # walk. File counts and path lengths describe the work, they do
+                # not decide it - the action is its kind and its two ends, and
+                # the watched parents below catch anything that moved (#46).
+                report = report_project(inv, fresh_map, count_files=False)
+                fresh = build_repair_plan(report, fresh_map, self.node).actions
+                if [_identity(a) for a in fresh] != [_identity(a) for a in self.actions]:
+                    return f"{self.project} no longer needs the same work"
 
         if _snapshot(project_path, tuple(rel for rel, _s, _e in self.watched)) != self.watched:
             return f"{self.project} changed on disk since the preview"

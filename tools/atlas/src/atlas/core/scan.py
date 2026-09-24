@@ -24,9 +24,9 @@ DEFAULT_MOUNT_ROOT = Path(os.environ.get("ATLAS_MOUNT_ROOT", r"G:\Shared drives"
 
 # Load State, per ADR 0004. UNREAD is the state of every folder Atlas has not
 # opened yet - it belongs to the tree rather than to a Listing, since a Listing
-# only exists once a folder has been read. PARTIAL is modelled but not yet
-# produced: no reliable way to detect a short enumeration has been found (see the
-# drive-cost research).
+# only exists once a folder has been read. PARTIAL is produced only by the count
+# cap (ticket 12): no reliable way to detect a short enumeration has been found
+# (see the drive-cost research), but a deliberately stopped one is known.
 UNREAD = "unread"
 READ = "read"
 UNREADABLE = "unreadable"
@@ -130,17 +130,21 @@ def is_project_dir(name: str) -> bool:
     return not (name.startswith("_") or name.startswith("00 ") or name.startswith("."))
 
 
-def list_entries(path: Path) -> Listing:
-    """Enumerate one directory, reporting failure rather than hiding it."""
+def list_entries(path: Path, limit: int | None = None) -> Listing:
+    """Enumerate one directory, reporting failure rather than hiding it.
+
+    ``limit`` caps the enumeration (ticket 12's count cap). A folder with more
+    entries than that comes back PARTIAL holding the first ``limit`` - a lower
+    bound, never presented as the whole.
+    """
     try:
         with os.scandir(long_path(path)) as it:
-            return Listing(
-                state=READ,
-                entries=tuple(
-                    Entry(name=e.name, is_dir=e.is_dir(follow_symlinks=False))
-                    for e in it
-                ),
-            )
+            entries: list[Entry] = []
+            for e in it:
+                if limit is not None and len(entries) >= limit:
+                    return Listing(state=PARTIAL, entries=tuple(entries))
+                entries.append(Entry(name=e.name, is_dir=e.is_dir(follow_symlinks=False)))
+            return Listing(state=READ, entries=tuple(entries))
     except OSError as exc:
         return Listing(state=UNREADABLE, error=f"{type(exc).__name__}: {exc.strerror or exc}")
 

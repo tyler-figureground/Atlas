@@ -20,7 +20,7 @@ from pathlib import Path
 from .conform import DONE, Plan, parent_key
 from .doctor import ProjectReport
 from .mapfile import DriveMap
-from .scan import UNREAD, Listing, ProjectInventory, list_entries
+from .scan import READ, UNREAD, Listing, ProjectInventory, list_entries
 
 # Filing State, per ADR 0004: what the drive map says about a node that exists.
 MAPPED = "mapped"
@@ -33,6 +33,24 @@ UNFILED = "unfiled"
 # the Drive redirector, so someone else's change reaches the tree when the TTL
 # expires or when the operator asks for a refresh, and never any sooner.
 DEFAULT_TTL = 60.0
+
+# The rest of ticket 12's budgets, measured on the live drive
+# (docs/research/atlas-drive-latency-measurement.md) and recorded here, where the
+# tree reads them. They interact, so they live together.
+#
+# LOADING_DELAY: seconds before a load shows a loading state. Above the cold p99
+#   of 91 ms, below the perceptual boundary; at p90 of 1.74 ms almost no
+#   expansion ever shows it, so the tree does not flicker.
+# CONCURRENCY_CAP: node loads in flight at once. Most of the measured gain
+#   (2.15x at 8 workers, already flat), and it leaves the shared pool free.
+# PREFETCH_CAP: nodes that may be read ahead of the cursor. The tree does not
+#   prefetch today; any prefetch that is added stays one level ahead, under this.
+# COUNT_CAP: entries read from one folder before its listing stops as PARTIAL.
+#   The pathological tail, not the median, is what this bounds.
+LOADING_DELAY = 0.120
+CONCURRENCY_CAP = 4
+PREFETCH_CAP = 50
+COUNT_CAP = 500
 
 # What kind of thing an unmet Expectation is. The distinction is not cosmetic:
 # conform backfills the control plane and has never created a mapped section, so
@@ -114,12 +132,13 @@ class ProjectTree:
     """A lazily-expanding handle on one Project's folders and files."""
 
     def __init__(self, project: Path, drive_map: DriveMap, report: ProjectReport,
-                 *, ttl: float = DEFAULT_TTL,
+                 *, ttl: float = DEFAULT_TTL, count_cap: int | None = COUNT_CAP,
                  clock: Callable[[], float] = time.monotonic):
         self.project = project
         self.drive_map = drive_map
         self.report = report
         self.ttl = ttl
+        self.count_cap = count_cap
         self._clock = clock
         self._listings: dict[str, Listing] = {}
         self._read_at: dict[str, float] = {}
@@ -167,7 +186,7 @@ class ProjectTree:
     def _listing(self, key: str) -> Listing:
         if not self._fresh(key):
             self._listings[key] = list_entries(
-                self.project / key if key else self.project)
+                self.project / key if key else self.project, limit=self.count_cap)
             self._read_at[key] = self._clock()
         return self._listings[key]
 
@@ -182,10 +201,10 @@ class ProjectTree:
         unmet = [Expectation(path=item, kind=CONTROL_PLANE)
                  for item in self.report.missing_control_plane]
         root = self._listing("")
-        if not root.readable:
+        if root.state != READ:
             # Nothing is known to be missing from a folder Atlas could not
-            # read; listing every section as unmet would draw an unreadable
-            # project exactly like an empty one (ADR 0004).
+            # read, or read only up to the count cap; listing every section as
+            # unmet would draw it exactly like an empty project (ADR 0004).
             return tuple(sorted(unmet, key=lambda e: e.path))
         present = {e.name for e in root if e.is_dir}
         for section in self.drive_map.sections:
@@ -193,8 +212,10 @@ class ProjectTree:
                 unmet.append(Expectation(path=section.id, kind=SECTION))
                 continue
             listing = self._listing(section.id)
-            if not listing.readable:
-                continue    # the tree row itself says "cannot read"
+            if listing.state != READ:
+                # Unreadable, or stopped at the count cap: a child absent from
+                # what was read is not known to be absent from disk.
+                continue
             here = {e.name for e in listing}
             unmet.extend(
                 Expectation(path=f"{section.id}/{child}", kind=SECTION)
