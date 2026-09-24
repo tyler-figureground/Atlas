@@ -1893,7 +1893,9 @@ class AtlasApp(App):
             return
         project_path, folder_name = selected
         try:
-            record = load_project_record(project_path)
+            record = load_project_record(
+                project_path, project_file=self._inventory.map.project_file
+            )
         except ProjectDataError as error:
             self.notify(str(error), title="Cannot edit project", severity="error", timeout=10)
             return
@@ -1905,7 +1907,11 @@ class AtlasApp(App):
                 return
             try:
                 plan = preview_project_update(
-                    root, project_path, result.intake, expected_digest=record.source_digest
+                    root,
+                    project_path,
+                    result.intake,
+                    expected_digest=record.source_digest,
+                    project_file=drive_map.project_file,
                 )
             except ProjectDataError as error:
                 self.notify(str(error), title="Cannot preview project edit", severity="error", timeout=10)
@@ -1927,6 +1933,7 @@ class AtlasApp(App):
                             f"Previous folder: {updated.old_path}",
                             f"Current folder: {updated.path}",
                             "PROJECT.md and project index updated.",
+                            *(f"Warning: {warning}" for warning in updated.warnings),
                         ),
                     )
 

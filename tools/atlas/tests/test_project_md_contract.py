@@ -580,3 +580,81 @@ def test_contact_update_refuses_a_change_made_since_the_form_opened(fixture_driv
 
     stored = load_contacts(fixture_drive).contacts[0]
     assert (stored.phone, stored.company) == ("510 555 0100", None)
+
+
+# ---------------------------------------------------------------- #56 edit edges
+
+
+def test_log_failure_after_a_committed_edit_is_a_warning_not_an_error(
+    fixture_drive, monkeypatch, capsys
+):
+    import atlas.core.ops as ops_module
+    from atlas.cli import main
+
+    _, _, project = _project(fixture_drive)
+
+    def unwritable(*_args, **_kwargs):
+        raise PermissionError("log folder is read-only")
+
+    monkeypatch.setattr(ops_module, "append_log", unwritable)
+
+    status = main(
+        [
+            "project",
+            "edit",
+            project.name,
+            "--drive",
+            str(fixture_drive),
+            "--name",
+            "Pine House",
+            "--yes",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert status == 0
+    assert "updated:" in captured.out
+    assert "warning:" in captured.err and "read-only" in captured.err
+    assert load_project_record(project).intake.project_name == "Pine House"
+
+
+def test_preview_reports_a_rename_collision_before_apply(fixture_drive):
+    _, intake, project = _project(fixture_drive)
+    (fixture_drive / "260813_99 Pine Avenue").mkdir()
+
+    with pytest.raises(ProjectDataError, match="destination already exists"):
+        preview_project_update(
+            fixture_drive,
+            project,
+            replace(intake, project_address=replace(intake.project_address, street="99 Pine Avenue")),
+        )
+
+
+def test_edit_follows_a_map_that_renames_the_project_file(fixture_drive, capsys):
+    from conftest import FIXTURE_MAP, write_map
+
+    from atlas.cli import main
+
+    custom = json.loads(json.dumps(FIXTURE_MAP))
+    custom["controlPlane"]["projectFile"] = "DOSSIER.md"
+    write_map(fixture_drive, custom)
+    drive_map, _, project = _project(fixture_drive)
+    assert (project / "DOSSIER.md").is_file()
+    assert not (project / "PROJECT.md").exists()
+
+    status = main(
+        [
+            "project",
+            "edit",
+            project.name,
+            "--drive",
+            str(fixture_drive),
+            "--name",
+            "Pine House",
+            "--yes",
+        ]
+    )
+
+    assert status == 0, capsys.readouterr().err
+    assert b'project: "Pine House"' in (project / "DOSSIER.md").read_bytes()
+    assert not (project / "PROJECT.md").exists()

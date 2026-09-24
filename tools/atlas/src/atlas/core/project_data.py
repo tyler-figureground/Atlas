@@ -61,6 +61,7 @@ class ProjectUpdatePlan:
     contacts_digest: str | None
     index_digest: str | None
     _source: bytes = field(repr=False, compare=False)
+    project_file: str = "PROJECT.md"
 
     @property
     def rename_required(self) -> bool:
@@ -73,11 +74,14 @@ class ProjectUpdateResult:
     path: Path
     renamed: bool
     record: ProjectRecord
+    # Things that went wrong after the update committed: reported, not raised,
+    # because the edit itself succeeded.
+    warnings: tuple[str, ...] = ()
 
 
-def _read_source(project_path: Path) -> tuple[Path, Path, bytes]:
+def _read_source(project_path: Path, project_file: str) -> tuple[Path, Path, bytes]:
     project = Path(project_path)
-    dossier = project / "PROJECT.md"
+    dossier = project / project_file
     try:
         source = dossier.read_bytes()
     except OSError as error:
@@ -461,10 +465,15 @@ def _project_address(values: dict[str, str], dossier: Path) -> ProjectAddress:
     )
 
 
-def load_project_record(project_path: Path) -> ProjectRecord:
-    """Load one Atlas 0.2 project dossier through its intake contract."""
+def load_project_record(
+    project_path: Path, *, project_file: str = "PROJECT.md"
+) -> ProjectRecord:
+    """Load one Atlas 0.2 project dossier through its intake contract.
 
-    project, dossier, source = _read_source(project_path)
+    ``project_file`` is the drive map's ``projectFile``.
+    """
+
+    project, dossier, source = _read_source(project_path, project_file)
     return _record_from_source(project, dossier, source)
 
 
@@ -535,6 +544,7 @@ def preview_project_update(
     intake: ProjectIntake,
     *,
     expected_digest: str | None = None,
+    project_file: str = "PROJECT.md",
 ) -> ProjectUpdatePlan:
     """Validate an edit and return its deterministic, non-mutating plan.
 
@@ -545,10 +555,10 @@ def preview_project_update(
     """
 
     root = Path(drive_root).resolve(strict=True)
-    record = load_project_record(project_path)
+    record = load_project_record(project_path, project_file=project_file)
     if expected_digest is not None and record.source_digest != expected_digest:
         raise ProjectDataError(
-            f"{record.path / 'PROJECT.md'} changed since you opened it; "
+            f"{record.path / project_file} changed since you opened it; "
             "reload the project and make your edit again"
         )
     old_path = record.path.resolve(strict=True)
@@ -564,6 +574,14 @@ def preview_project_update(
         new_path = validate_project_folder_path(root, folder_name)
     except NamingError as error:
         raise ProjectDataError(str(error)) from error
+    if (
+        str(new_path) != str(old_path)
+        and new_path.exists()
+        and not _same_underlying_path(old_path, new_path)
+    ):
+        # Apply refuses this too; saying so here keeps --dry-run and the
+        # confirm modal from showing a clean plan that cannot be applied.
+        raise ProjectDataError(f"rename destination already exists: {new_path}")
     try:
         directory = load_contacts(root)
     except ContactError as error:
@@ -597,6 +615,7 @@ def preview_project_update(
         contacts_digest=directory._digest,
         index_digest=index_digest,
         _source=record._source,
+        project_file=project_file,
     )
 
 
@@ -648,7 +667,7 @@ def _identity_values(
 
 def _render_updated_dossier(plan: ProjectUpdatePlan) -> bytes:
     intake = plan.intake
-    dossier = plan.old_path / "PROJECT.md"
+    dossier = plan.old_path / plan.project_file
     front_values = {
         "project": intake.project_name,
         "address": intake.project_address.formatted,
@@ -800,14 +819,14 @@ def _rename_folder(source: Path, destination: Path) -> None:
 
 
 def _restore_after_index_failure(
-    old_path: Path, current_path: Path, original: bytes, updated: bytes
+    old_path: Path, current_path: Path, original: bytes, updated: bytes, project_file: str
 ) -> str | None:
     try:
         if str(current_path) != str(old_path):
             if old_path.exists() and not _same_underlying_path(current_path, old_path):
                 return f"cannot roll back rename because {old_path} now exists"
             _rename_folder(current_path, old_path)
-        _atomic_replace(old_path / "PROJECT.md", original, updated)
+        _atomic_replace(old_path / project_file, original, updated)
     except (OSError, ProjectDataError) as error:
         return str(error)
     return None
@@ -834,7 +853,7 @@ def apply_project_update(
         and not _same_underlying_path(old_path, plan.new_path)
     ):
         raise ProjectDataError(f"rename destination already exists: {plan.new_path}")
-    dossier = old_path / "PROJECT.md"
+    dossier = old_path / plan.project_file
     try:
         current_source = dossier.read_bytes()
     except OSError as error:
@@ -901,7 +920,7 @@ def apply_project_update(
         )
     except ProjectIndexError as error:
         rollback_error = _restore_after_index_failure(
-            old_path, current_path, current_source, updated
+            old_path, current_path, current_source, updated, plan.project_file
         )
         if rollback_error:
             raise ProjectDataError(
@@ -909,16 +928,21 @@ def apply_project_update(
             ) from error
         raise ProjectDataError(f"cannot update project index: {error}; project restored") from error
 
-    from .ops import append_log
+    from . import ops
 
-    append_log(
-        root,
-        f"[{current_path.name}] project update: folder {old_path.name} -> {current_path.name}",
-    )
-    record = load_project_record(current_path)
+    warnings: list[str] = []
+    try:
+        ops.append_log(
+            root,
+            f"[{current_path.name}] project update: folder {old_path.name} -> {current_path.name}",
+        )
+    except OSError as error:
+        warnings.append(f"project updated, but the Atlas log could not be written: {error}")
+    record = load_project_record(current_path, project_file=plan.project_file)
     return ProjectUpdateResult(
         old_path=old_path,
         path=current_path,
         renamed=plan.rename_required,
         record=record,
+        warnings=tuple(warnings),
     )

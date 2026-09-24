@@ -493,7 +493,7 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
     drive_map = load_map(find_map(root))
     project = _resolve_project(root, args.folder)
-    record = load_project_record(project)
+    record = load_project_record(project, project_file=drive_map.project_file)
     editable_values = (
         args.name,
         args.street,
@@ -611,7 +611,11 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         created=current.created,
     )
     plan = preview_project_update(
-        root, project, intake, expected_digest=record.source_digest
+        root,
+        project,
+        intake,
+        expected_digest=record.source_digest,
+        project_file=drive_map.project_file,
     )
     if args.dry_run:
         if args.json:
@@ -651,6 +655,8 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         plan,
         allow_rename=allow_rename,
     )
+    for warning in result.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
     if args.json:
         print(json.dumps(_project_update_to_dict(result), ensure_ascii=False))
     else:
