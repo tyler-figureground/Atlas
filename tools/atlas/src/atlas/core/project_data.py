@@ -16,6 +16,7 @@ from .contacts import Contact, ContactError, find_contact, load_contacts
 from .intake import ContactSnapshot, IntakeError, ProjectAddress, ProjectIntake, ProjectUseCase
 from .mapfile import DriveMap
 from .naming import NamingError, build_folder_name, clean_name_part, validate_project_folder_path
+from .projectmd import table_cell, yaml_quote
 from .project_index import (
     INDEX_NAME,
     ProjectIndexError,
@@ -252,7 +253,7 @@ def _front_matter(source: bytes, dossier: Path) -> dict[str, str]:
 def _identity_value(source: bytes, field_name: str, dossier: Path) -> str:
     prefix = f"| {field_name} |"
     matches = []
-    for line in source.decode("utf-8").splitlines():
+    for line in source.decode("utf-8").split("\r\n"):
         if line.startswith(prefix) and line.endswith("|"):
             matches.append(line[len(prefix) : -1].strip())
     if len(matches) != 1:
@@ -445,13 +446,10 @@ def preview_project_update(
     )
 
 
-def _yaml(value: str) -> str:
-    return json.dumps(value, ensure_ascii=False)
+_yaml = yaml_quote
 
 
-def _table(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace("|", r"\|")
-    return " ".join(escaped.splitlines()).strip()
+_table = table_cell
 
 
 def _contact_values(role: str, contact: ContactSnapshot) -> dict[str, str]:

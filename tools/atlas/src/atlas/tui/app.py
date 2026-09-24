@@ -54,7 +54,14 @@ from ..core.contacts import (
     update_contact,
 )
 from ..core.doctor import DriveReport, report_project
-from ..core.intake import IntakeError, ProjectAddress, ProjectIntake, ProjectUseCase, USE_CASES
+from ..core.intake import (
+    CONTROL_PATTERN,
+    IntakeError,
+    ProjectAddress,
+    ProjectIntake,
+    ProjectUseCase,
+    USE_CASES,
+)
 from ..core.mapfile import DriveMap, MapError, find_map, load_map
 from ..core.naming import (
     NamingError,
@@ -551,6 +558,10 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             )
             if not self.query_one("#name", Input).value.strip():
                 raise IntakeError("Project Name is required")
+            if CONTROL_PATTERN.search(self.query_one("#name", Input).value.strip()) or (
+                CONTROL_PATTERN.search(self.query_one("#desc", Input).value.strip())
+            ):
+                raise IntakeError("Project Name and Description cannot contain control characters")
             return address, use_case
         except IntakeError as error:
             self.query_one("#project-error", Static).update(str(error))
@@ -605,6 +616,13 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             created=self._created,
         )
 
+    def _refuse_request(self, error: IntakeError) -> None:
+        """Back to project details with the reason inline; entries kept."""
+        self._show_step(1)
+        self._sync_project()
+        if not self.query_one("#next-project", Button).disabled:
+            self.query_one("#project-error", Static).update(str(error))
+
     def _show_step(self, step: int) -> None:
         self._step = step
         for number, name in ((1, "project"), (2, "contacts"), (3, "review")):
@@ -647,12 +665,20 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
         elif button_id == "back-project":
             self._show_step(1)
         elif button_id == "next-contacts":
-            self._show_review()
+            try:
+                self._show_review()
+            except IntakeError as error:
+                self._refuse_request(error)
+                return
             self._show_step(3)
         elif button_id == "back-contacts":
             self._show_step(2)
         elif button_id == "create-project":
-            request = self._request()
+            try:
+                request = self._request()
+            except IntakeError as error:
+                self._refuse_request(error)
+                return
             map_path = find_map(self._drive_root)
             if map_path is None:
                 self.query_one("#review-error", Static).update(

@@ -292,6 +292,11 @@ def _validate_draft(draft: ContactDraft) -> _ContactValues:
     first_name = draft.first_name.strip()
     last_name = draft.last_name.strip()
     email = draft.email.strip()
+    if any(
+        CONTROL_PATTERN.search(value or "")
+        for value in (first_name, last_name, email, draft.phone, draft.company)
+    ):
+        raise ContactError("contact fields cannot contain control characters")
     for field_name, value in (("first name", first_name), ("last name", last_name)):
         if not value:
             raise ContactError(f"{field_name} is required")

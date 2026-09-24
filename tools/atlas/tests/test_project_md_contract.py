@@ -6,12 +6,14 @@ Atlas parses only the keys it owns; everything else is carried through.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import date
 
 import pytest
 
-from atlas.core.intake import ProjectAddress
+from atlas.core.contacts import ContactDraft, ContactError, add_contact
+from atlas.core.intake import IntakeError, ProjectAddress
 from atlas.core.mapfile import load_map
 from atlas.core.ops import new_project
 from atlas.core.project_data import (
@@ -169,3 +171,79 @@ def test_name_alias_is_read_and_rewritten_in_place(fixture_drive):
     raw = (result.path / "PROJECT.md").read_bytes()
     assert b'name: "Pine House"\r\n' in raw
     assert b"project:" not in raw.split(b"\r\n---\r\n")[0]
+
+
+# ---------------------------------------------------------------- #34 control characters
+
+LINE_BREAKERS = ["\t", "\x7f", "\x85", " ", " "]
+
+
+@pytest.mark.parametrize("character", LINE_BREAKERS)
+def test_intake_refuses_every_control_or_line_break_character(fixture_drive, character):
+    intake = make_intake(fixture_drive, "Oak House", created=CREATED)
+
+    with pytest.raises(IntakeError, match="control characters"):
+        replace(intake, project_name=f"Oak{character}House")
+    with pytest.raises(IntakeError, match="control characters"):
+        replace(intake, description=f"Kitchen{character}Bath")
+
+
+@pytest.mark.parametrize("character", LINE_BREAKERS)
+@pytest.mark.parametrize("field", ["first_name", "last_name", "company", "phone"])
+def test_contact_drafts_refuse_control_characters(fixture_drive, character, field):
+    values = {
+        "first_name": "Ada",
+        "last_name": "Lovelace",
+        "email": "ada@example.com",
+        "phone": "510 555 0100",
+        "company": "Engines",
+    }
+    values[field] = values[field][:2] + character + values[field][2:]
+
+    with pytest.raises(ContactError, match="control characters"):
+        add_contact(fixture_drive, ContactDraft(**values))
+
+
+@pytest.mark.parametrize("character", LINE_BREAKERS)
+def test_snapshot_from_a_stored_contact_with_a_line_breaker_stays_editable(
+    fixture_drive, character
+):
+    # A contact written into the shared store by another tool can carry such a
+    # character. Assigning it to a project must not brick the dossier.
+    drive_map, _, project = _project(fixture_drive)
+    contact = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Bob", last_name="Builder", email="bob@example.com"),
+    )
+    store = fixture_drive / "_tools" / "billing-contacts.json"
+    payload = json.loads(store.read_text(encoding="utf-8"))
+    for item in payload["contacts"]:
+        if item["id"] == contact.id:
+            item["company"] = f"Builder{character}Co"
+    store.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    _, result = _edit(
+        fixture_drive,
+        drive_map,
+        project,
+        billing_contact_id=contact.id,
+        client_contact_id=contact.id,
+    )
+
+    raw = (result.path / "PROJECT.md").read_bytes()
+    assert character.encode("utf-8") not in raw
+    assert b"\n" not in raw.replace(b"\r\n", b"")
+    reloaded = load_project_record(result.path)
+    assert reloaded.billing_contact.company == f"Builder{character}Co"
+
+    _edit(fixture_drive, drive_map, result.path, project_name="Still Editable")
+
+
+@pytest.mark.parametrize("character", LINE_BREAKERS)
+def test_yaml_writer_escapes_line_breakers(character):
+    from atlas.core.projectmd import yaml_quote
+
+    quoted = yaml_quote(f"a{character}b")
+
+    assert character not in quoted
+    assert json.loads(quoted) == f"a{character}b"

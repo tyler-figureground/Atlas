@@ -137,6 +137,54 @@ async def test_edit_project_prepopulates_and_confirms_folder_rename(fixture_driv
     )
 
 
+async def test_new_project_refuses_pasted_control_characters_inline(fixture_drive):
+    # Two spreadsheet cells pasted into Project name used to leave "Next"
+    # enabled and then crash the app at review, losing every entry.
+    contact = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com"),
+    )
+    app = AtlasApp(fixture_drive)
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await pilot.press("n")
+        await pilot.pause()
+        for field, value in (
+            ("#name", "Oak House\tRenovation\r\n"),
+            ("#street", "1842 Oak Street"),
+            ("#city", "Oakland"),
+            ("#state", "CA"),
+            ("#postal-code", "94612"),
+        ):
+            app.screen.query_one(field, Input).value = value
+        app.screen.query_one("#use-case", Select).value = "Renovation"
+        await pilot.pause()
+
+        assert app.screen.query_one("#next-project", Button).disabled
+        assert "control characters" in str(
+            app.screen.query_one("#project-error", Static).render()
+        )
+
+        app.screen.query_one("#name", Input).value = "Oak House"
+        app.screen.query_one("#desc", Input).value = "Kitchen Bath"
+        await pilot.pause()
+        assert app.screen.query_one("#next-project", Button).disabled
+
+        # Even when a bad value reaches review, the error lands inline.
+        app.screen.query_one("#next-project", Button).disabled = False
+        app.screen.query_one("#next-project", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#billing-contact", Select).value = contact.id
+        await pilot.pause()
+        app.screen.query_one("#next-contacts", Button).press()
+        await pilot.pause()
+        assert isinstance(app.screen, NewProjectModal)
+        assert app.screen.query_one("#name", Input).value == "Oak House"
+        assert "control characters" in str(
+            app.screen.query_one("#project-error", Static).render()
+        )
+
+
 async def test_manage_contacts_edits_po_box_without_rewriting_projects(fixture_drive):
     contact = add_contact(
         fixture_drive,
