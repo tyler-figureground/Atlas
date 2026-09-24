@@ -247,3 +247,116 @@ def test_yaml_writer_escapes_line_breakers(character):
 
     assert character not in quoted
     assert json.loads(quoted) == f"a{character}b"
+
+
+# ---------------------------------------------------------------- #35 Identity rows
+
+APN_ROW = (
+    "| Address / BBL | 100 Oak Street, Oakland, CA 94612 · APN 000-0000-000 "
+    "(county GIS, 2026-09-01) |"
+).encode("utf-8")
+
+
+def _identity_lines(path):
+    text = (path / "PROJECT.md").read_bytes().decode("utf-8")
+    section = text.split("## Identity", 1)[1].split("\r\n## ", 1)[0]
+    return [line for line in section.split("\r\n") if line.startswith("|")]
+
+
+def test_name_only_edit_leaves_other_identity_rows_and_provenance_alone(fixture_drive):
+    drive_map, _, project = _project(fixture_drive)
+    _replace_line(project, b"| Address / BBL |", APN_ROW)
+    _replace_line(project, b"| Client |", b"| Client | Test Oak House (client, 2026-08-13) |")
+    _replace_line(project, b"| Created |", b"| Created | 2026-08-13 (Atlas intake, 2026-08-13) |")
+    before = _identity_lines(project)
+
+    _, result = _edit(fixture_drive, drive_map, project, project_name="Oak House Revised")
+
+    after = _identity_lines(result.path)
+    changed = [(old, new) for old, new in zip(before, after) if old != new]
+    assert changed == [("| Project | Oak House |", "| Project | Oak House Revised |")]
+
+
+def test_changed_value_keeps_the_provenance_that_follows_it(fixture_drive):
+    drive_map, intake, project = _project(fixture_drive)
+    _replace_line(project, b"| Address / BBL |", APN_ROW)
+    _replace_line(project, b"| Project |", b"| Project | Oak House (client, 2026-08-13) |")
+
+    _, result = _edit(
+        fixture_drive,
+        drive_map,
+        project,
+        project_name="Pine House",
+        project_address=replace(intake.project_address, unit="Apt 4B"),
+    )
+
+    lines = _identity_lines(result.path)
+    assert "| Project | Pine House (client, 2026-08-13) |" in lines
+    assert (
+        "| Address / BBL | 100 Oak Street, Apt 4B, Oakland, CA 94612 · APN 000-0000-000 "
+        "(county GIS, 2026-09-01) |"
+    ) in lines
+
+
+def test_created_row_with_provenance_loads(fixture_drive):
+    _, _, project = _project(fixture_drive)
+    _replace_line(project, b"| Created |", b"| Created | 2026-08-13 (Atlas intake, 2026-08-13) |")
+
+    assert load_project_record(project).intake.created == CREATED
+
+
+def test_address_corrected_outside_the_components_is_refused_not_reverted(fixture_drive):
+    _, _, project = _project(fixture_drive)
+    _replace_line(project, b"address:", b'address: "100 Oak Street, Oakland, CA 94607"')
+    _replace_line(
+        project, b"| Address / BBL |", b"| Address / BBL | 100 Oak Street, Oakland, CA 94607 |"
+    )
+    before = (project / "PROJECT.md").read_bytes()
+
+    with pytest.raises(ProjectDataError, match="address disagrees.*94607.*Identity table wins"):
+        load_project_record(project)
+
+    assert (project / "PROJECT.md").read_bytes() == before
+
+
+def test_client_row_a_person_wrote_survives_a_client_contact_change(fixture_drive):
+    drive_map, _, project = _project(fixture_drive)
+    _replace_line(project, b"| Client |", b"| Client | Acme Holdings LLC (client, 2026-08-13) |")
+    bob = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Bob", last_name="Builder", email="bob@example.com"),
+    )
+
+    _, result = _edit(fixture_drive, drive_map, project, client_contact_id=bob.id)
+
+    lines = _identity_lines(result.path)
+    assert "| Client | Acme Holdings LLC (client, 2026-08-13) |" in lines
+    assert "| Client Contact | Bob Builder |" in lines
+
+
+def test_seeded_client_row_follows_a_client_contact_change(fixture_drive):
+    drive_map, _, project = _project(fixture_drive)
+    bob = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Bob", last_name="Builder", email="bob@example.com"),
+    )
+
+    _, result = _edit(fixture_drive, drive_map, project, client_contact_id=bob.id)
+
+    assert "| Client | Bob Builder |" in _identity_lines(result.path)
+
+
+def test_heading_the_dossier_skill_wrote_is_not_replaced_by_the_folder(fixture_drive):
+    drive_map, intake, project = _project(fixture_drive)
+    _replace_line(project, b"# 260813_", "# Project Dossier — Oak House".encode("utf-8"))
+
+    plan, result = _edit(
+        fixture_drive,
+        drive_map,
+        project,
+        project_address=replace(intake.project_address, street="99 Pine Avenue"),
+    )
+
+    assert plan.rename_required
+    raw = (result.path / "PROJECT.md").read_bytes()
+    assert "\r\n# Project Dossier — Oak House\r\n".encode("utf-8") in raw

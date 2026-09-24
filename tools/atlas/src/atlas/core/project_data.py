@@ -250,17 +250,136 @@ def _front_matter(source: bytes, dossier: Path) -> dict[str, str]:
     return values
 
 
-def _identity_value(source: bytes, field_name: str, dossier: Path) -> str:
-    prefix = f"| {field_name} |"
-    matches = []
-    for line in source.decode("utf-8").split("\r\n"):
-        if line.startswith(prefix) and line.endswith("|"):
-            matches.append(line[len(prefix) : -1].strip())
-    if len(matches) != 1:
+def _row_cells(line: str) -> list[str] | None:
+    """A Markdown table row's cells, still escaped; None when not a row.
+
+    Padding is ignored, so an aligned table a formatter wrote reads the same
+    as Atlas's own ``| Field | Value |``.
+    """
+
+    stripped = line.strip()
+    if len(stripped) < 2 or not stripped.startswith("|") or not stripped.endswith("|"):
+        return None
+    cells: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for character in stripped[1:-1]:
+        if character == "|" and not escaped:
+            cells.append("".join(current).strip())
+            current = []
+        else:
+            current.append(character)
+        escaped = character == "\\" and not escaped
+    cells.append("".join(current).strip())
+    return cells
+
+
+@dataclass(frozen=True)
+class _Identity:
+    """The Identity table: each field's row line numbers, and where it ends."""
+
+    rows: dict[str, list[int]]
+    table_end: int | None
+
+
+def _identity(lines: list[str]) -> _Identity:
+    start = next(
+        (index for index, line in enumerate(lines) if line.strip() == "## Identity"), None
+    )
+    if start is None:
+        return _Identity(rows={}, table_end=None)
+    rows: dict[str, list[int]] = {}
+    table_end: int | None = None
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("## "):
+            break
+        cells = _row_cells(lines[index])
+        if cells is None:
+            continue
+        table_end = index + 1
+        if len(cells) >= 2:
+            rows.setdefault(cells[0], []).append(index)
+    return _Identity(rows=rows, table_end=table_end)
+
+
+def _identity_cell(lines: list[str], identity: _Identity, field_name: str) -> str | None:
+    """The escaped value cell of one Identity row; None when absent or ambiguous."""
+
+    indexes = identity.rows.get(field_name, [])
+    if len(indexes) != 1:
+        return None
+    cells = _row_cells(lines[indexes[0]])
+    assert cells is not None
+    return cells[1]
+
+
+def _unescape_cell(cell: str) -> str:
+    return re.sub(r"\\([\\|])", r"\1", cell)
+
+
+def _leads_with(cell: str, value: str) -> bool:
+    """Whether an escaped cell holds ``value`` followed only by provenance.
+
+    Rule 1 of the dossier skill: every entry carries a source and a date, so a
+    row reads ``100 Oak Street, ... · APN 000 (county GIS, 2026-09-01)``.
+    """
+
+    rendered = _table(value)
+    if not rendered or not cell.startswith(rendered):
+        return False
+    rest = cell[len(rendered) :]
+    return not rest or rest[0].isspace() or rest[0] in "·("
+
+
+_CREATED_PREFIX = re.compile(r"\s*(\d{4}-\d{2}-\d{2})(?!\d)")
+_FOLDER_STAMP = re.compile(r"(\d{2})(\d{2})(\d{2})_")
+
+
+def _created(lines: list[str], identity: _Identity, project: Path, dossier: Path) -> date:
+    if len(identity.rows.get("Created", [])) > 1:
+        raise ProjectDataError(f"{dossier} has more than one 'Created' Identity row")
+    cell = _identity_cell(lines, identity, "Created") or ""
+    match = _CREATED_PREFIX.match(cell)
+    try:
+        if match is not None:
+            return date.fromisoformat(match.group(1))
+        stamp = _FOLDER_STAMP.match(project.name)
+        if not cell.strip() and stamp is not None:
+            # No Created row: the folder's own YYMMDD stamp is the same fact.
+            return date(2000 + int(stamp.group(1)), int(stamp.group(2)), int(stamp.group(3)))
+    except ValueError as error:
+        raise ProjectDataError(f"{dossier} has an invalid 'Created' date: {error}") from error
+    raise ProjectDataError(
+        f"{dossier} 'Created' Identity row must start with a YYYY-MM-DD date"
+    )
+
+
+def _check_address_agreement(
+    values: dict[str, str],
+    lines: list[str],
+    identity: _Identity,
+    address: ProjectAddress,
+    dossier: Path,
+) -> None:
+    """Refuse when the formatted address or its Identity row say otherwise.
+
+    The address_* components used to win silently, so a ZIP corrected in
+    ``address`` and the Identity row came back wrong on the next edit.
+    """
+
+    formatted = address.formatted
+    disagreements = []
+    if values.get("address") and values["address"] != formatted:
+        disagreements.append(f"front matter 'address' says '{values['address']}'")
+    cell = _identity_cell(lines, identity, "Address / BBL")
+    if cell and not _leads_with(cell, formatted):
+        disagreements.append(f"the Identity 'Address / BBL' row says '{_unescape_cell(cell)}'")
+    if disagreements:
         raise ProjectDataError(
-            f"{dossier} must contain exactly one '{field_name}' Identity row"
+            f"{dossier} address disagrees: the address_* keys give '{formatted}', but "
+            f"{' and '.join(disagreements)}. The Identity table wins (/project-dossier "
+            "rule 5): reconcile the address_* keys to it, then retry."
         )
-    return matches[0].replace(r"\|", "|").replace(r"\\", "\\")
 
 
 def _required(values: dict[str, str], key: str, dossier: Path) -> str:
@@ -334,9 +453,17 @@ def load_project_record(project_path: Path) -> ProjectRecord:
     """Load one Atlas 0.2 project dossier through its intake contract."""
 
     project, dossier, source = _read_source(project_path)
+    return _record_from_source(project, dossier, source)
+
+
+def _record_from_source(project: Path, dossier: Path, source: bytes) -> ProjectRecord:
     values = _front_matter(source, dossier)
+    lines = source.decode("utf-8").split("\r\n")
+    identity = _identity(lines)
     try:
         address = _project_address(values, dossier)
+        if "address_street" in values:
+            _check_address_agreement(values, lines, identity, address, dossier)
         category = _required(values, "project_use_case_category", dossier)
         display = _required(values, "project_use_case", dossier)
         use_case = ProjectUseCase(category, display if category == "Other" else "")
@@ -346,7 +473,7 @@ def load_project_record(project_path: Path) -> ProjectRecord:
             )
         billing = _snapshot(values, "billing", dossier)
         client = _snapshot(values, "client", dossier)
-        created = date.fromisoformat(_identity_value(source, "Created", dossier))
+        created = _created(lines, identity, project, dossier)
         intake = ProjectIntake(
             project_name=_required(values, "project", dossier),
             project_address=address,
@@ -463,8 +590,38 @@ def _contact_values(role: str, contact: ContactSnapshot) -> dict[str, str]:
     }
 
 
+def _identity_values(
+    intake: ProjectIntake, billing: ContactSnapshot, client: ContactSnapshot
+) -> dict[str, str]:
+    """The Identity rows Atlas owns, and the value each mirrors.
+
+    ``Created`` is absent on purpose: an edit never changes it. ``Client`` is
+    a human fact the intake seeds with the client contact's name; it follows
+    a contact change only while it still holds that name (see below).
+    """
+
+    return {
+        "Project": intake.project_name,
+        "Address / BBL": intake.project_address.formatted,
+        "Project Use Case": intake.project_use_case.display,
+        "Client": client.full_name,
+        "Billing Contact": billing.full_name,
+        "Billing Email": billing.email,
+        "Billing Phone": billing.phone,
+        "Billing Company": billing.company,
+        "Billing Address": billing.address,
+        "Client Contact": client.full_name,
+        "Client Email": client.email,
+        "Client Phone": client.phone,
+        "Client Company": client.company,
+        "Client Address": client.address,
+        "Descriptor": intake.description,
+    }
+
+
 def _render_updated_dossier(plan: ProjectUpdatePlan) -> bytes:
     intake = plan.intake
+    dossier = plan.old_path / "PROJECT.md"
     front_values = {
         "project": intake.project_name,
         "address": intake.project_address.formatted,
@@ -479,88 +636,78 @@ def _render_updated_dossier(plan: ProjectUpdatePlan) -> bytes:
         **_contact_values("billing", plan.billing_contact),
         **_contact_values("client", plan.client_contact),
     }
-    identity_values = {
-        "Project": intake.project_name,
-        "Address / BBL": intake.project_address.formatted,
-        "Project Use Case": intake.project_use_case.display,
-        "Client": plan.client_contact.full_name,
-        "Billing Contact": plan.billing_contact.full_name,
-        "Billing Email": plan.billing_contact.email,
-        "Billing Phone": plan.billing_contact.phone,
-        "Billing Company": plan.billing_contact.company,
-        "Billing Address": plan.billing_contact.address,
-        "Client Contact": plan.client_contact.full_name,
-        "Client Email": plan.client_contact.email,
-        "Client Phone": plan.client_contact.phone,
-        "Client Company": plan.client_contact.company,
-        "Client Address": plan.client_contact.address,
-        "Descriptor": intake.description,
-        "Created": intake.created.isoformat(),
-    }
 
-    lines = plan._source[:-2].split(b"\r\n")
     try:
-        text_lines = [line.decode("utf-8") for line in lines]
+        lines = plan._source.decode("utf-8").split("\r\n")
     except UnicodeDecodeError as error:
         raise ProjectDataError(f"project dossier is no longer UTF-8: {error}") from error
-    front = _parse_front_matter(text_lines, plan.old_path / "PROJECT.md")
-    front_end = front.end
+    if lines and lines[-1] == "":
+        lines.pop()
+    before = _record_from_source(plan.old_path, dossier, plan._source)
+
+    front = _parse_front_matter(lines, dossier)
     if "project" not in front.line_of and "name" in front.line_of:
         # Keep the alias the dossier chose rather than adding a second key.
         front_values["name"] = front_values.pop("project")
-    output: list[bytes] = list(lines[: front_end])
-    appended: list[bytes] = []
+    output = list(lines)
+    appended: list[str] = []
     for key, value in front_values.items():
         index = front.line_of.get(key)
         if index is None:
-            appended.append(f"{key}: {_yaml(value)}".encode("utf-8"))
+            appended.append(f"{key}: {_yaml(value)}")
             continue
         if front.values[key] == value:
             continue  # unchanged: the line keeps its quoting and comment
         rewritten = f"{key}: {_yaml(value)}"
         comment_at = front.comment_at.get(key)
         if comment_at is not None:
-            comment = text_lines[index][comment_at:]
+            comment = lines[index][comment_at:]
             rewritten += " " * max(1, comment_at - len(rewritten)) + comment
-        output[index] = rewritten.encode("utf-8")
-    output.extend(appended)
-    output.append(lines[front_end])
+        output[index] = rewritten
 
-    body = list(lines[front_end + 1 :])
-    heading_indexes = [index for index, line in enumerate(body) if line.startswith(b"# ")]
-    if not heading_indexes:
-        raise ProjectDataError("project dossier is missing its top heading")
-    body[heading_indexes[0]] = f"# {plan.new_path.name}".encode("utf-8")
-    seen_identity: set[str] = set()
-    in_identity = False
-    for index, raw_line in enumerate(body):
-        if raw_line == b"## Identity":
-            if in_identity:
-                raise ProjectDataError("project dossier has duplicate Identity sections")
-            in_identity = True
+    # The top heading is Atlas's only while it names the folder; the dossier
+    # template's "# Project Dossier - <name>" belongs to the skill.
+    heading = next(
+        (index for index in range(front.end + 1, len(output)) if output[index].startswith("# ")),
+        None,
+    )
+    if heading is not None and output[heading][2:].strip() == plan.old_path.name:
+        output[heading] = f"# {plan.new_path.name}"
+
+    # Identity rows: rewrite only a value that changed, and keep whatever
+    # follows it - the source and date the dossier skill requires (rule 1).
+    identity = _identity(output)
+    old_values = _identity_values(before.intake, before.billing_contact, before.client_contact)
+    new_values = _identity_values(intake, plan.billing_contact, plan.client_contact)
+    inserted: list[str] = []
+    for field_name, value in new_values.items():
+        old_value = old_values[field_name]
+        if value == old_value:
             continue
-        if in_identity and raw_line.startswith(b"## "):
-            in_identity = False
-        if not in_identity:
+        indexes = identity.rows.get(field_name, [])
+        if len(indexes) > 1:
+            raise ProjectDataError(f"project dossier has duplicate '{field_name}' Identity rows")
+        if not indexes:
+            if value and identity.table_end is not None:
+                inserted.append(f"| {field_name} | {_table(value)} |")
             continue
-        try:
-            line = raw_line.decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise ProjectDataError(f"project dossier is no longer UTF-8: {error}") from error
-        for field_name, value in identity_values.items():
-            if line.startswith(f"| {field_name} |") and line.endswith("|"):
-                if field_name in seen_identity:
-                    raise ProjectDataError(
-                        f"project dossier has duplicate '{field_name}' Identity rows"
-                    )
-                body[index] = f"| {field_name} | {_table(value)} |".encode("utf-8")
-                seen_identity.add(field_name)
-                break
-    missing_identity = set(identity_values) - seen_identity
-    if missing_identity:
-        names = ", ".join(sorted(missing_identity))
-        raise ProjectDataError(f"project dossier is missing Identity row(s): {names}")
-    return b"\r\n".join((*output, *body)) + b"\r\n"
+        cells = _row_cells(output[indexes[0]])
+        assert cells is not None
+        cell = cells[1]
+        if _leads_with(cell, old_value):
+            new_cell = _table(value) + cell[len(_table(old_value)) :]
+        elif field_name == "Client" and cell:
+            continue  # a person wrote something else here; theirs to keep
+        else:
+            new_cell = _table(value)
+        cells[1] = new_cell.strip()
+        output[indexes[0]] = "| " + " | ".join(cells) + " |"
+    if inserted:
+        assert identity.table_end is not None
+        output[identity.table_end : identity.table_end] = inserted
+
+    output[front.end : front.end] = appended
+    return ("\r\n".join(output) + "\r\n").encode("utf-8")
 
 
 def _atomic_replace(path: Path, contents: bytes, expected: bytes) -> None:
