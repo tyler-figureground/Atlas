@@ -163,11 +163,15 @@ class ProjectTreeView(Tree):
     ICON_NODE = ""
     ICON_NODE_EXPANDED = ""
 
-    # Tree's default bindings include shift+space -> expand_all, which posts one
-    # NodeExpanded per descendant - measured at 201 messages for 201 nodes. On a
-    # streaming mount that is a load storm, and the binding is unreachable in
-    # practice anyway, so it does not survive here.
-    BINDINGS = [b for b in Tree.BINDINGS if getattr(b, "action", "") != "expand_all"]
+    def action_toggle_expand_all(self) -> None:
+        """Nothing: there is no expand-all.
+
+        Tree's default bindings include shift+space -> toggle_expand_all, which
+        posts one NodeExpanded per descendant - measured at 201 messages for 201
+        nodes. On a streaming mount that is a load storm. Filtering BINDINGS
+        cannot remove it, because Textual merges the base class's bindings back
+        in, so the action itself is what goes.
+        """
 
     def __init__(self, **kwargs) -> None:
         super().__init__("", data="", **kwargs)

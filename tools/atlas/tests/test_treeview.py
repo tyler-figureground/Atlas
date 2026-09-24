@@ -196,12 +196,31 @@ def test_the_width_and_the_label_agree():
         assert label_width(leaf) == node_label(leaf).cell_len, filing
 
 
-def test_there_is_no_expand_all():
+async def test_there_is_no_expand_all(fixture_drive):
     """expand_all posts one NodeExpanded per descendant - 201 messages for 201
-    nodes, measured. On a streaming mount that is a load storm."""
-    actions = {getattr(b, "action", "") for b in ProjectTreeView.BINDINGS}
-    assert "expand_all" not in actions
-    assert "toggle_node" in actions, "the useful ones survive"
+    nodes, measured. On a streaming mount that is a load storm.
+
+    Pressed, not read off BINDINGS: Textual merges inherited bindings, and the
+    action is `toggle_expand_all`, so the old filter removed nothing and its
+    test passed whether or not the key worked (#50)."""
+    make_project(fixture_drive, "260605_All",
+                 sections=["01 Model/01 Site Model", "06 Research/Zoning", "08 OUT/RFI"])
+    source = source_for(fixture_drive, "260605_All")
+    app = Harness(source)
+
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        tree = app.query_one(ProjectTreeView)
+        tree.focus()
+        tree.cursor_line = 0
+        await pilot.pause()
+        before = [node.is_expanded for node in tree.root.children]
+
+        await pilot.press("shift+space")
+        await settle(app, pilot)
+
+        assert [node.is_expanded for node in tree.root.children] == before
+        assert source.load_state("06 Research") == UNREAD, "nothing was walked"
 
 
 
