@@ -126,9 +126,10 @@ Address fallback: `https://data.cityofnewyork.us/resource/yvxd-uipr.json?$where=
 
 ## Step 4: Write Report
 
-Write to working directory as `property-{address-slug}.md`.
+Write to working directory as `property-{address-slug}.md`. Keep the `<!-- architecture-studio:report -->` marker as the first line of the body (see `rules/output-formatting.md`).
 
 ```markdown
+<!-- architecture-studio:report -->
 # NYC Property Report — {Address}
 
 **Generated:** {date}

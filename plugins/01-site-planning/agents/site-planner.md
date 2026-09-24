@@ -31,7 +31,7 @@ The most common case — one address, full analysis.
    - **Opportunities** — what the site data suggests the project should leverage (transit adjacency, growing demographics, landmark character)
    - **Constraints** — what limits development or design (flood zone, noise, limited transit, aging infrastructure)
    - **Recommendations** — 3-5 actionable takeaways for the design team
-4. **Save** — write the full brief as a markdown report with YAML front matter (title, date, address, skill).
+4. **Save** — write the full brief as a markdown report with YAML front matter (title, date, address, skill), and the `<!-- architecture-studio:report -->` marker as the first line of the body.
 
 ### Site Comparison
 

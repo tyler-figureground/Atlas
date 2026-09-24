@@ -186,6 +186,7 @@ class ProjectTreeView(Tree):
         self._filter = ""
         self._expanded_before: set[str] = set()
         self._drawn: dict[str, list[TreeNode]] = {}
+        self._reopen: set[str] = set()
         self.show_root = False
         self.guide_depth = 2
 
@@ -202,6 +203,7 @@ class ProjectTreeView(Tree):
         self._filter = ""
         self._expanded_before = set()
         self._drawn = {}
+        self._reopen = set()
         self.reset("", data="")
         self._by_key[""] = self.root
         # The root level is a displayed node like any other, so it is read the
@@ -219,6 +221,22 @@ class ProjectTreeView(Tree):
         # Row widths are cached by the Tree; they depend on the words chosen.
         self._invalidate()
 
+    def reload(self, *, narrow: bool | None = None) -> None:
+        """Rebuild from the seam, keeping what was open and where the cursor was.
+
+        For when the source's facts changed under the widget - a refresh, a
+        project-wide conform. Textual restores the cursor by line number, so both
+        are carried across by Node Key instead: folders re-open as they are drawn
+        and the cursor lands on its key once that key exists (#40).
+        """
+        expanded = {key for key, node in self._by_key.items() if key and node.is_expanded}
+        cursor = self.cursor_node
+        cursor_key = str(cursor.data) if cursor is not None and cursor.data else None
+        self.set_source(self.source, narrow=self.narrow if narrow is None else narrow)
+        self._reopen = expanded
+        if cursor_key:
+            self._pending_key = cursor_key
+
     def _fill(self, parent: TreeNodeWidget, key: str) -> None:
         """Draw one folder's children from the seam, and remember their facts."""
         if self.source is None:
@@ -229,6 +247,8 @@ class ProjectTreeView(Tree):
             node = (parent.add(child.name, data=child.key) if child.is_dir
                     else parent.add_leaf(child.name, data=child.key))
             self._by_key[child.key] = node
+            if child.is_dir and child.key in self._reopen:
+                node.expand()   # posts NodeExpanded, which loads it off-thread
         if not key and not parent.children and self.source.load_state("") == UNREADABLE:
             # The root is hidden, so an unreadable project would draw nothing -
             # the same blank as an empty one (ADR 0004). A row says which it is.

@@ -63,9 +63,10 @@ Search for environmental and topographic data:
 
 ## Output Format
 
-Write the analysis to a markdown file at `./environmental-analysis-[location-slug].md`.
+Write the analysis to a markdown file at `./environmental-analysis-[location-slug].md`. Keep the `<!-- architecture-studio:report -->` marker as the first line of the body (see `rules/output-formatting.md`).
 
 ```markdown
+<!-- architecture-studio:report -->
 # Environmental Analysis — [Full Address or Location Name]
 
 > **Date:** [YYYY-MM-DD] | **Coordinates:** [lat, lon]

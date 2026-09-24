@@ -8,7 +8,7 @@ safety contracts.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 import os
 from pathlib import Path
@@ -40,12 +40,15 @@ from textual.widgets import (
 from ..core.conform import (
     CONFLICT,
     DONE,
+    RELOCATE,
+    RENAME,
     SKIPPED,
     Guard,
     Plan,
     apply_plan,
     build_plan,
     build_repair_plan,
+    move_effect,
 )
 from ..core.contacts import (
     Contact,
@@ -58,7 +61,14 @@ from ..core.contacts import (
     update_contact,
 )
 from ..core.doctor import DriveReport, report_project
-from ..core.intake import IntakeError, ProjectAddress, ProjectIntake, ProjectUseCase, USE_CASES
+from ..core.intake import (
+    CONTROL_PATTERN,
+    IntakeError,
+    ProjectAddress,
+    ProjectIntake,
+    ProjectUseCase,
+    USE_CASES,
+)
 from ..core.mapfile import DriveMap, MapError, find_map, load_map
 from ..core.naming import (
     NamingError,
@@ -114,11 +124,12 @@ from .layout import (
 )
 from .model import ProjectRow, project_detail, project_rows, visible_rows
 from .repair import (
+    UndoEntry,
     UndoStack,
     confirm_line,
     confirms_inline,
     repair_offer,
-    result_line,
+    results_line,
 )
 from .treeview import ProjectTreeView, middle_ellipsis
 
@@ -136,6 +147,11 @@ class _ArmedRepair:
     plan: Plan
     guard: Guard
     node: str
+    # The Region it was armed from. A repair arms in the tree; an undo can arm
+    # from the list too, and Enter commits only where it was armed.
+    region: str = TREE
+    # Set when this is an undo: the stack entry it reverses.
+    undo: UndoEntry | None = None
 
 
 # What `#operation`'s `padding: 0 2` costs, in columns. Anything sized against
@@ -191,6 +207,9 @@ class OperationOutcome:
     lines: tuple[str, ...]
     severity: str = "information"
     marks_after: tuple[str, ...] | None = None
+    # Projects a project-wide conform wrote to. Their per-node undo history is
+    # dropped: the stack cannot describe what the conform did around it.
+    forget_undo: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -281,6 +300,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
         super().__init__()
         self._drive_root = drive_root
         self._contacts: tuple[Contact, ...] = ()
+        self._opened_updated_at: str | None = None
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="dialog"):
@@ -329,6 +349,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
         if contact is None:
             self.query_one("#manager-error", Static).update("Contact is no longer available.")
             return
+        self._opened_updated_at = contact.updated_at
         address = contact.address or {}
         values = {
             "manager-first": contact.first_name,
@@ -379,6 +400,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
                     company=self.query_one("#manager-company", Input).value,
                     address=address,
                 ),
+                expected_updated_at=self._opened_updated_at,
             )
         except ContactError as error:
             self.query_one("#manager-error", Static).update(str(error))
@@ -583,6 +605,10 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             )
             if not self.query_one("#name", Input).value.strip():
                 raise IntakeError("Project Name is required")
+            if CONTROL_PATTERN.search(self.query_one("#name", Input).value.strip()) or (
+                CONTROL_PATTERN.search(self.query_one("#desc", Input).value.strip())
+            ):
+                raise IntakeError("Project Name and Description cannot contain control characters")
             return address, use_case
         except IntakeError as error:
             self.query_one("#project-error", Static).update(str(error))
@@ -637,6 +663,13 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             created=self._created,
         )
 
+    def _refuse_request(self, error: IntakeError) -> None:
+        """Back to project details with the reason inline; entries kept."""
+        self._show_step(1)
+        self._sync_project()
+        if not self.query_one("#next-project", Button).disabled:
+            self.query_one("#project-error", Static).update(str(error))
+
     def _show_step(self, step: int) -> None:
         self._step = step
         for number, name in ((1, "project"), (2, "contacts"), (3, "review")):
@@ -679,12 +712,20 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
         elif button_id == "back-project":
             self._show_step(1)
         elif button_id == "next-contacts":
-            self._show_review()
+            try:
+                self._show_review()
+            except IntakeError as error:
+                self._refuse_request(error)
+                return
             self._show_step(3)
         elif button_id == "back-contacts":
             self._show_step(2)
         elif button_id == "create-project":
-            request = self._request()
+            try:
+                request = self._request()
+            except IntakeError as error:
+                self._refuse_request(error)
+                return
             map_path = find_map(self._drive_root)
             if map_path is None:
                 self.query_one("#review-error", Static).update(
@@ -922,6 +963,9 @@ class AtlasApp(App):
         # that Undo pops. Both are session state and neither reaches the CLI.
         self._armed: _ArmedRepair | None = None
         self._undo = UndoStack()
+        # Which drive the tree cache and the undo stack describe. Both are keyed
+        # by project name, and the same project folder can sit on two drives.
+        self._drive_root: Path | None = None
         self._follow_debounce = follow_debounce
         self._follow_timer = None
         self._workspace_project = ""
@@ -1009,18 +1053,20 @@ class AtlasApp(App):
 
     def on_resize(self, event: events.Resize) -> None:
         self._screen_size = event.size
+        # The armed line was cut to the old width; re-arming is one key.
+        self._cancel_repair()
         self._refresh_mark()
         self._apply_layout()
         # The tree abbreviates by width; the flag used to be set only when a
         # project was assigned, so it kept the old width's words.
         self.query_one(ProjectTreeView).set_narrow(
             (event.size.width or 80) < ABBREVIATE_COLUMNS)
-        # An armed confirm was sized once, when armed. Re-size it so the keys
-        # that commit or cancel the write are never the part clipped off.
-        armed = self._armed
-        if armed is not None:
-            room = (event.size.width or 0) - OPERATION_MARGIN
-            self._set_operation(confirm_line(armed.plan, max(0, room)))
+
+    def push_screen(self, *args, **kwargs):
+        """Every modal and the command palette arrive here. An armed repair does
+        not survive one: Enter inside the modal is meant for the modal (#2)."""
+        self._cancel_repair()
+        return super().push_screen(*args, **kwargs)
 
     # ------------------------------------------------------------- the shell
 
@@ -1191,6 +1237,7 @@ class AtlasApp(App):
     # ------------------------------------------------------------- drives and scans
 
     def _show_drives(self, *, auto_open: bool) -> None:
+        self._cancel_repair()
         self._scan_generation += 1
         self._busy = False
         self._work_kind = None
@@ -1231,7 +1278,22 @@ class AtlasApp(App):
         if index is not None and 0 <= index < len(self._drives):
             self._open_drive(self._drives[index])
 
+    def _forget_drive(self) -> None:
+        """Drop everything that describes the drive being left (ADR 0006: the
+        undo stack is discarded on drive switch). A same-named project on the
+        next drive must never inherit this one's tree, history or armed write."""
+        self._armed = None
+        self._undo = UndoStack()
+        self._trees.clear()
+        self._workspace_project = ""
+        self.query_one(ProjectTreeView).set_source(None)
+
     def _open_drive(self, root: Path, *, announce: bool = True) -> None:
+        # A rescan replaces the facts the armed Plan was built from.
+        self._cancel_repair()
+        if root != self._drive_root:
+            self._forget_drive()
+            self._drive_root = root
         self._busy = True
         self._work_kind = "scan"
         self._inventory_fresh = False
@@ -1274,6 +1336,7 @@ class AtlasApp(App):
             return
         self._inventory = inventory
         self._rows = rows
+        self._refresh_trees(inventory, rows)
         current_names = {row.key for row in rows}
         self._marked.intersection_update(current_names)
         self._busy = False
@@ -1293,6 +1356,28 @@ class AtlasApp(App):
         # rescans, and in Single-Region Composition the list may be hidden.
         self._focus_current_region()
         self.refresh_bindings()
+
+    def _refresh_trees(self, inventory: DriveInventory, rows: tuple[ProjectRow, ...]) -> None:
+        """Hand every cached tree the fresh scan (#12).
+
+        A rescan - `r`, or the one every project-wide operation ends with - is
+        the moment the tree's facts may have changed under it. ADR 0007: a
+        project-wide conform invalidates the whole project, and CONTEXT.md: the
+        tree picks up outside changes when the operator refreshes. A tree whose
+        project is gone is dropped. The one on screen is rebuilt in place,
+        keeping its open folders and cursor.
+        """
+        fresh = {row.key: row for row in rows}
+        paths = {project.name: project.path for project in inventory.projects}
+        for name, tree in list(self._trees.items()):
+            row = fresh.get(name)
+            if row is None or paths.get(name) != tree.project:
+                del self._trees[name]
+                continue
+            tree.invalidate_all(row.report)
+        view = self.query_one(ProjectTreeView)
+        if view.source is not None and view.source in self._trees.values():
+            view.reload()
 
     def _scan_failed(self, generation: int, root: Path, error: Exception) -> None:
         if generation != self._scan_generation:
@@ -1437,10 +1522,13 @@ class AtlasApp(App):
         """The tree handle for one project, built once and kept."""
         if self._inventory is None:
             return None
-        if row.key not in self._trees:
-            inv = next((p for p in self._inventory.projects if p.name == row.key), None)
-            if inv is None:
-                return None
+        inv = next((p for p in self._inventory.projects if p.name == row.key), None)
+        if inv is None:
+            return None
+        cached = self._trees.get(row.key)
+        # Keyed by name, so check the folder too: a tree for the same name on
+        # another drive is not this project's tree.
+        if cached is None or cached.project != inv.path:
             self._trees[row.key] = open_project_tree(inv, self._inventory.map, row.report)
         return self._trees[row.key]
 
@@ -1455,6 +1543,8 @@ class AtlasApp(App):
             self._follow_timer.stop()
             self._follow_timer = None
         changed = row.key != self._workspace_project
+        if changed:
+            self._cancel_repair()
         self._workspace_project = row.key
         self.query_one("#workspace-title", Static).update(row.key)
         if changed:
@@ -1476,8 +1566,15 @@ class AtlasApp(App):
         if row.key != self._workspace_project:
             return      # the cursor moved on while this was pending
         tree = self._project_tree(row)
-        self.query_one(ProjectTreeView).set_source(
-            tree, narrow=(self.size.width or 80) < ABBREVIATE_COLUMNS)
+        view = self.query_one(ProjectTreeView)
+        narrow = (self.size.width or 80) < ABBREVIATE_COLUMNS
+        # Only a different project earns a rebuild. `d`, health, mark, sort and
+        # the filter all come through here for the same project, and rebuilding
+        # threw away the open folders and the cursor every time (#40).
+        if view.source is not tree:
+            view.set_source(tree, narrow=narrow)
+        elif view.narrow != narrow:
+            view.reload(narrow=narrow)
         self._render_companion(row, tree)
 
     def _render_companion(self, row: ProjectRow, tree: ProjectTree | None) -> None:
@@ -1601,6 +1698,8 @@ class AtlasApp(App):
         self._last_result = outcome
         if outcome.marks_after is not None:
             self._marked = set(outcome.marks_after)
+        for name in outcome.forget_undo:
+            self._undo.forget(name)
         self._set_operation(f"Last result: {outcome.summary} - press l for details", outcome.severity)
         self.notify(
             outcome.summary,
@@ -1635,15 +1734,17 @@ class AtlasApp(App):
     def action_back(self) -> None:
         """Escape unwinds: out of the filter, out through the Regions, out to the
         drive picker. One key, one direction, the same in both Compositions."""
+        if self._cancel_repair():
+            # Escape unwinds, and the innermost thing to unwind out of is an
+            # armed write. Nothing has happened on disk, so this costs nothing.
+            # First, before the scan branch: that one leaves the screen, and an
+            # armed write must never ride along to the drive picker.
+            return
         if self._busy and self._work_kind != "scan":
             self.notify("Wait for the current operation to finish", title="Atlas is working")
             return
         if self._work_kind == "scan":
             self._show_drives(auto_open=False)
-            return
-        if self._cancel_repair():
-            # Escape unwinds, and the innermost thing to unwind out of is an
-            # armed write. Nothing has happened on disk, so this costs nothing.
             return
         tree_filter = self.query_one("#tree-filter", Input)
         if tree_filter.display and self._focus_region == TREE:
@@ -1670,6 +1771,8 @@ class AtlasApp(App):
             self._show_drives(auto_open=False)
 
     def _move_to_region(self, region: str) -> None:
+        if region != self._focus_region:
+            self._cancel_repair()
         self._focus_region = region
         if self._zoomed is not None:
             self._zoomed = region
@@ -1693,8 +1796,12 @@ class AtlasApp(App):
         if self._busy or self._showing != "projects":
             return
         if self._armed is not None:
-            self._commit_repair()
-            return
+            if self._armed_is_current():
+                self._commit_repair()
+                return
+            # Armed for a context the operator has left. This Enter was meant
+            # for where they are now, not for the write they walked away from.
+            self._cancel_repair()
         self._move_to_region(drill(self._focus_region))
 
     def action_show_health(self) -> None:
@@ -1748,6 +1855,7 @@ class AtlasApp(App):
         by project name or health, the tree by the names it has opened."""
         if self._busy or self._inventory is None:
             return
+        self._cancel_repair()
         if self._showing == "projects" and self._focus_region == TREE:
             tree_filter = self.query_one("#tree-filter", Input)
             tree_filter.display = True
@@ -1881,6 +1989,7 @@ class AtlasApp(App):
                             lines=tuple(detail),
                             severity="warning",
                             marks_after=tuple(sorted(remaining)),
+                            forget_undo=tuple(names[:index]),
                         )
 
                     project_path = root / name
@@ -1901,6 +2010,7 @@ class AtlasApp(App):
                             lines=tuple(detail),
                             severity="error",
                             marks_after=tuple(sorted(remaining)),
+                            forget_undo=tuple(names[:index + 1]),
                         )
 
                     completed += 1
@@ -1934,6 +2044,7 @@ class AtlasApp(App):
                     lines=tuple(detail),
                     severity=severity,
                     marks_after=tuple(sorted(unresolved)),
+                    forget_undo=tuple(names),
                 )
 
             self._start_operation("Conforming marked projects", root, conform_batch)
@@ -2072,7 +2183,9 @@ class AtlasApp(App):
             return
         project_path, folder_name = selected
         try:
-            record = load_project_record(project_path)
+            record = load_project_record(
+                project_path, project_file=self._inventory.map.project_file
+            )
         except ProjectDataError as error:
             self.notify(str(error), title="Cannot edit project", severity="error", timeout=10)
             return
@@ -2083,7 +2196,13 @@ class AtlasApp(App):
             if result is None:
                 return
             try:
-                plan = preview_project_update(root, project_path, result.intake)
+                plan = preview_project_update(
+                    root,
+                    project_path,
+                    result.intake,
+                    expected_digest=record.source_digest,
+                    project_file=drive_map.project_file,
+                )
             except ProjectDataError as error:
                 self.notify(str(error), title="Cannot preview project edit", severity="error", timeout=10)
                 return
@@ -2104,6 +2223,7 @@ class AtlasApp(App):
                             f"Previous folder: {updated.old_path}",
                             f"Current folder: {updated.path}",
                             "PROJECT.md and project index updated.",
+                            *(f"Warning: {warning}" for warning in updated.warnings),
                         ),
                     )
 
@@ -2309,13 +2429,22 @@ class AtlasApp(App):
         """Offer a repair for the Tree Node under the cursor, or say why not."""
         row = self._selected_row()
         tree = self._trees.get(self._workspace_project)
-        facts = self.query_one(ProjectTreeView).selected_facts()
+        view = self.query_one(ProjectTreeView)
+        facts = view.selected_facts()
         if row is None or self._inventory is None:
             return
         if tree is None:
             # The Workspace follows the cursor on a debounce, so the tree can
             # be moments from existing. A key that stays quiet reads as broken.
             self._set_operation("Tree still loading - try again in a moment", "warning")
+            return
+        if (row.key != self._workspace_project or view.source is not tree
+                or tree.project != self._inventory.root / row.key):
+            # The Plan is built for the list's project and the node comes from
+            # the widget. If those are not the same project, a repair would
+            # write to a folder the operator is not looking at (#3).
+            self._set_operation(f"The tree is not showing {row.key} yet - try again",
+                                "warning")
             return
         if facts is None:
             # The cursor is on nothing - an empty project, or a tree still
@@ -2354,15 +2483,41 @@ class AtlasApp(App):
             node=offer.target,
         )
         room = (self.size.width or 0) - OPERATION_MARGIN
-        self._set_operation(confirm_line(plan, max(0, room)))
+        self._set_operation(confirm_line(plan, max(0, room), project=row.key,
+                                         effect=self._effect(project.path, plan)))
+
+    @staticmethod
+    def _effect(project_path: Path, plan: Plan, *, inverse: bool = False) -> str:
+        """What a one-move Plan will do on disk - move, merge or remove - by the
+        rule _apply_move follows, so the confirm cannot promise a rename (#20)."""
+        action = plan.actions[0]
+        if action.kind not in (RENAME, RELOCATE):
+            return ""
+        return move_effect(project_path, action, inverse=inverse)
 
     def _cancel_repair(self) -> bool:
-        """Abandon an armed repair. True if there was one to abandon."""
+        """Abandon an armed repair. True if there was one to abandon.
+
+        Called on every context change - project, filter, rescan, drive, Region,
+        modal, resize - as well as on Escape. The line is overwritten either
+        way: a confirm still on screen after its repair is gone is a lie.
+        """
         if self._armed is None:
             return False
         self._armed = None
         self._set_operation("Repair cancelled")
         return True
+
+    def _armed_is_current(self) -> bool:
+        """Whether the armed repair is still for what is on screen: the same
+        project in the Workspace, the tree focused, no modal over it."""
+        armed = self._armed
+        if armed is None or armed.project != self._workspace_project:
+            return False
+        if self._focus_region != armed.region or self.screen is not self.screen_stack[0]:
+            return False
+        tree = self._trees.get(armed.project)
+        return tree is not None and self.query_one(ProjectTreeView).source is tree
 
     def _commit_repair(self) -> None:
         """Apply the armed repair, after the scoped Guard agrees it is still
@@ -2372,15 +2527,18 @@ class AtlasApp(App):
         if armed is None or self._inventory is None:
             return
         self._apply_repair(armed.project, armed.plan, armed.guard, armed.node,
-                           remember=True)
+                           remember=armed.undo is None, undo=armed.undo)
 
     def action_undo(self) -> None:
-        """Put the last repair in this Project back.
+        """Offer to put the last repair in this Project back.
 
         One stack per Project, no redo (ADR 0006): undo restores the precondition
-        that offered the repair, so re-pressing the repair key is redo. The
-        inverse is guarded exactly as the repair was, which is what lets the
-        stack be optimistic rather than eagerly invalidated.
+        that offered the repair, so re-pressing the repair key is redo.
+
+        Undo is a write like any other (#7): it previews and waits for the
+        confirm, inline for one move and in the modal for a merge's several. Its
+        Guard was snapshotted when the repair applied (#6), and the entry leaves
+        the stack only once the undo has actually moved something.
         """
         if self._busy or self._showing != "projects" or self._inventory is None:
             return
@@ -2388,22 +2546,49 @@ class AtlasApp(App):
         row = self._selected_row()
         if row is None:
             return
-        inverse = self._undo.pop(row.key)
-        if inverse is None:
+        entry = self._undo.peek(row.key)
+        if entry is None:
             self._set_operation(f"Nothing to undo in {row.key}", "warning")
             return
+        inverse = entry.inverse
         node = inverse.actions[0].src if inverse.actions else ""
         # for_undo, not for_action: an inverse cannot be re-derived from the map,
         # so the guard that rebuilds and compares would refuse every undo.
-        guard = Guard.for_undo(self._inventory.root, row.key,
-                               self._inventory.map, inverse)
-        self._apply_repair(row.key, inverse, guard, node, remember=False)
+        guard = entry.guard or Guard.for_undo(self._inventory.root, row.key,
+                                              self._inventory.map, inverse)
+        prefix = "undo (partial merge)" if entry.partial else "undo"
+        if confirms_inline(inverse):
+            self._armed = _ArmedRepair(project=row.key, plan=inverse, guard=guard,
+                                       node=node, region=self._focus_region, undo=entry)
+            room = (self.size.width or 0) - OPERATION_MARGIN
+            effect = self._effect(self._inventory.root / row.key, inverse, inverse=True)
+            self._set_operation(confirm_line(inverse, max(0, room), project=row.key,
+                                             prefix=prefix, effect=effect))
+            return
+
+        project_name = row.key
+
+        def done(confirmed: bool) -> None:
+            if confirmed:
+                self._apply_repair(project_name, inverse, guard, node,
+                                   remember=False, undo=entry)
+
+        self.push_screen(
+            ConfirmListModal(
+                f"Undo - {project_name}",
+                [f"{action.src} -> {action.dst or 'the project root'}"
+                 for action in inverse.actions],
+                f"Undo {len(inverse.actions)} move(s)",
+            ),
+            done,
+        )
 
     def _apply_repair(self, project_name: str, plan: Plan, guard: Guard,
-                      node: str, *, remember: bool) -> None:
+                      node: str, *, remember: bool, undo: UndoEntry | None = None) -> None:
         """Guard, apply, remember, reconcile. The one write path for both the
         repair key and its undo - they differ only in which Plan they carry and
-        whether the result goes on the stack."""
+        whether the result goes on the stack. An undo's entry stays on the
+        stack unless something moved, so a refusal can be retried (#6)."""
         inventory = self._inventory
         if inventory is None:
             return
@@ -2425,32 +2610,53 @@ class AtlasApp(App):
             return
 
         conflicts = [a for a in applied.actions if a.status == CONFLICT]
+        if undo is not None and any(a.status == DONE for a in applied.actions):
+            self._undo.drop(project_name, undo)
+        undoable = True
         if remember:
-            self._undo.push(project_name, applied)
+            # The undo's Guard is snapshotted now, as the repair left the drive.
+            # Built at `u` time it could not see anything done in between (#6).
+            # A write the stack refuses says so now, not when `u` finds an older
+            # entry to undo instead (#20).
+            undoable = self._undo.push(
+                project_name, applied,
+                guard_for=lambda inverse: Guard.for_undo(root, project_name,
+                                                         inventory.map, inverse))
         self._reconcile_after(project_name, applied, node)
         row = self._selected_row()
         if row is not None and row.key == project_name:
             # The Companion lists what is still unmet; a repair changes that.
             self._render_companion(row, self._trees.get(project_name))
 
-        action = applied.actions[0] if applied.actions else None
-        if conflicts:
-            self._set_operation(
-                f"{conflicts[0].kind} left in place - {conflicts[0].note or 'conflict'}",
-                "warning")
-        elif len(applied.actions) > 1:
-            # Inverting a merge yields one action per child moved. Naming only
-            # the first would report a third of what happened as all of it.
-            self._set_operation(f"Done: {len(applied.actions)} moves in {node or project_name}")
-        elif action is not None:
-            self._set_operation(result_line(action))
+        if not applied.actions:
+            return
+        # Reported by what happened, not by what was previewed (#20). Inverting
+        # a merge yields one action per child moved; results_line counts them.
+        settled = all(a.status == DONE for a in applied.actions)
+        self._set_operation(
+            results_line(applied, node or project_name, undoable=undoable),
+            "information" if settled and not conflicts else "warning")
+
+    def _adopt_project(self, fresh: ProjectInventory, report) -> None:
+        """Put one project's post-write facts into the list (#25).
+
+        The inventory entry and the row both carried the pre-repair scan, so the
+        row still counted the fix just made, and a project conform previewed it
+        and was then refused as changed - its root token no longer matched.
+        """
+        inventory = self._inventory
+        if inventory is None:
+            return
+        self._inventory = replace(inventory, projects=tuple(
+            fresh if p.name == fresh.name else p for p in inventory.projects))
+        self._rows = tuple(
+            ProjectRow(report, row.section_total) if row.key == fresh.name else row
+            for row in self._rows)
+        self._fill()
 
     def _reconcile_after(self, project_name: str, applied: Plan, node: str) -> None:
         """Forget the folders the Move Manifest names and follow the cursor to
         where the node went (ADR 0007). Two enumerations, not a walk."""
-        tree = self._trees.get(project_name)
-        if tree is None:
-            return
         inv = next((p for p in (self._inventory.projects if self._inventory else ())
                     if p.name == project_name), None)
         report = None
@@ -2458,10 +2664,21 @@ class AtlasApp(App):
             fresh = ProjectInventory(path=inv.path, name=inv.name,
                                      root_entries=list_entries(inv.path))
             report = report_project(fresh, self._inventory.map)
+            self._adopt_project(fresh, report)
+        tree = self._trees.get(project_name)
+        if tree is None:
+            return
         landed = tree.follow(node, applied)
         tree.reconcile(applied, report)
+        if project_name != self._workspace_project:
+            # The cached tree is reconciled for when it is next shown; the widget
+            # keeps drawing the project whose title is above it (#3).
+            return
         view = self.query_one(ProjectTreeView)
-        view.set_source(tree, narrow=(self.size.width or 80) < ABBREVIATE_COLUMNS)
+        if view.source is tree:
+            view.reload()   # keep the folders the operator had open (#40)
+        else:
+            view.set_source(tree, narrow=(self.size.width or 80) < ABBREVIATE_COLUMNS)
         view.select_key(landed)
 
     def action_conform(self) -> None:
@@ -2519,9 +2736,11 @@ class AtlasApp(App):
             plan=plan,
             guard=Guard.for_action(inventory.root, row.key, inventory.map, plan),
             node=offer.target,
+            region=COMPANION,
         )
         room = (self.size.width or 0) - OPERATION_MARGIN
-        self._set_operation(confirm_line(plan, max(0, room)))
+        self._set_operation(confirm_line(plan, max(0, room), project=row.key,
+                                         effect=self._effect(project.path, plan)))
 
     def _conform_project(self) -> None:
         """Preview the whole Selected Project's repairs in the modal."""
@@ -2602,6 +2821,7 @@ class AtlasApp(App):
                     summary=summary,
                     lines=tuple(detail) or ("Project already follows the drive map.",),
                     severity=severity,
+                    forget_undo=(name,),
                 )
 
             self._start_operation("Applying conform plan", root, conform)

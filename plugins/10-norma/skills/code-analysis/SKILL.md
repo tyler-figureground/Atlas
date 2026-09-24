@@ -101,7 +101,7 @@ Read the three verdicts alongside them. `confidence` scores the code candidates 
 
 ## Output document
 
-Write Markdown into the project's code dir. Get the destination with **`norma project analysis-dir`** (it prints/creates `<workspace>/06 Research & Existing Conditions/Code/`), then write **`06 …/Code/<project>-code-analysis.md`**. Use exactly these sections, every value-line ending in a `<edition> <section>` citation:
+Write Markdown into the project's code dir. Get the destination with **`norma project analysis-dir`** (it prints/creates `<workspace>/06 Research & Existing Conditions/Code/`), then write **`06 …/Code/<project>-code-analysis.md`**. Its first line is the `<!-- architecture-studio:report -->` marker, so the marketplace's metadata hook recognises it as a report. Use exactly these sections, every value-line ending in a `<edition> <section>` citation:
 
 1. **Project & Jurisdiction** - name, address, jurisdiction, governing edition (one line explicitly), corpus path.
 2. **Occupancy Classification** - group(s), mixed-use treatment (separated/non-separated), cite Chapter 3 sections.

@@ -374,7 +374,9 @@ async def test_a_snap_resize_redraws_for_the_new_size_not_the_old_one(fixture_dr
         assert not tree.narrow
 
 
-async def test_an_armed_confirm_is_rebuilt_for_the_new_width(fixture_drive):
+async def test_a_resize_never_leaves_a_confirm_clipped_to_the_old_width(fixture_drive):
+    """The armed line is sized once, when armed. A resize cancels it (re-arming
+    is one key) rather than leave `Esc cancel` clipped off at the new width."""
     drifted(fixture_drive)
     app = AtlasApp(fixture_drive, follow_debounce=0)
 
@@ -391,5 +393,6 @@ async def test_an_armed_confirm_is_rebuilt_for_the_new_width(fixture_drive):
         await pilot.resize_terminal(46, 51)
         await settle(app, pilot)
         line = app._operation_text
-        assert line.endswith("Enter confirm  Esc cancel")
+        assert app._armed is None
+        assert "Enter confirm" not in line
         assert len(line) <= 46 - OPERATION_MARGIN

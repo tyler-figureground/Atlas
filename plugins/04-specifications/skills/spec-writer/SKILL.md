@@ -128,6 +128,7 @@ Compile all sections into a single `.md` file organized by division number.
 - Derive `[project-slug]` from the project name or type provided by the user (lowercase, hyphenated — e.g., `outline-specs-brannan-office.md`)
 - If no project name is given, use `outline-specs-draft.md`
 - Ask the user if they want a different path
+- First line of the body is the `<!-- architecture-studio:report -->` marker (see `rules/output-formatting.md`)
 
 **File structure:**
 

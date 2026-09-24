@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from contextlib import contextmanager
 from pathlib import Path
 import tempfile
@@ -285,6 +286,15 @@ def _table(value: str) -> str:
     return " ".join(escaped.splitlines()).strip()
 
 
+_CELL_ESCAPE = re.compile(r"\\([\\|])")
+
+
+def _untable(cell: str) -> str:
+    """The inverse of ``_table``: a parsed cell's text, so escaping it again
+    reproduces the cell rather than doubling its backslashes."""
+    return _CELL_ESCAPE.sub(r"\1", cell)
+
+
 def _project_row(folder_name: str, intake: ProjectIntake, status: str = "Active") -> str:
     values = (
         folder_name,
@@ -368,7 +378,7 @@ def update_project_index_row(
         for index in range(header_index + 2, row_end):
             cells = _split_table_row(lines[index])
             assert cells is not None
-            if cells[0] == old_folder_name:
+            if _untable(cells[0]) == old_folder_name:
                 matches.append(index)
         if len(matches) > 1:
             raise ProjectIndexError(
@@ -380,6 +390,6 @@ def update_project_index_row(
             existing_cells = _split_table_row(lines[matches[0]])
             assert existing_cells is not None
             lines[matches[0]] = _project_row(
-                new_folder_name, intake, existing_cells[6]
+                new_folder_name, intake, _untable(existing_cells[6])
             )
         _atomic_write(path, _crlf_bytes(lines), contents)
