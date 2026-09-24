@@ -166,7 +166,7 @@ async def test_new_project_refuses_pasted_control_characters_inline(fixture_driv
         )
 
         app.screen.query_one("#name", Input).value = "Oak House"
-        app.screen.query_one("#desc", Input).value = "Kitchen Bath"
+        app.screen.query_one("#desc", Input).value = "Kitchen\u2028Bath"
         await pilot.pause()
         assert app.screen.query_one("#next-project", Button).disabled
 

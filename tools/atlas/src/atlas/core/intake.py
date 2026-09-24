@@ -16,7 +16,7 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # C0, DEL, C1 (which holds NEL, U+0085), and the Unicode line and paragraph
 # separators: every character a line-oriented reader may split on or a YAML
 # parser refuses as non-printable.
-CONTROL_PATTERN = re.compile("[\x00-\x1f\x7f-\x9f  ]")
+CONTROL_PATTERN = re.compile("[\x00-\x1f\x7f-\x9f\u2028\u2029]")
 STREET_PATTERN = re.compile(r"^\d+(?:-\d+)?[A-Za-z]?\s+\S")
 USE_CASES = (
     "Renovation",

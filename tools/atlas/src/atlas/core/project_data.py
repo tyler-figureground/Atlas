@@ -98,7 +98,7 @@ def _lines(source: bytes) -> list[str]:
     Unicode line breaks ``str.splitlines`` also honours.
     """
 
-    text = source.decode("utf-8").removeprefix("﻿").replace("\r\n", "\n")
+    text = source.decode("utf-8").removeprefix("\ufeff").replace("\r\n", "\n")
     lines = text.split("\n")
     if lines[-1] == "":
         lines.pop()

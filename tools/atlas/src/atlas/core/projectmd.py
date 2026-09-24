@@ -70,7 +70,7 @@ def create_crlf_no_bom(path: Path, lines: list[str]) -> bool:
 # json.dumps escapes C0 but writes these raw. Raw, U+2028/U+2029/U+0085 split a
 # line for any reader that uses str.splitlines(), and DEL/C1/BOM are
 # non-printable to PyYAML - either way the dossier stops loading.
-_UNSAFE_IN_YAML = re.compile("[\x7f-\x9f  ﻿￾￿]")
+_UNSAFE_IN_YAML = re.compile("[\x7f-\x9f\u2028\u2029\ufeff\ufffe\uffff]")
 
 
 def yaml_quote(value: str) -> str:

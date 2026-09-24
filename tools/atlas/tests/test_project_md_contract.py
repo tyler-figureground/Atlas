@@ -176,7 +176,7 @@ def test_name_alias_is_read_and_rewritten_in_place(fixture_drive):
 
 # ---------------------------------------------------------------- #34 control characters
 
-LINE_BREAKERS = ["\t", "\x7f", "\x85", " ", " "]
+LINE_BREAKERS = ["\t", "\x7f", "\x85", "\u2028", "\u2029"]
 
 
 @pytest.mark.parametrize("character", LINE_BREAKERS)
