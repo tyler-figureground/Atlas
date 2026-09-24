@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import __version__
 from .core.conform import (
+    FAILED,
     NotInvertible,
     Plan,
     action_to_dict,
@@ -884,6 +885,10 @@ def cmd_conform(args: argparse.Namespace) -> int:
         if not args.apply and pending:
             print("\n(dry run - pass --apply to perform)")
     if args.apply:
+        if any(a.status == FAILED for plan in results for a in plan.actions):
+            # An OS error stopped an action part-way. The JSON above carries
+            # what moved before it, so --revert can still put it back.
+            return 2
         conflicts = any(a.status == "conflict" for plan in results for a in plan.actions)
         return 1 if conflicts or leftovers or unread else 0
     return 1 if pending or leftovers or unread else 0

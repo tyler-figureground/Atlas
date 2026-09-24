@@ -54,6 +54,7 @@ SWEEP = "sweep"
 DONE = "done"
 CONFLICT = "conflict"   # no-clobber leftovers; a human resolves
 SKIPPED = "skipped"
+FAILED = "failed"       # an OS error stopped it; ``moved`` holds what moved first
 
 
 # Windows refuses a path longer than this without the extended-length prefix,
@@ -273,8 +274,10 @@ def invert_plan(plan: Plan) -> Plan:
     nor after, and the operator pressed one key expecting one thing.
     """
     for action in plan.actions:
-        if action.status == SKIPPED:
+        if action.status == SKIPPED or (action.status == FAILED and not action.moved):
             continue    # nothing happened, so there is nothing to reverse
+        if action.status == FAILED:
+            continue    # stopped part-way: what its manifest moved goes back
         if action.status != DONE:
             raise NotInvertible(
                 f"{action.kind} {action.src or action.dst} is "
@@ -437,24 +440,58 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
         raise OpsError(f"project folder is no longer available: {project}")
     applied: list[Action] = []
     order = {BACKFILL: 0, RENAME: 1, RELOCATE: 2, SWEEP: 3}
-    for action in sorted(plan.actions, key=lambda a: order[a.kind]):
-        if only and action.kind not in only:
-            applied.append(replace(action, status=SKIPPED, note="filtered by --only"))
-            continue
-        if action.kind == BACKFILL:
-            applied.append(_apply_backfill(project, m, action))
-        elif action.kind == RENAME:
-            applied.append(_apply_move(project, action, merge_into_existing=True))
-        elif action.kind == RELOCATE:
-            applied.append(_apply_move(project, action, merge_into_existing=True))
-        elif action.kind == SWEEP:
-            applied.append(_apply_sweep(project, action))
-    result = Plan(project=plan.project, actions=tuple(applied))
-    done = [a for a in result.actions if a.status == DONE]
-    if done:
-        append_log(drive_root, f"[{project.name}] conform: " +
-                   "; ".join(f"{a.kind} {a.src or a.dst} -> {a.dst}" for a in done))
-    return result
+    try:
+        for action in sorted(plan.actions, key=lambda a: order[a.kind]):
+            if only and action.kind not in only:
+                applied.append(replace(action, status=SKIPPED, note="filtered by --only"))
+                continue
+            # One failed action fails that action, not the process: a file held
+            # open in Revit or Excel refuses the rename, and everything that
+            # already moved must still be recorded, logged and undoable.
+            try:
+                applied.append(_apply_one(project, m, action))
+            except OSError as error:
+                applied.append(replace(action, status=FAILED, note=_os_note(error)))
+    finally:
+        _log_applied(drive_root, project, applied)
+    return Plan(project=plan.project, actions=tuple(applied))
+
+
+def _apply_one(project: Path, m: DriveMap, action: Action) -> Action:
+    if action.kind == BACKFILL:
+        return _apply_backfill(project, m, action)
+    if action.kind in (RENAME, RELOCATE):
+        return _apply_move(project, action, merge_into_existing=True)
+    if action.kind == SWEEP:
+        return _apply_sweep(project, action)
+    return replace(action, status=SKIPPED, note=f"unknown action kind '{action.kind}'")
+
+
+def _os_note(error: OSError, where: str = "") -> str:
+    name = Path(error.filename).name if error.filename else where
+    reason = error.strerror or str(error)
+    return f"{name}: {reason}" if name else reason
+
+
+def _log_applied(drive_root: Path, project: Path, applied: list[Action]) -> None:
+    """One drive-log line for whatever changed the drive, failures included.
+
+    Written in a ``finally`` so a failure part-way still leaves a record of
+    what moved before it. A failed action is logged only when it moved
+    something - its manifest is the record.
+    """
+    parts = []
+    for a in applied:
+        if a.status == DONE:
+            parts.append(f"{a.kind} {a.src or a.dst} -> {a.dst}")
+        elif a.status == FAILED and a.moved:
+            moved = ", ".join(f"{mv.src} -> {mv.dst}" for mv in a.moved)
+            parts.append(f"{a.kind} {a.src} -> {a.dst} FAILED ({a.note}) after moving {moved}")
+    if parts:
+        try:
+            append_log(drive_root, f"[{project.name}] conform: " + "; ".join(parts))
+        except OSError:
+            pass    # the log is a record, never a reason to lose the result
 
 
 # ---- control plane ---------------------------------------------------------
@@ -685,7 +722,17 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool) -> Act
         # Case-only rename on a case-insensitive mount: two-step via temp.
         tmp = src.with_name(src.name + ".atlas-tmp")
         src.rename(tmp)
-        tmp.rename(dst)
+        try:
+            tmp.rename(dst)
+        except OSError as error:
+            # Never strand the folder under its temp name: put it back first.
+            try:
+                tmp.rename(src)
+            except OSError:
+                return replace(action, status=FAILED, note=(
+                    f"{_os_note(error, action.src)}; left as {tmp.name}"),
+                    moved=(Move(src=action.src, dst=f"{action.src}.atlas-tmp", is_dir=True),))
+            return replace(action, status=FAILED, note=_os_note(error, action.src))
         return replace(action, status=DONE, note="case-only rename",
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
 
@@ -701,17 +748,24 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool) -> Act
     # Merge, never clobber: move each child whose name is free at the target.
     manifest: list[Move] = []
     left = 0
-    for child in list(src.iterdir()):
-        target = dst / child.name
-        if target.exists():
-            left += 1
-            continue
-        is_dir = child.is_dir()
-        child.rename(target)
-        manifest.append(Move(src=f"{action.src}/{child.name}",
-                             dst=f"{action.dst}/{child.name}", is_dir=is_dir))
+    try:
+        for child in list(src.iterdir()):
+            target = dst / child.name
+            if target.exists():
+                left += 1
+                continue
+            is_dir = child.is_dir()
+            child.rename(target)
+            manifest.append(Move(src=f"{action.src}/{child.name}",
+                                 dst=f"{action.dst}/{child.name}", is_dir=is_dir))
+        emptied = left == 0 and _remove_if_file_empty(src)
+    except OSError as error:
+        # Earlier children already moved. The manifest is the only record of
+        # which, so it leaves with the failure rather than being lost to it.
+        return replace(action, status=FAILED, note=_os_note(error),
+                       moved=tuple(manifest))
     moved = len(manifest)
-    if left == 0 and _remove_if_file_empty(src):
+    if emptied:
         return replace(action, status=DONE, note=f"merged {moved} item(s)",
                        moved=tuple(manifest))
     return replace(action, status=CONFLICT,

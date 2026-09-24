@@ -36,6 +36,7 @@ from textual.widgets import (
 from ..core.conform import (
     CONFLICT,
     DONE,
+    FAILED,
     SKIPPED,
     Guard,
     Plan,
@@ -2198,7 +2199,14 @@ class AtlasApp(App):
         if inventory is None:
             return
         root = inventory.root
-        stale = guard.check(root)
+        # The same broad handler _operation_worker uses: a map caught mid-save,
+        # a locked file, a vanished mount - each is reported on the operation
+        # line, never allowed to exit the console (#4).
+        try:
+            stale = guard.check(root)
+        except Exception as error:  # noqa: BLE001 - reported, not raised
+            self._set_operation(f"Nothing moved - {error}", "error")
+            return
         if stale is not None:
             self._set_operation(f"Nothing moved - {stale}", "warning")
             return
@@ -2210,17 +2218,33 @@ class AtlasApp(App):
             return
         try:
             applied = apply_plan(root, project.path, inventory.map, plan)
-        except OpsError as error:
+        except Exception as error:  # noqa: BLE001 - reported, not raised
             self._set_operation(f"Repair stopped: {error}", "error")
             return
 
         conflicts = [a for a in applied.actions if a.status == CONFLICT]
-        if remember:
+        failed = [a for a in applied.actions if a.status == FAILED]
+        if remember and (not failed or any(a.moved for a in failed)):
+            # A part-way failure is still undoable: its manifest says what moved.
             self._undo.push(project_name, applied)
-        self._reconcile_after(project_name, applied, node)
+        try:
+            if failed:
+                tree = self._trees.get(project_name)
+                if tree is not None:
+                    tree.invalidate_all()
+            self._reconcile_after(project_name, applied, node)
+        except Exception as error:  # noqa: BLE001 - the write is done; say so
+            self._set_operation(f"Repair applied; tree not refreshed - {error}", "warning")
+            return
 
         action = applied.actions[0] if applied.actions else None
-        if conflicts:
+        if failed:
+            moved = sum(len(a.moved) for a in failed)
+            self._set_operation(
+                f"{failed[0].kind} stopped - {failed[0].note}"
+                + (f"; {moved} item(s) moved first, u undoes them" if moved else ""),
+                "error")
+        elif conflicts:
             self._set_operation(
                 f"{conflicts[0].kind} left in place - {conflicts[0].note or 'conflict'}",
                 "warning")
@@ -2316,6 +2340,7 @@ class AtlasApp(App):
                 done_count = sum(1 for action in result.actions if action.status == DONE)
                 skipped = sum(1 for action in result.actions if action.status == SKIPPED)
                 conflicts = sum(1 for action in result.actions if action.status == CONFLICT)
+                failed = sum(1 for action in result.actions if action.status == FAILED)
                 detail = []
                 for action in result.actions:
                     source = f"{action.src} -> " if action.src else ""
@@ -2324,10 +2349,13 @@ class AtlasApp(App):
                         f"{(action.status or 'planned').upper()}: "
                         f"{action.kind} {source}{action.dst}{note}"
                     )
-                severity = "warning" if conflicts or skipped else "information"
+                severity = ("error" if failed
+                            else "warning" if conflicts or skipped else "information")
                 summary = f"Conformed {name}: {done_count} done, {skipped} skipped"
                 if conflicts:
                     summary += f", {conflicts} conflict(s) need review"
+                if failed:
+                    summary += f", {failed} failed (a file may be open)"
                 return OperationOutcome(
                     title="Conform result",
                     summary=summary,
