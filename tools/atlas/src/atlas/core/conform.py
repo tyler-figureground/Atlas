@@ -96,6 +96,14 @@ class Action:
     # Longest absolute path this action would create, measured at preview time.
     # Zero when the plan was built without a project path to measure against.
     path_length: int = 0
+    # What the write brought into existence that was not a Move: the file or
+    # folder a backfill made, and any parent folder a move or sweep had to create
+    # on the way. Empty until applied. The tree reconciles by it (ADR 0007), and
+    # the undo removes created folders it leaves empty.
+    created: tuple[str, ...] = ()
+    # On an inverse Action only: folders the write being undone created, removed
+    # after this action if they are then empty. Deepest first.
+    prune: tuple[str, ...] = ()
 
     @property
     def path_warning(self) -> bool:
@@ -206,6 +214,8 @@ def action_to_dict(action: Action) -> dict:
                   for mv in action.moved],
         "path_length": action.path_length,
         "path_warning": action.path_warning,
+        "created": list(action.created),
+        "prune": list(action.prune),
     }
 
 
@@ -221,7 +231,8 @@ def plan_from_dict(payload: dict) -> Plan:
     ``moved`` becomes an uninvertible Plan two steps later, where the message no
     longer names the real problem. ``path_warning`` is derived and ignored on the
     way in - it is a property, and honouring a supplied one would let a manifest
-    contradict its own ``path_length``.
+    contradict its own ``path_length``. ``created`` and ``prune`` came later and
+    default to empty, so a manifest an older Atlas printed still reads back.
     """
     try:
         actions = tuple(
@@ -237,6 +248,8 @@ def plan_from_dict(payload: dict) -> Plan:
                     for mv in a["moved"]
                 ),
                 path_length=a["path_length"],
+                created=tuple(a.get("created", ())),
+                prune=tuple(a.get("prune", ())),
             )
             for a in payload["actions"]
         )
@@ -304,6 +317,7 @@ def invert_plan(plan: Plan) -> Plan:
     # apply_plan keeps an inverse Plan's order rather than re-sorting by kind.
     actions: list[Action] = []
     for action in reversed(plan.actions):
+        start = len(actions)
         for mv in reversed(action.moved):
             if mv.is_dir:
                 actions.append(Action(kind=RELOCATE, src=mv.dst, dst=mv.src))
@@ -311,6 +325,12 @@ def invert_plan(plan: Plan) -> Plan:
                 # A file goes back by sweep, whose destination is the folder it
                 # came from. _apply_move refuses files outright.
                 actions.append(Action(kind=SWEEP, src=mv.dst, dst=parent_key(mv.src)))
+        if action.created and len(actions) > start:
+            # The folders this action had to create go once its moves are back,
+            # so the undo leaves no empty parent that existed neither before nor
+            # after. Removed only if empty: someone may have filed into them.
+            prune = tuple(sorted(action.created, key=lambda k: k.count("/"), reverse=True))
+            actions[-1] = replace(actions[-1], prune=prune)
     return Plan(project=plan.project, actions=tuple(actions), inverse=True)
 
 
@@ -459,19 +479,56 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
         if only and action.kind not in only:
             applied.append(replace(action, status=SKIPPED, note="filtered by --only"))
             continue
+        absent = _absent_chain(project, _created_root(action))
         if action.kind == BACKFILL:
-            applied.append(_apply_backfill(project, m, action))
+            result = _apply_backfill(project, m, action)
         elif action.kind in (RENAME, RELOCATE):
-            applied.append(_apply_move(project, action, merge_into_existing=True,
-                                       remove_empty_duplicate=not plan.inverse))
-        elif action.kind == SWEEP:
-            applied.append(_apply_sweep(project, action))
+            result = _apply_move(project, action, merge_into_existing=True,
+                                 remove_empty_duplicate=not plan.inverse)
+        else:
+            result = _apply_sweep(project, action)
+        created = tuple(rel for rel in absent if (project / rel).exists())
+        if created:
+            result = replace(result, created=created)
+        if result.status == DONE and action.prune:
+            _prune_empty(project, action.prune)
+        applied.append(result)
     result = Plan(project=plan.project, actions=tuple(applied), inverse=plan.inverse)
     done = [a for a in result.actions if a.status == DONE]
     if done:
         append_log(drive_root, f"[{project.name}] conform: " +
                    "; ".join(f"{a.kind} {a.src or a.dst} -> {a.dst}" for a in done))
     return result
+
+
+def _created_root(action: Action) -> str:
+    """The deepest path an action may bring into existence other than by a Move:
+    a backfill's target, a sweep's destination folder, a move's parent."""
+    dst = action.dst.replace("\\", "/").rstrip("/")
+    if action.kind in (BACKFILL, SWEEP):
+        return dst
+    return parent_key(dst)
+
+
+def _absent_chain(project: Path, rel: str) -> tuple[str, ...]:
+    """``rel`` and each of its ancestors that does not exist yet, shallowest first."""
+    absent: list[str] = []
+    parts = [p for p in rel.split("/") if p]
+    for depth in range(1, len(parts) + 1):
+        key = "/".join(parts[:depth])
+        if not (project / key).exists():
+            absent.append(key)
+    return tuple(absent)
+
+
+def _prune_empty(project: Path, keys: tuple[str, ...]) -> None:
+    """Remove each folder that is now entirely empty, deepest first. rmdir is the
+    whole check: it refuses a folder with anything at all in it."""
+    for key in keys:
+        try:
+            (project / key).rmdir()
+        except OSError:
+            pass
 
 
 # ---- control plane ---------------------------------------------------------

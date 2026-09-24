@@ -374,6 +374,79 @@ def test_reconcile_takes_the_fresh_verdict_with_it(fixture_drive):
     assert [n.name for n in tree.children()] == ["01 Model", "11 Meetings"]
 
 
+def test_a_backfilled_file_shows_up_in_the_tree_at_once(fixture_drive):
+    """Issue #22. A backfill has an empty manifest, so reconcile touched nothing
+    and the created file sat in neither the tree nor the unmet list for 60 s."""
+    make_project(fixture_drive, "260416_Backfill", sections=["01 Model"])
+    tree = tree_for(fixture_drive, "260416_Backfill")
+    assert "CLAUDE.md" not in {n.name for n in tree.children()}
+
+    applied = applied_repair(fixture_drive, "260416_Backfill", "CLAUDE.md")
+    assert [a.status for a in applied.actions] == ["done"], applied.actions
+
+    tree.reconcile(applied)
+    assert "CLAUDE.md" in {n.name for n in tree.children()}
+
+
+def test_a_folder_a_move_had_to_create_shows_up_in_the_tree(fixture_drive):
+    """Relocating into a parent that does not exist creates it. Nothing in the
+    Move Manifest names that parent's parent, so the root stayed cached."""
+    make_project(
+        fixture_drive, "260417_Created",
+        sections=["01 Model", "08 OUT/Invoices"],
+        files={"08 OUT/Invoices/inv.pdf": "y"},
+    )
+    tree = tree_for(fixture_drive, "260417_Created")
+    assert "10 Legal" not in {n.name for n in tree.children()}
+
+    applied = applied_repair(fixture_drive, "260417_Created", "08 OUT/Invoices")
+    (action,) = applied.actions
+    assert action.created == ("10 Legal",), action
+
+    tree.reconcile(applied)
+    assert "10 Legal" in {n.name for n in tree.children()}
+
+
+def test_a_removed_duplicate_leaves_the_tree(fixture_drive):
+    make_project(
+        fixture_drive, "260418_Removed",
+        sections=["01 Model", "08 OUT/Invoices", "10 Legal/Invoices"],
+    )
+    tree = tree_for(fixture_drive, "260418_Removed")
+    assert "Invoices" in {n.name for n in tree.children("08 OUT")}
+
+    applied = applied_repair(fixture_drive, "260418_Removed", "08 OUT/Invoices")
+    assert "file-empty" in applied.actions[0].note
+
+    tree.reconcile(applied)
+    assert "Invoices" not in {n.name for n in tree.children("08 OUT")}
+
+
+def test_undo_removes_the_folder_the_move_created(fixture_drive):
+    """Undoing a relocate into a created parent left that parent behind, empty -
+    a state that existed neither before the repair nor after it."""
+    from atlas.core.conform import invert_plan
+
+    project = make_project(
+        fixture_drive, "260419_Pruned",
+        sections=["01 Model", "08 OUT/Invoices"],
+        files={"08 OUT/Invoices/inv.pdf": "y"},
+    )
+    tree = tree_for(fixture_drive, "260419_Pruned")
+    applied = applied_repair(fixture_drive, "260419_Pruned", "08 OUT/Invoices")
+    tree.reconcile(applied)
+    assert "10 Legal" in {n.name for n in tree.children()}
+
+    inventory = scan_drive(fixture_drive)
+    undone = apply_plan(fixture_drive, project, inventory.map, invert_plan(applied))
+    assert [a.status for a in undone.actions] == ["done"], undone.actions
+
+    assert (project / "08 OUT" / "Invoices" / "inv.pdf").is_file()
+    assert not (project / "10 Legal").exists()
+    tree.reconcile(undone)
+    assert "10 Legal" not in {n.name for n in tree.children()}
+
+
 def test_a_project_wide_conform_invalidates_the_project(fixture_drive):
     """Guard strength scales with action scope, and so does invalidation. A
     conform's manifest can span the whole project; rebuilding it wholesale is
