@@ -224,6 +224,30 @@ async def test_the_split_list_keeps_its_columns_on_screen(fixture_drive):
         app = AtlasApp(fixture_drive, follow_debounce=0)
 
 
+# ------------------------------------------------ token grounds on screen (#39)
+
+
+async def test_the_focused_tree_and_list_draw_on_the_token_ground(fixture_drive):
+    """Measured on screen, not read from the stylesheet: the theme's surface and
+    its 5% focus tint are what put ACTION under 4.5:1."""
+    from textual.color import Color as TColor
+
+    make_project(fixture_drive, "260813_Ground", sections=["01 Model", "Meetings"])
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+    ground = TColor.parse(tokens.PALETTE.ground)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        table = app.query_one("#projects", DataTable)
+        assert table.has_focus
+        assert table.background_colors[1] == ground
+        await pilot.press("enter")
+        await settle(app, pilot)
+        tree = app.query_one(ProjectTreeView)
+        assert tree.has_focus
+        assert tree.background_colors[1] == ground
+
+
 # ------------------------------------------------- narrow clipping (#57)
 
 

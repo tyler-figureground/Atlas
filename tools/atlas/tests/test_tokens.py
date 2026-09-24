@@ -152,6 +152,83 @@ def test_the_cursor_is_the_brightest_thing_on_screen():
         assert cursor > contrast_ratio(getattr(PALETTE, name), ground)
 
 
+# ------------------------------------------ every pair the console draws (#39)
+
+
+def _rules() -> dict[str, dict[str, str]]:
+    """The generated stylesheet as {selector: {property: value}}."""
+    import re
+
+    rules: dict[str, dict[str, str]] = {}
+    css = re.sub(r"/\*.*?\*/", "", stylesheet(), flags=re.S)
+    for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        props = {}
+        for decl in body.split(";"):
+            if ":" in decl:
+                name, value = decl.split(":", 1)
+                props[name.strip()] = value.strip()
+        for selector in selectors.split(","):
+            rules.setdefault(" ".join(selector.split()), {}).update(props)
+    return rules
+
+
+def _hex(value: str | None) -> str | None:
+    import re
+
+    found = re.search(r"#[0-9A-Fa-f]{6}", value or "")
+    return found.group(0) if found else None
+
+
+def _ground_of(selector: str, rules: dict[str, dict[str, str]]) -> str | None:
+    """The background a selector's text is drawn on: its own, or the one it
+    sits inside. Never assumed to be `ground` - that assumption is the bug.
+    None when the container leaves it to the Textual theme."""
+    own = _hex(rules.get(selector, {}).get("background"))
+    if own:
+        return own
+    for container in ("#operation", "#dialog", "DataTable", "Tree", "#keys"):
+        if selector.startswith(container) and selector != container:
+            return _hex(rules.get(container, {}).get("background"))
+    return _hex(rules["Screen"]["background"])
+
+
+def _drawn_pairs():
+    rules = _rules()
+    pairs = []
+    for selector, props in rules.items():
+        colour = _hex(props.get("color"))
+        if colour:
+            pairs.append((selector, colour, _ground_of(selector, rules)))
+    # Colours the tree and list set from Python, on the grounds the stylesheet
+    # gives those widgets.
+    for widget in ("Tree", "DataTable"):
+        ground = _ground_of(widget + " >", rules)
+        for state in FILING_STATES:
+            pairs.append((f"{widget} {state}", filing_style(state).colour, ground))
+        for name in ("ink", "muted"):
+            pairs.append((f"{widget} {name}", getattr(PALETTE, name), ground))
+        for status, colour in PALETTE.status.items():
+            pairs.append((f"{widget} {status}", colour, ground))
+    return pairs
+
+
+def test_the_tree_and_list_are_painted_on_token_grounds():
+    rules = _rules()
+    for widget in ("Tree", "DataTable", "DataTable > .datatable--header", "#operation"):
+        assert _hex(rules.get(widget, {}).get("background")), f"{widget} has no token ground"
+
+
+@pytest.mark.parametrize("pair", _drawn_pairs(), ids=lambda p: p[0])
+def test_every_text_pair_the_console_draws_is_legible(pair):
+    """Ticket 18: every text token clears 4.5:1 - on what it is actually drawn
+    on. ACTION passed against `ground` and measured 3.64:1 on the tree's theme
+    surface."""
+    name, fg, bg = pair
+    assert bg, f"{name} is drawn on a Textual theme colour, not a token ground"
+    ratio = contrast_ratio(fg, bg)
+    assert ratio >= 4.5, f"{name}: {fg} on {bg} is {ratio:.2f}:1, needs 4.5"
+
+
 def test_contrast_ratio_is_symmetric_and_bounded():
     assert contrast_ratio("#FFFFFF", "#000000") == pytest.approx(21.0, abs=0.05)
     assert contrast_ratio("#000000", "#FFFFFF") == pytest.approx(21.0, abs=0.05)

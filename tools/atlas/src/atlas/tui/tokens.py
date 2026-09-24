@@ -237,8 +237,25 @@ def stylesheet(palette: Palette = PALETTE) -> str:
     #summary {{ color: {p.muted}; }}
     #operation {{ background: {p.surface}; color: {p.ink}; }}
     #operation.-warning {{ color: {p.status["REVIEW"]}; }}
-    #operation.-error {{ color: {p.status["ACTION"]}; }}
+    /* ACTION measures 4.49:1 on surface - under the floor by a hair. The ramp's
+       next step up is the same warm family and clears it. */
+    #operation.-error {{ color: {p.ember[2]}; }}
 
+    /* The tree and list draw their text in token colours from Python, so they
+       sit on a token ground too. Left to the Textual theme they drew on its
+       surface (and a 5% focus tint), where ACTION fell to 3.64:1. Hover is
+       painted the same, because a hover band is one more ground under the
+       same text. */
+    Tree {{ background: {p.ground}; color: {p.ink}; }}
+    Tree:focus {{ background-tint: {p.ground} 0%; }}
+    Tree > .tree--highlight-line {{ background: {p.ground}; }}
+    DataTable {{ background: {p.ground}; color: {p.ink}; }}
+    DataTable:focus {{ background-tint: {p.ground} 0%; }}
+    DataTable > .datatable--header {{ background: {p.ground}; color: {p.muted}; }}
+    DataTable > .datatable--header-hover {{ background: {p.ground}; }}
+    DataTable > .datatable--hover {{ background: {p.ground}; }}
+    DataTable > .datatable--even-row {{ background: {p.ground}; }}
+    DataTable > .datatable--odd-row {{ background: {p.ground}; }}
     DataTable > .datatable--cursor {{ background: {p.ember[2]}; color: {p.ground}; }}
     Tree > .tree--cursor {{ background: {p.ember[2]}; color: {p.ground}; text-style: bold; }}
     DataTable > .datatable--header {{ color: {p.muted}; }}
