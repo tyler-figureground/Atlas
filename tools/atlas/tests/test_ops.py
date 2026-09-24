@@ -37,6 +37,35 @@ def test_clean_name_part_ps1_parity():
     assert clean_name_part(None) == ""
 
 
+@pytest.mark.parametrize(
+    "raw, cleaned",
+    [
+        ("Kitchen .", "Kitchen"),
+        ("Kitchen. .", "Kitchen"),
+        ("Kitchen |.", "Kitchen"),
+        ("Kitchen ?", "Kitchen"),
+        (" . Kitchen", ". Kitchen"),
+        (". .", ""),
+    ],
+)
+def test_clean_name_part_leaves_no_trailing_space_or_dot(raw, cleaned):
+    # Windows drops a trailing space or dot when it makes the folder, so the
+    # name Atlas computes must already be the name the disk will hold.
+    assert clean_name_part(raw) == cleaned
+
+
+def test_clean_name_part_never_ends_in_space_or_dot_for_any_input():
+    import random
+
+    alphabet = ' .\t|?*"<>:/\\ab1'
+    generator = random.Random(33)
+    for _ in range(5000):
+        raw = "".join(generator.choice(alphabet) for _ in range(generator.randint(0, 12)))
+        cleaned = clean_name_part(raw)
+        assert cleaned == cleaned.strip(), raw
+        assert not cleaned.endswith("."), raw
+
+
 def test_build_folder_name():
     assert build_folder_name(CREATED, "House") == "260813_House"
     assert build_folder_name(CREATED, "House", "ADU") == "260813_House-ADU"
