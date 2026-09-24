@@ -269,10 +269,11 @@ Fog toward the destination. Graduates into tickets as the frontier clears it.
 - **File-level action set.** Which actions the tree offers, what core plan each
   builds, and how each previews. Depends on the write contract. *Partly cleared:*
   ticket 25 gave the map a way to make a root file Loose by name or content, and the
-  tree already offers its Sweep. What is still fog is everything that is not a Sweep -
-  open, reveal in Explorer, rename, delete, and whether a file the operator picks can
-  be moved anywhere the map has not named. Ticket 26 asks the narrowest version of
-  the last one.
+  tree already offers its Sweep. Ticket 04's non-writes are built (#45): `o` opens
+  the node under the cursor (an Unfiled node is revealed in Explorer instead), `y`
+  copies its path. What is still fog is rename, delete, and whether a file the
+  operator picks can be moved anywhere the map has not named. Ticket 26 asks the
+  narrowest version of the last one.
 - **Load State labels do not abbreviate.** Ticket 10 gave the Fault Word a short
   form; the Load State label beside it kept its long one, so `not opened yet` runs
   past the viewport at 46 columns and the row scrolls. Same principle, different

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date
 import os
 from pathlib import Path
+import subprocess
 
 from rich.text import Text
 from textual import events, work
@@ -79,7 +80,14 @@ from ..core.scan import (
     list_entries,
     scan_drive,
 )
-from ..core.tree import CONTRACT, Expectation, ProjectTree, open_project_tree
+from ..core.tree import (
+    CONTRACT,
+    UNFILED,
+    Expectation,
+    ProjectTree,
+    TreeNode,
+    open_project_tree,
+)
 from . import tokens
 from .wordmark import BAR, composition_for, mark_width, render_mark
 from .layout import (
@@ -152,6 +160,20 @@ KEY_HINTS = {
     "add_section": "a Add folders",
     "new_project": "n New project",
 }
+
+
+def open_path(path: Path) -> None:
+    """Open a file or folder in its default application. Never writes."""
+    if not hasattr(os, "startfile"):
+        raise OSError("opening files is available on Windows only")
+    os.startfile(path)  # type: ignore[attr-defined]
+
+
+def reveal_path(path: Path) -> None:
+    """Show a file or folder selected in Explorer, without opening it."""
+    if os.name != "nt":
+        raise OSError("reveal in Explorer is available on Windows only")
+    subprocess.Popen(["explorer", f"/select,{path}"])
 
 
 def _project_token(project: ProjectInventory) -> tuple[tuple[str, bool], ...]:
@@ -870,6 +892,7 @@ class AtlasApp(App):
         Binding("f", "conform", "Conform"),
         Binding("u", "undo", "Undo", show=False),
         Binding("o", "open_folder", "Open", show=False),
+        Binding("y", "copy_path", "Copy path", show=False),
         Binding("space", "toggle_mark", "Mark", show=False),
         Binding("x", "conform_marked", "Conform marked", show=False),
         Binding("s", "cycle_sort", "Sort", show=False),
@@ -1146,7 +1169,7 @@ class AtlasApp(App):
             return True if has_project and self._inventory_fresh and not self._busy else None
         if action == "conform_marked":
             return True if self._marked and self._inventory_fresh and not self._busy else None
-        if action in {"open_folder", "toggle_mark"}:
+        if action in {"open_folder", "toggle_mark", "copy_path"}:
             return True if has_project and not self._busy else None
         if action in {"drill", "next_region", "cycle_companion"}:
             # Enter and Tab are priority bindings, so they reach the App before
@@ -1933,17 +1956,51 @@ class AtlasApp(App):
         if self._last_result is not None:
             self.push_screen(ResultModal(self._last_result.title, self._last_result.lines))
 
+    def _selected_node_path(self) -> tuple[Path, TreeNode] | None:
+        """The full path and facts of the tree node under the cursor, when the
+        tree has focus. None anywhere else - `o` and `y` then mean the project."""
+        if self._focus_region != TREE or self._showing != "projects":
+            return None
+        facts = self.query_one(ProjectTreeView).selected_facts()
+        selected = self._selected_project()
+        if facts is None or selected is None:
+            return None
+        return selected[0] / facts.key, facts
+
+    def action_copy_path(self) -> None:
+        """Copy the full path of the node under the cursor, or of the project."""
+        node = self._selected_node_path()
+        selected = self._selected_project()
+        if node is None and selected is None:
+            return
+        path = node[0] if node is not None else selected[0]
+        self.copy_to_clipboard(str(path))
+        self._set_operation(f"Copied path: {path}")
+
     def action_open_folder(self) -> None:
         if self._busy:
+            return
+        node = self._selected_node_path()
+        if node is not None:
+            # Ticket 04's non-writes. An Unfiled node is revealed, not opened:
+            # it is the one a person has to look at where it sits, and reveal
+            # is the only thing the tree offers it.
+            path, facts = node
+            unfiled = facts.filing == UNFILED
+            verb = "Revealed" if unfiled else "Opened"
+            try:
+                (reveal_path if unfiled else open_path)(path)
+            except OSError as error:
+                self._set_operation(f"Could not open {facts.name}: {error}", "error")
+                return
+            self._set_operation(f"{verb} {facts.name}")
             return
         selected = self._selected_project()
         if selected is None:
             return
         project_path, name = selected
         try:
-            if not hasattr(os, "startfile"):
-                raise OSError("default folder opening is available on Windows only")
-            os.startfile(project_path)  # type: ignore[attr-defined]
+            open_path(project_path)
         except OSError as error:
             self._set_operation(f"Could not open {name}: {error}", "error")
             self.notify(str(error), title="Open folder failed", severity="error", timeout=10)
