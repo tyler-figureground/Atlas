@@ -401,3 +401,48 @@ def test_update_still_blocks_duplicate_matching_rows(fixture_drive):
         )
 
     assert index.read_bytes() == duplicate
+
+
+def test_update_leaves_untouched_status_cell_byte_identical(fixture_drive):
+    # An edit that does not touch Status must not re-escape it: a pipe in the
+    # cell used to double its backslashes on every edit.
+    drive_map = load_map(fixture_drive / "_tools" / "testdrive-map.json")
+    folder = "260813_100 Main-Old"
+    append_project_index_row(fixture_drive, drive_map, folder, _intake())
+    index = fixture_drive / "_Project Index.md"
+    status = rb"On hold \| see C:\\notes"
+    index.write_bytes(
+        index.read_bytes().replace(b"| Active |\r\n", b"| " + status + b" |\r\n")
+    )
+
+    for _ in range(3):
+        update_project_index_row(
+            fixture_drive,
+            drive_map,
+            folder,
+            folder,
+            _intake(),
+            expected_digest=hashlib.sha256(index.read_bytes()).hexdigest(),
+        )
+
+    assert index.read_bytes().endswith(b"| " + status + b" |\r\n")
+
+
+def test_update_finds_row_whose_folder_cell_is_escaped(fixture_drive):
+    drive_map = load_map(fixture_drive / "_tools" / "testdrive-map.json")
+    folder = r"260813_100 Main-A\B"
+    append_project_index_row(fixture_drive, drive_map, folder, _intake())
+    index = fixture_drive / "_Project Index.md"
+
+    update_project_index_row(
+        fixture_drive,
+        drive_map,
+        folder,
+        folder,
+        replace(_intake(), project_name="Renamed"),
+        expected_digest=hashlib.sha256(index.read_bytes()).hexdigest(),
+    )
+
+    raw = index.read_bytes()
+    assert raw.count(rb"| 260813_100 Main-A\\B |") == 1
+    assert b"| Renamed |" in raw

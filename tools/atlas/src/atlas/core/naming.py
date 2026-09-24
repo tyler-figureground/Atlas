@@ -21,7 +21,9 @@ def clean_name_part(s: str | None) -> str:
         return ""
     s = ILLEGAL.sub(" ", s.strip())
     s = WHITESPACE.sub(" ", s)
-    return s.strip().rstrip(".")
+    # Spaces and dots together: "Kitchen ." must not leave "Kitchen ", a
+    # trailing space Windows would silently drop from the folder it makes.
+    return s.rstrip(" .").strip()
 
 
 def build_folder_name(created: date, name: str, desc: str = "") -> str:

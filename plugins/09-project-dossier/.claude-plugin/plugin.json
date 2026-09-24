@@ -1,6 +1,6 @@
 {
   "name": "09-project-dossier",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Project dossier and decision records — persistent per-project facts (PROJECT.md, with a YAML front-matter machine contract that Norma and other skills read) and ADR-style decision capture (decisions/), maintained by skills across the studio.",
   "author": {
     "name": "ALPA",

@@ -712,3 +712,72 @@ def test_loaded_address_uses_mailing_address_validation(fixture_drive):
         load_contacts(fixture_drive)
 
     assert store.read_bytes() == before
+
+
+def _store_with_unknown_fields(fixture_drive):
+    ada = add_contact(
+        fixture_drive,
+        ContactDraft(
+            first_name="Ada",
+            last_name="Lovelace",
+            email="ada@example.com",
+            address={
+                "street": "123 Broadway",
+                "city": "Oakland",
+                "state": "CA",
+                "postal_code": "94607",
+            },
+        ),
+    )
+    store = fixture_drive / "_tools" / "billing-contacts.json"
+    payload = json.loads(store.read_text(encoding="utf-8"))
+    payload["_note"] = "maintained by the office manager"
+    payload["contacts"][0]["title"] = "Principal"
+    payload["contacts"][0]["notes"] = {"since": 2019}
+    payload["contacts"][0]["address"]["attention"] = "Accounts"
+    store.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+    return ada, store
+
+
+def test_unrelated_add_keeps_unknown_directory_and_contact_fields(fixture_drive):
+    # The directory is shared: a newer Atlas on another workstation may add a
+    # field this build does not know. Writing must not strip it.
+    _, store = _store_with_unknown_fields(fixture_drive)
+
+    add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Bob", last_name="Builder", email="bob@example.com"),
+    )
+
+    payload = json.loads(store.read_text(encoding="utf-8"))
+    assert payload["_note"] == "maintained by the office manager"
+    ada = next(item for item in payload["contacts"] if item["email"] == "ada@example.com")
+    assert ada["title"] == "Principal"
+    assert ada["notes"] == {"since": 2019}
+    assert ada["address"]["attention"] == "Accounts"
+
+
+def test_update_keeps_unknown_fields_of_the_edited_contact(fixture_drive):
+    ada, store = _store_with_unknown_fields(fixture_drive)
+
+    update_contact(
+        fixture_drive,
+        ada.id,
+        ContactDraft(
+            first_name="Ada",
+            last_name="King",
+            email="ada@example.com",
+            address={
+                "street": "123 Broadway",
+                "city": "Oakland",
+                "state": "CA",
+                "postal_code": "94607",
+            },
+        ),
+    )
+
+    payload = json.loads(store.read_text(encoding="utf-8"))
+    assert payload["_note"] == "maintained by the office manager"
+    edited = payload["contacts"][0]
+    assert (edited["lastName"], edited["title"]) == ("King", "Principal")
+    assert edited["address"]["attention"] == "Accounts"

@@ -54,7 +54,14 @@ from ..core.contacts import (
     update_contact,
 )
 from ..core.doctor import DriveReport, report_project
-from ..core.intake import IntakeError, ProjectAddress, ProjectIntake, ProjectUseCase, USE_CASES
+from ..core.intake import (
+    CONTROL_PATTERN,
+    IntakeError,
+    ProjectAddress,
+    ProjectIntake,
+    ProjectUseCase,
+    USE_CASES,
+)
 from ..core.mapfile import DriveMap, MapError, find_map, load_map
 from ..core.naming import (
     NamingError,
@@ -249,6 +256,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
         super().__init__()
         self._drive_root = drive_root
         self._contacts: tuple[Contact, ...] = ()
+        self._opened_updated_at: str | None = None
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="dialog"):
@@ -297,6 +305,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
         if contact is None:
             self.query_one("#manager-error", Static).update("Contact is no longer available.")
             return
+        self._opened_updated_at = contact.updated_at
         address = contact.address or {}
         values = {
             "manager-first": contact.first_name,
@@ -347,6 +356,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
                     company=self.query_one("#manager-company", Input).value,
                     address=address,
                 ),
+                expected_updated_at=self._opened_updated_at,
             )
         except ContactError as error:
             self.query_one("#manager-error", Static).update(str(error))
@@ -551,6 +561,10 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             )
             if not self.query_one("#name", Input).value.strip():
                 raise IntakeError("Project Name is required")
+            if CONTROL_PATTERN.search(self.query_one("#name", Input).value.strip()) or (
+                CONTROL_PATTERN.search(self.query_one("#desc", Input).value.strip())
+            ):
+                raise IntakeError("Project Name and Description cannot contain control characters")
             return address, use_case
         except IntakeError as error:
             self.query_one("#project-error", Static).update(str(error))
@@ -605,6 +619,13 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             created=self._created,
         )
 
+    def _refuse_request(self, error: IntakeError) -> None:
+        """Back to project details with the reason inline; entries kept."""
+        self._show_step(1)
+        self._sync_project()
+        if not self.query_one("#next-project", Button).disabled:
+            self.query_one("#project-error", Static).update(str(error))
+
     def _show_step(self, step: int) -> None:
         self._step = step
         for number, name in ((1, "project"), (2, "contacts"), (3, "review")):
@@ -647,12 +668,20 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
         elif button_id == "back-project":
             self._show_step(1)
         elif button_id == "next-contacts":
-            self._show_review()
+            try:
+                self._show_review()
+            except IntakeError as error:
+                self._refuse_request(error)
+                return
             self._show_step(3)
         elif button_id == "back-contacts":
             self._show_step(2)
         elif button_id == "create-project":
-            request = self._request()
+            try:
+                request = self._request()
+            except IntakeError as error:
+                self._refuse_request(error)
+                return
             map_path = find_map(self._drive_root)
             if map_path is None:
                 self.query_one("#review-error", Static).update(
@@ -1864,7 +1893,9 @@ class AtlasApp(App):
             return
         project_path, folder_name = selected
         try:
-            record = load_project_record(project_path)
+            record = load_project_record(
+                project_path, project_file=self._inventory.map.project_file
+            )
         except ProjectDataError as error:
             self.notify(str(error), title="Cannot edit project", severity="error", timeout=10)
             return
@@ -1875,7 +1906,13 @@ class AtlasApp(App):
             if result is None:
                 return
             try:
-                plan = preview_project_update(root, project_path, result.intake)
+                plan = preview_project_update(
+                    root,
+                    project_path,
+                    result.intake,
+                    expected_digest=record.source_digest,
+                    project_file=drive_map.project_file,
+                )
             except ProjectDataError as error:
                 self.notify(str(error), title="Cannot preview project edit", severity="error", timeout=10)
                 return
@@ -1896,6 +1933,7 @@ class AtlasApp(App):
                             f"Previous folder: {updated.old_path}",
                             f"Current folder: {updated.path}",
                             "PROJECT.md and project index updated.",
+                            *(f"Warning: {warning}" for warning in updated.warnings),
                         ),
                     )
 
