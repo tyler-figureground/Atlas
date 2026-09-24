@@ -143,6 +143,30 @@ async def test_enter_in_a_modal_never_commits_an_armed_repair(fixture_drive):
     assert (fixture_drive / "260813_Fixit" / "Meetings").is_dir(), "the repair behind the modal ran"
 
 
+# ------------------------------------------------ launching on a drive (#53)
+
+
+def test_atlas_drive_opens_the_console_on_that_drive(fixture_drive, monkeypatch):
+    """The drive picker says "launch with --drive" when it finds nothing. That
+    has to be a real flag on bare `atlas`, not only on the subcommands."""
+    import atlas.tui.app as tui_app
+    from atlas.cli import main
+
+    opened = []
+    monkeypatch.setattr(tui_app, "run_tui", lambda drive=None: opened.append(drive) or 0)
+
+    assert main(["--drive", str(fixture_drive)]) == 0
+    assert opened == [fixture_drive]
+    assert main([]) == 0
+    assert opened[-1] is None
+
+
+def test_a_subcommand_drive_is_not_taken_for_the_console_drive(fixture_drive, capsys):
+    from atlas.cli import main
+
+    assert main(["lint", "--drive", str(fixture_drive)]) in (0, 1)
+
+
 # ------------------------------------------------ focus never lands hidden (#11)
 
 

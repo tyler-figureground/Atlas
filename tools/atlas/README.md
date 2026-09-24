@@ -14,7 +14,7 @@ leaves conflicts in place. Clean removes file-empty folders only.
 
 | Command | Does |
 |---|---|
-| `atlas` | Interactive operations console: inspect, filter, sort, create, clean, and conform |
+| `atlas [--drive D]` | Interactive operations console: inspect, filter, sort, create, clean, and conform. `--drive` skips the drive picker |
 | `atlas doctor [--drive D] [--json]` | Drive-wide read-only conformance report |
 | `atlas lint [--drive D] [--json]` | Validate the map file itself |
 | `atlas new --name NAME --street STREET --city CITY --state ST --zip ZIP --use-case USE_CASE --billing-contact ID_OR_EMAIL [...]` | Create a complete mapped project |

@@ -806,6 +806,10 @@ def cmd_conform(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="atlas", description="Map-driven studio drive tooling.")
     parser.add_argument("--version", action="version", version=f"atlas {__version__}")
+    # The console's own drive. A separate dest: a subcommand's --drive default
+    # would otherwise overwrite it in the shared namespace.
+    parser.add_argument("--drive", dest="console_drive", metavar="DRIVE",
+                        help="open the console on this drive root instead of the drive picker")
     sub = parser.add_subparsers(dest="command")
 
     for name, fn, help_text in (
@@ -953,7 +957,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command is None:
         from .tui.app import run_tui  # lazy: textual import only when needed
-        return run_tui()
+        drive = _resolve_drive(args.console_drive) if args.console_drive else None
+        return run_tui(drive)
     try:
         return args.fn(args)
     except (ContactError, IntakeError, OpsError, ProjectDataError) as error:
