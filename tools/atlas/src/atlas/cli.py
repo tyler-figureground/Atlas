@@ -382,6 +382,7 @@ def cmd_contacts_edit(args: argparse.Namespace) -> int:
             company=args.company if args.company is not None else current.company,
             address=address,
         ),
+        expected_updated_at=current.updated_at,
     )
     if args.json:
         print(json.dumps(_contact_to_dict(updated), ensure_ascii=False))
@@ -609,7 +610,9 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         description=args.desc if args.desc is not None else current.description,
         created=current.created,
     )
-    plan = preview_project_update(root, project, intake)
+    plan = preview_project_update(
+        root, project, intake, expected_digest=record.source_digest
+    )
     if args.dry_run:
         if args.json:
             print(json.dumps(_project_update_plan_to_dict(plan), ensure_ascii=False))

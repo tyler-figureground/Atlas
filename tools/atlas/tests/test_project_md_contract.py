@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from atlas.core.contacts import ContactDraft, ContactError, add_contact
-from atlas.core.intake import IntakeError, ProjectAddress
+from atlas.core.intake import IntakeError, ProjectAddress, ProjectUseCase
 from atlas.core.mapfile import load_map
 from atlas.core.ops import new_project
 from atlas.core.project_data import (
@@ -534,3 +534,49 @@ def test_dossier_written_from_the_skill_template_round_trips_an_edit(fixture_dri
     again = load_project_record(result.path)
     assert again.intake.project_name == "Oak House Annex"
     assert again.intake.project_address.unit == "Unit 2"
+
+
+# ---------------------------------------------------------------- #31 open-time staleness
+
+
+def test_preview_refuses_a_dossier_changed_since_the_form_opened(fixture_drive):
+    _, _, project = _project(fixture_drive)
+    opened = load_project_record(project)
+    # Claude fixes the name and unit while the operator edits the use case.
+    _replace_line(project, b"project:", b'project: "Oak Street Residence"')
+    concurrent = (project / "PROJECT.md").read_bytes()
+
+    with pytest.raises(ProjectDataError, match="changed since you opened it"):
+        preview_project_update(
+            fixture_drive,
+            project,
+            replace(opened.intake, project_use_case=ProjectUseCase("Addition")),
+            expected_digest=opened.source_digest,
+        )
+
+    assert (project / "PROJECT.md").read_bytes() == concurrent
+
+
+def test_contact_update_refuses_a_change_made_since_the_form_opened(fixture_drive):
+    from atlas.core.contacts import load_contacts, update_contact
+
+    ada = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com"),
+    )
+    update_contact(
+        fixture_drive,
+        ada.id,
+        ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com", phone="510 555 0100"),
+    )
+
+    with pytest.raises(ContactError, match="changed since you opened"):
+        update_contact(
+            fixture_drive,
+            ada.id,
+            ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com", company="Engines"),
+            expected_updated_at=ada.updated_at,
+        )
+
+    stored = load_contacts(fixture_drive).contacts[0]
+    assert (stored.phone, stored.company) == ("510 555 0100", None)

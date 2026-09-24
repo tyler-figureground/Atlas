@@ -530,12 +530,27 @@ def _contact_snapshot(contact: Contact) -> ContactSnapshot:
 
 
 def preview_project_update(
-    drive_root: Path, project_path: Path, intake: ProjectIntake
+    drive_root: Path,
+    project_path: Path,
+    intake: ProjectIntake,
+    *,
+    expected_digest: str | None = None,
 ) -> ProjectUpdatePlan:
-    """Validate an edit and return its deterministic, non-mutating plan."""
+    """Validate an edit and return its deterministic, non-mutating plan.
+
+    ``expected_digest`` is the ``source_digest`` of the record the edit form
+    was filled from. Without it, whatever changed while the operator typed
+    would be read here, baked into the plan, and overwritten by the form's
+    stale values.
+    """
 
     root = Path(drive_root).resolve(strict=True)
     record = load_project_record(project_path)
+    if expected_digest is not None and record.source_digest != expected_digest:
+        raise ProjectDataError(
+            f"{record.path / 'PROJECT.md'} changed since you opened it; "
+            "reload the project and make your edit again"
+        )
     old_path = record.path.resolve(strict=True)
     if old_path.parent != root:
         raise ProjectDataError(f"project folder must be a direct child of drive root: {old_path}")

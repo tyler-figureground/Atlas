@@ -578,8 +578,19 @@ def add_contact(drive_root: Path, draft: ContactDraft) -> Contact:
     raise AssertionError("unreachable")
 
 
-def update_contact(drive_root: Path, contact_id: str, draft: ContactDraft) -> Contact:
-    """Replace one contact's editable fields while preserving its identity."""
+def update_contact(
+    drive_root: Path,
+    contact_id: str,
+    draft: ContactDraft,
+    *,
+    expected_updated_at: str | None = None,
+) -> Contact:
+    """Replace one contact's editable fields while preserving its identity.
+
+    ``expected_updated_at`` is the contact's ``updated_at`` when the edit form
+    was filled. When the stored contact has moved on since, the update is
+    refused rather than reverting another operator's change.
+    """
     values = _validate_draft(draft)
 
     path = Path(drive_root) / "_tools" / "billing-contacts.json"
@@ -596,6 +607,11 @@ def update_contact(drive_root: Path, contact_id: str, draft: ContactDraft) -> Co
                 raise ContactError(
                     f"contact ID not found: {contact_id!r}. Choose an existing contact ID; "
                     "file not changed."
+                )
+            if expected_updated_at is not None and current.updated_at != expected_updated_at:
+                raise ContactError(
+                    f"{current.first_name} {current.last_name} changed since you opened "
+                    "the contact; reload it and make your edit again. File not changed."
                 )
             existing = next(
                 (

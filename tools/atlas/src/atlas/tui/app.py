@@ -256,6 +256,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
         super().__init__()
         self._drive_root = drive_root
         self._contacts: tuple[Contact, ...] = ()
+        self._opened_updated_at: str | None = None
 
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="dialog"):
@@ -304,6 +305,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
         if contact is None:
             self.query_one("#manager-error", Static).update("Contact is no longer available.")
             return
+        self._opened_updated_at = contact.updated_at
         address = contact.address or {}
         values = {
             "manager-first": contact.first_name,
@@ -354,6 +356,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
                     company=self.query_one("#manager-company", Input).value,
                     address=address,
                 ),
+                expected_updated_at=self._opened_updated_at,
             )
         except ContactError as error:
             self.query_one("#manager-error", Static).update(str(error))
@@ -1901,7 +1904,9 @@ class AtlasApp(App):
             if result is None:
                 return
             try:
-                plan = preview_project_update(root, project_path, result.intake)
+                plan = preview_project_update(
+                    root, project_path, result.intake, expected_digest=record.source_digest
+                )
             except ProjectDataError as error:
                 self.notify(str(error), title="Cannot preview project edit", severity="error", timeout=10)
                 return

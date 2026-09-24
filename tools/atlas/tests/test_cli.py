@@ -503,6 +503,35 @@ def test_project_edit_interactive_keeps_contacts_by_id_not_snapshot_email(
     assert record.client_contact.full_name == "Ada Lovelace"
 
 
+def test_project_edit_interactive_refuses_a_dossier_changed_while_prompting(
+    fixture_drive, capsys, monkeypatch
+):
+    ada = _add_contact(fixture_drive, capsys)
+    created = _new_project(fixture_drive, capsys, ada["id"])
+    dossier = fixture_drive / created["created"] / "PROJECT.md"
+    concurrent = []
+
+    def answer(prompt):
+        if prompt.startswith("Description") and not concurrent:
+            # Claude fixes the name while the operator is at the prompts.
+            dossier.write_bytes(
+                dossier.read_bytes().replace(
+                    b'project: "Oak House"', b'project: "Oak Street Residence"'
+                )
+            )
+            concurrent.append(dossier.read_bytes())
+        return ""
+
+    monkeypatch.setattr("builtins.input", answer)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    status = main(["project", "edit", created["created"], "--drive", str(fixture_drive)])
+
+    assert status == 2
+    assert "changed since you opened it" in capsys.readouterr().err
+    assert dossier.read_bytes() == concurrent[0]
+
+
 def test_contacts_edit_flags_without_yes_never_prompt_or_write(
     fixture_drive, capsys, monkeypatch
 ):
