@@ -19,7 +19,7 @@ from textual.widgets import Tree
 from textual.widgets.tree import TreeNode as TreeNodeWidget
 
 from ..core.conform import parent_key
-from ..core.scan import READ
+from ..core.scan import READ, UNREADABLE
 from ..core.tree import ProjectTree, TreeNode
 from . import tokens
 
@@ -229,6 +229,14 @@ class ProjectTreeView(Tree):
             node = (parent.add(child.name, data=child.key) if child.is_dir
                     else parent.add_leaf(child.name, data=child.key))
             self._by_key[child.key] = node
+        if not key and not parent.children and self.source.load_state("") == UNREADABLE:
+            # The root is hidden, so an unreadable project would draw nothing -
+            # the same blank as an empty one (ADR 0004). A row says which it is.
+            # No data and no facts: it is not a node, and nothing acts on it.
+            parent.add_leaf(Text(f"{tokens.load_style(UNREADABLE).suffix}  "
+                                 f"{tokens.load_style(UNREADABLE).label} - "
+                                 "Atlas could not list this project folder",
+                                 style=tokens.PALETTE.muted))
         self._refresh_facts(key)
         if self._pending_key is not None and self._pending_key in self._by_key:
             self.select_key(self._pending_key)

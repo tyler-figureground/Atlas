@@ -297,6 +297,45 @@ def test_the_confirm_line_is_measured_in_cells_not_characters():
     assert line.endswith("Enter confirm  Esc cancel")
 
 
+# ------------------------------------- an unreadable project root (#13, the tree)
+
+
+async def test_an_unreadable_project_root_draws_a_row_saying_so(fixture_drive, monkeypatch):
+    """With the root hidden, an unreadable project drew nothing at all - the
+    same blank as an empty one. ADR 0004: unreadable never reads as empty."""
+    from textual.app import App
+
+    import atlas.core.tree as core_tree
+    from atlas.core.doctor import report_project
+    from atlas.core.scan import UNREADABLE, Listing, scan_drive
+    from atlas.core.tree import open_project_tree
+
+    project = make_project(fixture_drive, "260813_Locked", sections=["01 Model"])
+    inventory = scan_drive(fixture_drive)
+    inv = next(p for p in inventory.projects if p.name == "260813_Locked")
+    source = open_project_tree(inv, inventory.map, report_project(inv, inventory.map))
+    real = core_tree.list_entries
+    monkeypatch.setattr(
+        core_tree, "list_entries",
+        lambda path: Listing(UNREADABLE, error="Access is denied") if path == project
+        else real(path))
+
+    class Harness(App):
+        def compose(self):
+            yield ProjectTreeView(id="tree")
+
+        def on_mount(self):
+            self.query_one(ProjectTreeView).set_source(source)
+
+    app = Harness()
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        tree = app.query_one(ProjectTreeView)
+        rows = [str(node.label) for node in tree.root.children]
+        assert len(rows) == 1 and "cannot read" in rows[0], rows
+        assert tree.selected_facts() is None, "the placeholder is not a node to repair"
+
+
 # ------------------------------------------------------------- resize (#18)
 
 
