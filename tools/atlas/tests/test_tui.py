@@ -16,6 +16,7 @@ from atlas.core.ops import new_project
 from textual.widgets import Button, DataTable, Input, ListView, Select, SelectionList, Static
 
 from atlas.tui.app import (
+    AddContactModal,
     AddSectionModal,
     AtlasApp,
     ConfirmListModal,
@@ -33,6 +34,29 @@ async def settle(app: AtlasApp, pilot) -> None:
     for _ in range(3):
         await app.workers.wait_for_complete()
         await pilot.pause()
+
+
+async def wait_for(app: AtlasApp, pilot, predicate, *, rounds: int = 100) -> None:
+    """Pause until ``predicate()`` holds. A fixed number of pauses is what made
+    the wizard tests flaky under load: a pushed modal can be the active screen
+    before its on_mount has filled its Selects, and a button's handler runs a
+    message later than the press. Waiting on the state itself does not race."""
+    for _ in range(rounds):
+        try:
+            if predicate():
+                return
+        except Exception:  # noqa: BLE001 - the widget may not be mounted yet
+            pass
+        await app.workers.wait_for_complete()
+        await pilot.pause(0.01)
+    raise AssertionError("condition never held")
+
+
+def modal_ready(app: AtlasApp, cls, focused_id: str):
+    """The modal is on top and has run on_mount - which ends by focusing its
+    first field, so focus is the proof."""
+    return lambda: (isinstance(app.screen, cls)
+                    and getattr(app.screen.focused, "id", None) == focused_id)
 
 
 async def test_tui_boots_and_lists_projects(fixture_drive):
@@ -300,9 +324,12 @@ async def test_add_contact_duplicate_email_requires_explicit_choice(fixture_driv
     async with app.run_test() as pilot:
         await settle(app, pilot)
         await pilot.press("n")
+        # Not a bare pause: the Selects are filled in on_mount, and a value set
+        # before that is thrown away (the flake this test used to have).
+        await wait_for(app, pilot, modal_ready(app, NewProjectModal, "name"))
         app.screen.query_one("#use-case", Select).value = "Renovation"
         app.screen.query_one("#billing-contact", Select).value = NewProjectModal.ADD_NEW
-        await pilot.pause()
+        await wait_for(app, pilot, modal_ready(app, AddContactModal, "contact-first"))
         for field, value in (
             ("#contact-first", "Wrong"),
             ("#contact-last", "Person"),
@@ -310,7 +337,8 @@ async def test_add_contact_duplicate_email_requires_explicit_choice(fixture_driv
         ):
             app.screen.query_one(field, Input).value = value
         app.screen.query_one("#add-contact-ok", Button).press()
-        await pilot.pause()
+        await wait_for(app, pilot, lambda: str(
+            app.screen.query_one("#contact-error", Static).content))
         error = str(app.screen.query_one("#contact-error", Static).content)
         assert "already belongs to Ada Lovelace" in error
         assert app.screen.query_one("#contact-first", Input).value == "Wrong"
@@ -570,6 +598,8 @@ async def test_new_project_refuses_changed_drive_map(fixture_drive):
     async with app.run_test() as pilot:
         await settle(app, pilot)
         await pilot.press("n")
+        await wait_for(app, pilot, modal_ready(app, NewProjectModal, "name"))
+        wizard = app.screen
         for field, value in (
             ("#name", "Changed Map"),
             ("#street", "100 Changed Street"),
@@ -577,29 +607,32 @@ async def test_new_project_refuses_changed_drive_map(fixture_drive):
             ("#state", "CA"),
             ("#postal-code", "94612"),
         ):
-            app.screen.query_one(field, Input).value = value
-        app.screen.query_one("#use-case", Select).value = "Renovation"
-        await pilot.pause()
-        app.screen.query_one("#next-project", Button).press()
-        await pilot.pause()
-        app.screen.query_one("#billing-contact", Select).value = contact.id
-        await pilot.pause()
-        app.screen.query_one("#next-contacts", Button).press()
-        await pilot.pause()
+            wizard.query_one(field, Input).value = value
+        wizard.query_one("#use-case", Select).value = "Renovation"
+        await wait_for(app, pilot, lambda: not wizard.query_one("#next-project", Button).disabled)
+        wizard.query_one("#next-project", Button).press()
+        await wait_for(app, pilot, lambda: wizard.query_one("#step-contacts").display)
+        wizard.query_one("#billing-contact", Select).value = contact.id
+        await wait_for(app, pilot, lambda: not wizard.query_one("#next-contacts", Button).disabled)
+        wizard.query_one("#next-contacts", Button).press()
+        await wait_for(app, pilot, lambda: wizard.query_one("#step-review").display)
         changed_map = copy.deepcopy(FIXTURE_MAP)
         changed_map["version"] = "2.1"
         write_map(fixture_drive, changed_map)
-        app.screen.query_one("#create-project", Button).press()
-        await settle(app, pilot)
+        wizard.query_one("#create-project", Button).press()
+        await wait_for(app, pilot, lambda: "Drive map changed" in str(
+            wizard.query_one("#review-error", Static).render()))
 
-        assert isinstance(app.screen, NewProjectModal)
-        assert "Drive map changed" in str(app.screen.query_one("#review-error", Static).render())
-        assert app.screen.query_one("#name", Input).value == "Changed Map"
+        assert app.screen is wizard
+        assert wizard.query_one("#name", Input).value == "Changed Map"
         assert not any("100 Changed Street" in path.name for path in fixture_drive.iterdir())
 
-        app.screen.query_one("#create-project", Button).press()
+        wizard.query_one("#create-project", Button).press()
+        # Waited on the result, not on a count of pauses: the create runs in a
+        # worker scheduled by the modal's dismiss callback, a message later.
+        await wait_for(app, pilot, lambda: any(
+            "100 Changed Street" in path.name for path in fixture_drive.iterdir()))
         await settle(app, pilot)
-        assert any("100 Changed Street" in path.name for path in fixture_drive.iterdir())
 
 
 async def test_marked_projects_share_one_safe_conform_plan(fixture_drive):
