@@ -24,6 +24,7 @@ leaves conflicts in place. Clean removes file-empty folders only.
 | `atlas project edit FOLDER [--yes] [...]` | Edit project intake; safely preview/confirm folder rename |
 | `atlas add --project NAME --section SECTION` | Add map-approved project folders |
 | `atlas clean --project NAME [--apply]` | Preview or remove empty folders |
+| `atlas tree NAME [--depth N] [--json]` | One project's folders and files below the root: Filing State, Load State, child counts, and unmet Expectations as a separate list. Read-only |
 | `atlas conform --project NAME [--apply]` | Preview or apply mapped repairs |
 | `atlas conform --project NAME --node PATH [--apply]` | Preview or apply the repair for one node, by project-relative path |
 | `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
@@ -114,7 +115,7 @@ CLI edit commands are interactive when run in a terminal. Omitted fields retain 
 
 Atlas has not been validated with assistive technology and makes no accessibility conformance claim. Textual's screen-reader support is unresolved upstream ([textual#2425](https://github.com/Textualize/textual/issues/2425)), so the console should not be assumed usable with a screen reader.
 
-Every capability that writes, and every fact the console can show, is also reachable from the CLI with `--json`. That path is plain text and is the supported one for automation - and for anyone the console does not serve.
+Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `conform --node` for a single repair, `conform --revert` for undo. Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
 
 Within the console, colour reinforces a distinction and never carries one alone. A folder or file with something wrong with it names what is wrong in words; when the terminal is too narrow for the full phrase the word abbreviates - `NAME`, `PLACE`, `LOOSE`, `UNMAPPED` - rather than leaving the glyph and its colour to say it.
 

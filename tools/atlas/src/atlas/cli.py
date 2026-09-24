@@ -56,12 +56,17 @@ from .core.project_data import (
 )
 from .core.scan import (
     DEFAULT_MOUNT_ROOT,
+    READ,
+    UNREADABLE,
+    ProjectInventory,
     discover_drives,
     exists_exact,
     is_project_dir,
     list_entries,
     scan_drive,
 )
+from .core.tree import MAPPED, TreeNode, open_project_tree
+from .tui.tokens import filing_style  # the Fault Words; pure data, no Textual
 
 
 class UsageError(Exception):
@@ -753,6 +758,84 @@ def cmd_clean(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tree(args: argparse.Namespace) -> int:
+    """The tree's facts: Filing State and Load State below the project root.
+
+    A thin wrapper over ``core.tree`` (ticket 24, ADR 0008) - the TUI's seam
+    with a second consumer that is not a widget. ``--depth`` is the cost
+    control the TUI gets from lazy expansion: one enumeration per folder read,
+    never a walk. A folder at the last level is left Unread and carries no
+    counts, because an unread count is not zero.
+    """
+    if args.depth < 1:
+        raise UsageError("--depth must be 1 or more")
+    root = _resolve_drive(args.drive)
+    m = load_map(find_map(root))
+    project = _resolve_project(root, args.project)
+    inv = ProjectInventory(path=project, name=project.name, root_entries=list_entries(project))
+    tree = open_project_tree(inv, m, report_project(inv, m))
+
+    # Read first, describe after: a folder's own Load State and counts change
+    # once its children are read, and ``children`` hands out values.
+    # Level k's listings give the nodes shown at depth k-1 their counts, so
+    # --depth N reads N levels and shows N; the deepest shown stay Unread.
+    level = [""]
+    for _ in range(args.depth):
+        level = [n.key for key in level for n in tree.children(key)
+                 if n.is_dir and tree.load_state(n.key) != UNREADABLE]
+    outline: list[tuple[int, TreeNode]] = []
+
+    def describe(key: str, depth: int) -> None:
+        for node in tree.children(key):
+            outline.append((depth, node))
+            if node.is_dir and depth + 1 < args.depth and node.load == READ:
+                describe(node.key, depth + 1)
+
+    describe("", 0)
+    unmet = tree.expectations()
+    root_load = tree.load_state("")
+    findings = (root_load != READ or unmet
+                or any(n.filing != MAPPED or n.load == UNREADABLE for _d, n in outline))
+
+    if args.json:
+        nodes = {}
+        for _depth, node in outline:
+            facts: dict[str, object] = {"name": node.name, "is_dir": node.is_dir,
+                                        "filing": node.filing}
+            if node.is_dir:
+                facts["load"] = node.load
+                if node.load == READ:
+                    facts["folders"] = node.folders
+                    facts["files"] = node.files
+            nodes[node.key] = facts
+        print(json.dumps({
+            "drive": m.drive, "project": project.name, "depth": args.depth,
+            "load": root_load, "nodes": nodes,
+            "expectations": [{"path": e.path, "kind": e.kind, "repairable": e.repairable}
+                             for e in unmet],
+        }, indent=2))
+        return 1 if findings else 0
+
+    print(f"{project.name}" + ("" if root_load == READ else f"  [{root_load}]"))
+    for depth, node in outline:
+        name = f"{node.name}/" if node.is_dir else node.name
+        facts = []
+        if node.filing != MAPPED:
+            facts.append(filing_style(node.filing).label)
+        if node.is_dir and node.load == READ:
+            facts.append(f"{node.folders} folders, {node.files} files")
+        elif node.is_dir and node.load == UNREADABLE:
+            facts.append("cannot read")
+        detail = f"  ({'; '.join(facts)})" if facts else ""
+        print(f"{'  ' * (depth + 1)}{name}{detail}")
+    if unmet:
+        print("\nmissing:")
+        for e in unmet:
+            repair = "  (conform can backfill)" if e.repairable else ""
+            print(f"  {e.path}{repair}")
+    return 1 if findings else 0
+
+
 def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
     """Undo an applied conform from the manifest it printed.
 
@@ -973,11 +1056,19 @@ def main(argv: list[str] | None = None) -> int:
         ("add", cmd_add, "add blessed folders to a project"),
         ("clean", cmd_clean, "list/remove file-empty folders (rmdir-only; dry run by default)"),
         ("conform", cmd_conform, "plan/apply conformance: backfill, renames, relocations, sweeps"),
+        ("tree", cmd_tree, "one project's folders and files: Filing State, Load State, "
+                           "unmet Expectations (read-only)"),
     ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--drive", help="drive root (default: walk up from cwd, else auto-discover)")
         p.add_argument("--json", action="store_true", help="machine-readable output")
         p.set_defaults(fn=fn)
+
+    sub.choices["tree"].add_argument("project", help="project folder name")
+    sub.choices["tree"].add_argument(
+        "--depth", type=int, default=1,
+        help="levels to read below the project root (default 1). Each level is one "
+             "enumeration per folder; the deepest level shown stays Unread")
 
     contacts = sub.add_parser("contacts", help="list, add, and edit shared contacts")
     contact_commands = contacts.add_subparsers(dest="contacts_command", required=True)
