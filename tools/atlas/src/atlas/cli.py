@@ -13,6 +13,7 @@ from pathlib import Path
 from . import __version__
 from .core.conform import (
     NotInvertible,
+    Plan,
     action_to_dict,
     apply_plan,
     build_plan,
@@ -133,7 +134,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
               f"{counts['conform']} conform / {counts['drift']} drift / "
               f"{counts['unfiled']} unfiled / {counts['stub']} stub")
         for p in report.projects:
-            print(f"\n[{p.status.upper():7}] {p.name}  ({p.sections_present} sections)")
+            sections = (f"{p.sections_present} sections" if p.root_readable
+                        else "sections unknown")
+            print(f"\n[{p.status.upper():7}] {p.name}  ({sections})")
             for item in p.missing_control_plane:
                 print(f"    control-plane missing: {item}")
             for src, dst in p.drift:
@@ -813,8 +816,16 @@ def cmd_conform(args: argparse.Namespace) -> int:
     # What conform cannot repair but doctor still reports: only a person can
     # decide where an Unfiled item belongs. Not "OK", and not exit 0.
     leftovers: dict[str, int] = {}
+    # Projects, or parts of them, Atlas could not read. Never repaired - what
+    # cannot be read cannot be planned - and never reported as fine.
+    unread: dict[str, tuple[str, ...]] = {}
     for inv in targets:
         report = report_project(inv, m)
+        if report.unreadable:
+            unread[inv.name] = report.unreadable
+        if not report.root_readable:
+            results.append(Plan(project=inv.name, actions=()))
+            continue
         if not args.node and report.unfiled:
             leftovers[inv.name] = len(report.unfiled)
         if args.node:
@@ -845,8 +856,12 @@ def cmd_conform(args: argparse.Namespace) -> int:
     else:
         for plan in results:
             left = leftovers.get(plan.project, 0)
+            cannot = unread.get(plan.project, ())
             if plan.empty:
-                if args.node:
+                if cannot:
+                    print(f"[REVIEW ] {plan.project}: cannot read {cannot[0]}; "
+                          f"nothing changed")
+                elif args.node:
                     print(f"[OK     ] {plan.project}: {args.node} needs no repair")
                 elif left:
                     print(f"[REVIEW ] {plan.project}: nothing Atlas can repair; "
@@ -864,12 +879,14 @@ def cmd_conform(args: argparse.Namespace) -> int:
                 print(f"    {a.kind:9} {src}{a.dst}{files}{status}{note}{warning}")
             if left:
                 print(f"    {left} unfiled item(s) need a person")
+            for line in cannot:
+                print(f"    cannot read: {line}")
         if not args.apply and pending:
             print("\n(dry run - pass --apply to perform)")
     if args.apply:
         conflicts = any(a.status == "conflict" for plan in results for a in plan.actions)
-        return 1 if conflicts or leftovers else 0
-    return 1 if pending or leftovers else 0
+        return 1 if conflicts or leftovers or unread else 0
+    return 1 if pending or leftovers or unread else 0
 
 
 def _utf8_streams() -> None:

@@ -181,12 +181,21 @@ class ProjectTree:
         """
         unmet = [Expectation(path=item, kind=CONTROL_PLANE)
                  for item in self.report.missing_control_plane]
-        present = {e.name for e in self._listing("") if e.is_dir}
+        root = self._listing("")
+        if not root.readable:
+            # Nothing is known to be missing from a folder Atlas could not
+            # read; listing every section as unmet would draw an unreadable
+            # project exactly like an empty one (ADR 0004).
+            return tuple(sorted(unmet, key=lambda e: e.path))
+        present = {e.name for e in root if e.is_dir}
         for section in self.drive_map.sections:
             if section.id not in present:
                 unmet.append(Expectation(path=section.id, kind=SECTION))
                 continue
-            here = {e.name for e in self._listing(section.id)}
+            listing = self._listing(section.id)
+            if not listing.readable:
+                continue    # the tree row itself says "cannot read"
+            here = {e.name for e in listing}
             unmet.extend(
                 Expectation(path=f"{section.id}/{child}", kind=SECTION)
                 for child in section.children if child not in here

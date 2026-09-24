@@ -1239,7 +1239,8 @@ class AtlasApp(App):
                 Text(row.health, style=STATUS_STYLES.get(row.health, "bold")),
                 row.report.name,
                 row.sections,
-                str(row.fixes) if row.fixes else "-",
+                ("?" if not row.report.root_readable
+                 else str(row.fixes) if row.fixes else "-"),
                 str(row.review) if row.review else "-",
                 key=row.key,
             )

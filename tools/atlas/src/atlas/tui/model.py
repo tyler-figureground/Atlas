@@ -54,7 +54,9 @@ class ProjectRow:
 
     @property
     def sections(self) -> str:
-        return f"{self.report.sections_present}/{self.section_total}"
+        # Never a zero for a project Atlas could not read (ticket 13).
+        present = self.report.sections_present if self.report.root_readable else "?"
+        return f"{present}/{self.section_total}"
 
     @property
     def search_text(self) -> str:
