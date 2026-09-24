@@ -89,3 +89,81 @@ def test_a_repair_never_removes_empty_folders_behind_a_junction(fixture_drive, t
     apply_plan(fixture_drive, inv.path, inventory.map, plan)
 
     assert skeleton.is_dir()
+
+
+# ------------------------------------------------- unreadable subfolders (#24)
+
+
+def _deny(monkeypatch, *names: str) -> None:
+    """Make any folder with one of these names refuse to list, as an icacls
+    deny or an over-long path on a machine without LongPathsEnabled does."""
+    real = os.scandir
+
+    def scandir(path="."):
+        if os.path.basename(os.fspath(path).rstrip("\\/")) in names:
+            raise PermissionError(13, "Access is denied", os.fspath(path))
+        return real(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+
+
+def _invoices_project(drive: Path) -> Path:
+    return make_project(
+        drive, "260601_Locked",
+        sections=["01 Model", "08 OUT/Invoices/Denied", "10 Legal"],
+        files={"08 OUT/Invoices/Denied/INV-1.pdf": "x",
+               "08 OUT/Invoices/Denied/INV-2.pdf": "y"},
+    )
+
+
+def test_doctor_never_counts_an_unreadable_subfolder_as_zero_files(fixture_drive, capsys, monkeypatch):
+    import json
+
+    _invoices_project(fixture_drive)
+    _deny(monkeypatch, "Denied")
+
+    assert main(["doctor", "--drive", str(fixture_drive), "--json"]) == 1
+    project = json.loads(capsys.readouterr().out)["projects"][0]
+    assert project["relocations"][0]["files"] is None
+    assert any("Denied" in line for line in project["unreadable"]), project["unreadable"]
+
+    assert main(["doctor", "--drive", str(fixture_drive)]) == 1
+    out = capsys.readouterr().out
+    assert "(0 files)" not in out
+    assert "Denied" in out, "text output names what it could not read"
+
+
+def test_conform_refuses_to_move_or_remove_a_source_it_cannot_fully_read(fixture_drive, capsys, monkeypatch):
+    """The empty-duplicate branch believed the source empty and rmdir'd it;
+    only rmdir refusing a non-empty folder stopped it, as a traceback."""
+    import json
+
+    project = _invoices_project(fixture_drive)
+    (project / "10 Legal" / "Invoices").mkdir()
+    _deny(monkeypatch, "Denied")
+
+    status = main(["conform", "--drive", str(fixture_drive), "--project", "260601_Locked",
+                   "--only", "relocate", "--apply", "--json"])
+    monkeypatch.undo()
+
+    assert status == 1
+    actions = [a for p in json.loads(capsys.readouterr().out) for a in p["actions"]]
+    relocate = next(a for a in actions if a["kind"] == "relocate")
+    assert relocate["status"] == "conflict"
+    assert "cannot read" in relocate["note"]
+    assert (project / "08 OUT" / "Invoices" / "Denied" / "INV-1.pdf").is_file()
+
+
+def test_walk_reports_what_it_could_not_read(tmp_path, monkeypatch):
+    from atlas.core.scan import tally_files
+
+    (tmp_path / "ok").mkdir()
+    (tmp_path / "ok" / "a.txt").write_text("a", encoding="utf-8")
+    (tmp_path / "Denied").mkdir()
+    (tmp_path / "Denied" / "b.txt").write_text("b", encoding="utf-8")
+    _deny(monkeypatch, "Denied")
+
+    tally = tally_files(tmp_path)
+    assert tally.files == 1
+    assert [rel for rel, _error in tally.unreadable] == ["Denied"]
+    assert not tally.known

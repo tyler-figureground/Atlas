@@ -42,7 +42,7 @@ from .projectmd import (
     with_agents_block,
     write_crlf_no_bom,
 )
-from .scan import ProjectInventory, list_entries, long_path, scan_drive, walk
+from .scan import ProjectInventory, list_entries, long_path, scan_drive, tally_files, walk
 
 # Action kinds, in apply order.
 BACKFILL = "backfill"
@@ -652,8 +652,9 @@ def _remove_if_file_empty(path: Path) -> bool:
     A link is content: its target lives elsewhere, and walking into a junction
     here once removed empty folders outside the project.
     """
-    levels = list(walk(path, topdown=False))
-    if any(files or links for _root, _dirs, files, links in levels):
+    errors: list[tuple[str, str]] = []
+    levels = list(walk(path, topdown=False, errors=errors))
+    if errors or any(files or links for _root, _dirs, files, links in levels):
         return False
     for root, dirs, _files, _links in levels:
         for d in dirs:
@@ -667,6 +668,14 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool) -> Act
     dst = project / action.dst
     if not src.is_dir():
         return replace(action, status=SKIPPED, note="source gone")
+
+    # A source with a folder Atlas cannot read is not known to be empty, and
+    # what cannot be seen cannot be accounted for in a manifest. Leave it.
+    tally = tally_files(src)
+    if not tally.known:
+        rel, _why = tally.unreadable[0]
+        where = action.src if rel == "." else f"{action.src}/{rel}"
+        return replace(action, status=CONFLICT, note=f"cannot read {where}; left in place")
 
     # Empty duplicate: the canonical home already owns the artifact class.
     if _remove_if_file_empty(src):

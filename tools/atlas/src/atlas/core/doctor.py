@@ -15,7 +15,7 @@ from pathlib import Path
 from .filerules import first_match
 from .mapfile import DriveMap
 from .projectmd import agents_block_current, is_claude_pointer
-from .scan import DriveInventory, ProjectInventory, long_path, count_files
+from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
 # Files tolerated at a project root without being flagged: OS noise plus the
 # PRD-209 time-ledger family, which is blessed control plane per the map note.
@@ -31,7 +31,8 @@ STATUS_STUB = "stub"
 class RelocationHit:
     source: str
     target: str
-    file_count: int
+    # None when part of the source could not be read: unknown, never zero.
+    file_count: int | None
 
 
 @dataclass(frozen=True)
@@ -177,6 +178,7 @@ def report_project(inv: ProjectInventory, m: DriveMap) -> ProjectReport:
     # relocations: dir sources that exist, glob sources matched at root.
     reloc_hits: list[RelocationHit] = []
     sweeps: list[tuple[str, str]] = []
+    unreadable: list[str] = []
     for src, dst in m.relocations.items():
         if "*" in src or "?" in src:
             for e in inv.root_entries:
@@ -184,8 +186,14 @@ def report_project(inv: ProjectInventory, m: DriveMap) -> ProjectReport:
                     sweeps.append((e.name, dst))
             continue
         if _dir_exists_exact(inv.path, src):
-            src_path = inv.path / src
-            reloc_hits.append(RelocationHit(source=src, target=dst, file_count=count_files(src_path)))
+            tally = tally_files(inv.path / src)
+            unreadable.extend(
+                f"{src}/{rel}  {why}" if rel != "." else f"{src}  {why}"
+                for rel, why in tally.unreadable
+            )
+            reloc_hits.append(RelocationHit(
+                source=src, target=dst,
+                file_count=tally.files if tally.known else None))
 
     # Unfiled: whatever the canon, control plane, pending actions, and
     # tolerated set do not explain.
@@ -217,9 +225,8 @@ def report_project(inv: ProjectInventory, m: DriveMap) -> ProjectReport:
         if e.name not in explained and e.name not in swept and not _tolerated(e.name)
     )
 
-    unreadable: list[str] = []
     if not inv.root_entries.readable:
-        unreadable.append(f".  {inv.root_entries.error}")
+        unreadable.insert(0, f".  {inv.root_entries.error}")
 
     if unreadable:
         # A person has to look. Never STUB - "no sections found" would claim we

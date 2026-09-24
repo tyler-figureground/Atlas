@@ -130,7 +130,8 @@ def project_detail(row: ProjectRow) -> str:
     fix_lines.extend(f"Backfill {name}" for name in report.missing_control_plane)
     fix_lines.extend(f"Rename {source} -> {target}" for source, target in report.drift)
     fix_lines.extend(
-        f"Move {hit.source} -> {hit.target} ({hit.file_count} files)"
+        f"Move {hit.source} -> {hit.target} "
+        + ("(files unknown)" if hit.file_count is None else f"({hit.file_count} files)")
         for hit in report.relocations
     )
     rules = dict(report.sweep_rules)

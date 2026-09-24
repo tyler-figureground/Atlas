@@ -221,3 +221,30 @@ def walk(top: Path | str, *, topdown: bool = True,
 def count_files(path: Path) -> int:
     """Recursive file count; never follows junctions/symlinks."""
     return sum(len(files) for _root, _dirs, files, _links in walk(path))
+
+
+@dataclass(frozen=True)
+class FileTally:
+    """A recursive file count and every folder it could not read on the way.
+
+    A count with a failure in it is a lower bound, not a number: "(0 files)"
+    over a folder Atlas could not list is the false negative ADR 0004 forbids.
+    ``unreadable`` holds ``(path relative to the tallied folder, reason)``.
+    """
+
+    files: int
+    unreadable: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def known(self) -> bool:
+        return not self.unreadable
+
+
+def tally_files(path: Path) -> FileTally:
+    """``count_files``, reporting what it could not read instead of hiding it."""
+    errors: list[tuple[str, str]] = []
+    total = sum(len(files) for _root, _dirs, files, _links in walk(path, errors=errors))
+    base = os.fspath(path)
+    return FileTally(files=total, unreadable=tuple(
+        (os.path.relpath(where, base).replace("\\", "/"), why) for where, why in errors
+    ))

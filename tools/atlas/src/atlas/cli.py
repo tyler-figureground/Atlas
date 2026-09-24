@@ -126,14 +126,18 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             for src, dst in p.drift:
                 print(f"    drift: {src} -> {dst}")
             for h in p.relocations:
-                print(f"    relocation pending: {h.source} -> {h.target} ({h.file_count} files)")
+                count = "files unknown" if h.file_count is None else f"{h.file_count} files"
+                print(f"    relocation pending: {h.source} -> {h.target} ({count})")
             rules = dict(p.sweep_rules)
             for name, dst in p.sweeps:
                 because = f" (rule: {rules[name]})" if name in rules else ""
                 print(f"    sweep pending: {name} -> {dst}{because}")
             for name in p.unfiled:
                 print(f"    unfiled: {name}")
-    pending = any(p.actionable or p.unfiled for p in report.projects)
+            for line in p.unreadable:
+                print(f"    cannot read: {line}")
+    # An unreadable folder is pending too: a person has to look (ADR 0004).
+    pending = any(p.actionable or p.unfiled or p.unreadable for p in report.projects)
     return 1 if pending else 0
 
 
