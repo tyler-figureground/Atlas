@@ -100,6 +100,7 @@ from .layout import (
 )
 from .model import ProjectRow, project_detail, project_rows, visible_rows
 from .repair import (
+    UndoEntry,
     UndoStack,
     confirm_line,
     confirms_inline,
@@ -122,6 +123,11 @@ class _ArmedRepair:
     plan: Plan
     guard: Guard
     node: str
+    # The Region it was armed from. A repair arms in the tree; an undo can arm
+    # from the list too, and Enter commits only where it was armed.
+    region: str = TREE
+    # Set when this is an undo: the stack entry it reverses.
+    undo: UndoEntry | None = None
 
 
 # What `#operation`'s `padding: 0 2` costs, in columns. Anything sized against
@@ -159,6 +165,9 @@ class OperationOutcome:
     lines: tuple[str, ...]
     severity: str = "information"
     marks_after: tuple[str, ...] | None = None
+    # Projects a project-wide conform wrote to. Their per-node undo history is
+    # dropped: the stack cannot describe what the conform did around it.
+    forget_undo: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -1507,6 +1516,8 @@ class AtlasApp(App):
         self._last_result = outcome
         if outcome.marks_after is not None:
             self._marked = set(outcome.marks_after)
+        for name in outcome.forget_undo:
+            self._undo.forget(name)
         self._set_operation(f"Last result: {outcome.summary} - press l for details", outcome.severity)
         self.notify(
             outcome.summary,
@@ -1778,6 +1789,7 @@ class AtlasApp(App):
                             lines=tuple(detail),
                             severity="warning",
                             marks_after=tuple(sorted(remaining)),
+                            forget_undo=tuple(names[:index]),
                         )
 
                     project_path = root / name
@@ -1798,6 +1810,7 @@ class AtlasApp(App):
                             lines=tuple(detail),
                             severity="error",
                             marks_after=tuple(sorted(remaining)),
+                            forget_undo=tuple(names[:index + 1]),
                         )
 
                     completed += 1
@@ -1831,6 +1844,7 @@ class AtlasApp(App):
                     lines=tuple(detail),
                     severity=severity,
                     marks_after=tuple(sorted(unresolved)),
+                    forget_undo=tuple(names),
                 )
 
             self._start_operation("Conforming marked projects", root, conform_batch)
@@ -2240,7 +2254,7 @@ class AtlasApp(App):
         armed = self._armed
         if armed is None or armed.project != self._workspace_project:
             return False
-        if self._focus_region != TREE or self.screen is not self.screen_stack[0]:
+        if self._focus_region != armed.region or self.screen is not self.screen_stack[0]:
             return False
         tree = self._trees.get(armed.project)
         return tree is not None and self.query_one(ProjectTreeView).source is tree
@@ -2253,15 +2267,18 @@ class AtlasApp(App):
         if armed is None or self._inventory is None:
             return
         self._apply_repair(armed.project, armed.plan, armed.guard, armed.node,
-                           remember=True)
+                           remember=armed.undo is None, undo=armed.undo)
 
     def action_undo(self) -> None:
-        """Put the last repair in this Project back.
+        """Offer to put the last repair in this Project back.
 
         One stack per Project, no redo (ADR 0006): undo restores the precondition
-        that offered the repair, so re-pressing the repair key is redo. The
-        inverse is guarded exactly as the repair was, which is what lets the
-        stack be optimistic rather than eagerly invalidated.
+        that offered the repair, so re-pressing the repair key is redo.
+
+        Undo is a write like any other (#7): it previews and waits for the
+        confirm, inline for one move and in the modal for a merge's several. Its
+        Guard was snapshotted when the repair applied (#6), and the entry leaves
+        the stack only once the undo has actually moved something.
         """
         if self._busy or self._showing != "projects" or self._inventory is None:
             return
@@ -2269,22 +2286,48 @@ class AtlasApp(App):
         row = self._selected_row()
         if row is None:
             return
-        inverse = self._undo.pop(row.key)
-        if inverse is None:
+        entry = self._undo.peek(row.key)
+        if entry is None:
             self._set_operation(f"Nothing to undo in {row.key}", "warning")
             return
+        inverse = entry.inverse
         node = inverse.actions[0].src if inverse.actions else ""
         # for_undo, not for_action: an inverse cannot be re-derived from the map,
         # so the guard that rebuilds and compares would refuse every undo.
-        guard = Guard.for_undo(self._inventory.root, row.key,
-                               self._inventory.map, inverse)
-        self._apply_repair(row.key, inverse, guard, node, remember=False)
+        guard = entry.guard or Guard.for_undo(self._inventory.root, row.key,
+                                              self._inventory.map, inverse)
+        prefix = "undo (partial merge)" if entry.partial else "undo"
+        if confirms_inline(inverse):
+            self._armed = _ArmedRepair(project=row.key, plan=inverse, guard=guard,
+                                       node=node, region=self._focus_region, undo=entry)
+            room = (self.size.width or 0) - OPERATION_MARGIN
+            self._set_operation(confirm_line(inverse, max(0, room), project=row.key,
+                                             prefix=prefix))
+            return
+
+        project_name = row.key
+
+        def done(confirmed: bool) -> None:
+            if confirmed:
+                self._apply_repair(project_name, inverse, guard, node,
+                                   remember=False, undo=entry)
+
+        self.push_screen(
+            ConfirmListModal(
+                f"Undo - {project_name}",
+                [f"{action.src} -> {action.dst or 'the project root'}"
+                 for action in inverse.actions],
+                f"Undo {len(inverse.actions)} move(s)",
+            ),
+            done,
+        )
 
     def _apply_repair(self, project_name: str, plan: Plan, guard: Guard,
-                      node: str, *, remember: bool) -> None:
+                      node: str, *, remember: bool, undo: UndoEntry | None = None) -> None:
         """Guard, apply, remember, reconcile. The one write path for both the
         repair key and its undo - they differ only in which Plan they carry and
-        whether the result goes on the stack."""
+        whether the result goes on the stack. An undo's entry stays on the
+        stack unless something moved, so a refusal can be retried (#6)."""
         inventory = self._inventory
         if inventory is None:
             return
@@ -2306,8 +2349,15 @@ class AtlasApp(App):
             return
 
         conflicts = [a for a in applied.actions if a.status == CONFLICT]
+        if undo is not None and any(a.status == DONE for a in applied.actions):
+            self._undo.drop(project_name, undo)
         if remember:
-            self._undo.push(project_name, applied)
+            # The undo's Guard is snapshotted now, as the repair left the drive.
+            # Built at `u` time it could not see anything done in between (#6).
+            self._undo.push(
+                project_name, applied,
+                guard_for=lambda inverse: Guard.for_undo(root, project_name,
+                                                         inventory.map, inverse))
         self._reconcile_after(project_name, applied, node)
 
         action = applied.actions[0] if applied.actions else None
@@ -2431,6 +2481,7 @@ class AtlasApp(App):
                     summary=summary,
                     lines=tuple(detail) or ("Project already follows the drive map.",),
                     severity=severity,
+                    forget_undo=(name,),
                 )
 
             self._start_operation("Applying conform plan", root, conform)

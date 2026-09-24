@@ -128,9 +128,123 @@ async def test_undo_puts_it_back(fixture_drive):
 
         await pilot.press("u")
         await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
 
         assert (project / "Meetings" / "kickoff.md").is_file()
         assert not (project / "11 Meetings").exists()
+
+
+async def repair_meetings(app, pilot):
+    await settle(app, pilot)
+    await open_tree_on(app, pilot, "Meetings")
+    await pilot.press("f")
+    await settle(app, pilot)
+    await pilot.press("enter")
+    await settle(app, pilot)
+
+
+async def test_undo_previews_and_waits_for_enter(fixture_drive):
+    """Issue #7. `u` moved folders on one keypress. Undo is a write like any
+    other: it builds a Plan, previews it, and waits for the confirm."""
+    project = drifted_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+
+        await pilot.press("u")
+        await settle(app, pilot)
+
+        line = operation_text(app)
+        assert "undo" in line.lower() and "Enter confirm" in line, line
+        assert (project / "11 Meetings").is_dir(), "arming the undo must not write"
+
+        await pilot.press("escape")
+        await settle(app, pilot)
+        assert (project / "11 Meetings").is_dir()
+        assert app._undo.depth("260601_Drift") == 1, "a cancelled undo stays on the stack"
+
+
+async def test_a_merge_undo_confirms_in_the_modal(fixture_drive):
+    """ADR 0006: confirmation weight follows plan size, and undo inherits it.
+    Undoing a merge is one move per child, so it gets the list."""
+    project = make_project(fixture_drive, "260606_MergeUndo",
+                           sections=["01 Model", "Meetings", "11 Meetings"],
+                           files={"Meetings/a.md": "a", "Meetings/b.md": "b",
+                                  "11 Meetings/native.md": "n"})
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+        assert (project / "11 Meetings" / "a.md").is_file()
+
+        await pilot.press("u")
+        await settle(app, pilot)
+        assert app.screen is not app.screen_stack[0], "the modal is up"
+        assert (project / "11 Meetings" / "a.md").is_file()
+        await pilot.click("#ok")
+        await settle(app, pilot)
+
+        assert (project / "Meetings" / "a.md").is_file()
+        assert (project / "Meetings" / "b.md").is_file()
+        assert (project / "11 Meetings" / "native.md").is_file()
+
+
+async def test_undo_refuses_a_change_made_after_the_repair_and_keeps_the_entry(fixture_drive):
+    """Issue #6. The undo guard was built when `u` was pressed, so it could not
+    see anything done between the repair and the undo. It is snapshotted when the
+    repair applies. A refused undo stays on the stack for a retry."""
+    project = drifted_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+
+        (project / "ZZZ Colleague").mkdir()     # the undo's watched folder moved on
+        await pilot.press("u")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert "nothing moved" in operation_text(app).lower()
+        assert (project / "11 Meetings").is_dir()
+        assert app._undo.depth("260601_Drift") == 1
+
+        (project / "ZZZ Colleague").rmdir()     # the operator puts it right
+        await pilot.press("u")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert (project / "Meetings" / "kickoff.md").is_file()
+        assert app._undo.depth("260601_Drift") == 0
+
+
+async def test_a_project_wide_conform_forgets_the_project_s_undo(fixture_drive):
+    """UndoStack.forget had no caller, so after a whole-project conform `u`
+    reversed a tree repair inside the freshly conformed project."""
+    project = make_project(fixture_drive, "260607_Forget", sections=["01 Model", "Meetings"],
+                           files={"Meetings/k.md": "k", "HANDOFF-x.md": "h"})
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+        assert app._undo.depth("260607_Forget") == 1
+
+        app._move_to_region("projects")
+        await pilot.press("r")
+        await settle(app, pilot)
+        await pilot.press("f")
+        await pilot.pause()
+        await pilot.click("#ok")
+        await settle(app, pilot)
+        assert (project / ".agent" / "handoff" / "HANDOFF-x.md").is_file()
+
+        await pilot.press("u")
+        await settle(app, pilot)
+        assert "nothing to undo" in operation_text(app).lower()
+        assert (project / "11 Meetings").is_dir()
 
 
 async def test_undo_with_an_empty_stack_says_so(fixture_drive):

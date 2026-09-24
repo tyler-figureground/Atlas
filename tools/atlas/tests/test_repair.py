@@ -195,6 +195,38 @@ def test_a_plan_that_cannot_be_reversed_is_refused_at_push_not_at_pop():
     assert stack.depth("A") == 0
 
 
+def test_the_stack_is_capped():
+    """ADR 0006 and ticket 04: in memory, capped at 50. The oldest goes first."""
+    stack = UndoStack()
+    for n in range(51):
+        stack.push("A", plan_of(applied(RENAME, f"old{n}", f"new{n}")))
+
+    assert stack.depth("A") == 50
+    assert stack.peek("A").inverse.actions[0].src == "new50"
+
+
+def test_peeking_does_not_consume_the_entry():
+    """Issue #6. The entry was popped before the guard ran, so a refused undo
+    lost it. The caller peeks, guards, applies, and only then drops."""
+    stack = UndoStack()
+    stack.push("A", plan_of(applied(RENAME, "Meetings", "11 Meetings")))
+
+    entry = stack.peek("A")
+    assert stack.depth("A") == 1
+    stack.drop("A", entry)
+    assert stack.depth("A") == 0
+
+
+def test_push_snapshots_the_guard_for_the_undo_at_push_time():
+    seen = []
+    stack = UndoStack()
+    stack.push("A", plan_of(applied(RENAME, "Meetings", "11 Meetings")),
+               guard_for=lambda inverse: seen.append(inverse) or "guard")
+
+    assert len(seen) == 1, "built once, when the repair applied"
+    assert stack.peek("A").guard == "guard"
+
+
 # ------------------------------------------------------- what an apply reports
 
 
