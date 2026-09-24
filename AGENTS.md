@@ -54,7 +54,7 @@ pip install pyyaml
 ## Layout
 
 - `plugins/` - installable plugin bundles, numbered by project lifecycle. Skills live in `plugins/<n>-<name>/skills/<skill>/SKILL.md`; agents in `plugins/<n>-<name>/agents/`.
-- `tools/` - application code, the one exception to content-is-Markdown (ADR 0002). `tools/atlas/` is the studio drive/project TUI-CLI: self-contained uv project, own tests (`cd tools/atlas && uv run pytest`), not a plugin, not covered by `scripts/lint.sh`.
+- `tools/` - application code, the one exception to content-is-Markdown (ADR 0002). `tools/atlas/` is the studio drive/project TUI-CLI: self-contained uv project, own tests (`cd tools/atlas && uv run pytest`), not a plugin, not covered by `scripts/lint.sh`. CI runs the suite on `ubuntu-latest` via `.github/workflows/atlas.yml` when `tools/atlas/**` changes.
 - `agents/` - agents index.
 - `rules/` - cross-cutting conventions.
 - `docs/adr/` - architecture decision records.
