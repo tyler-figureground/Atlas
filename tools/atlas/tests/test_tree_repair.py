@@ -339,6 +339,105 @@ async def test_the_repair_key_refuses_when_the_tree_is_not_the_selected_project(
         assert untouched(alpha, bravo)
 
 
+# ------------------------------------------------ the tree stays fresh (#12, #40)
+
+
+async def test_a_refresh_shows_a_colleague_s_rename_in_the_tree(fixture_drive):
+    """Issue #12. `r` refreshed the list and left the tree on its first report:
+    Meetings still drawn Drifted after a colleague had renamed it."""
+    project = drifted_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        view = app.query_one(ProjectTreeView)
+        assert view.node_for("Meetings") is not None
+
+        (project / "Meetings").rename(project / "11 Meetings")
+        (project / "Scratch").mkdir()
+        await pilot.press("r")
+        await settle(app, pilot)
+
+        assert view.node_for("Meetings") is None
+        assert view.node_for("11 Meetings") is not None
+        assert view.source.filing_state("Scratch") == "unfiled"
+
+
+async def test_a_project_wide_conform_refreshes_the_tree(fixture_drive):
+    """ADR 0007: a project-wide conform invalidates the whole project."""
+    drifted_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await open_tree_on(app, pilot, "Meetings")
+        app._move_to_region("projects")
+        await pilot.press("f")
+        await pilot.pause()
+        await pilot.click("#ok")
+        await settle(app, pilot)
+
+        view = app.query_one(ProjectTreeView)
+        assert view.node_for("Meetings") is None
+        assert view.node_for("11 Meetings") is not None
+        assert view.source.filing_state("Meetings") != "drifted"
+
+
+def invoices_project(drive):
+    return make_project(drive, "260605_Keep",
+                        sections=["01 Model", "08 OUT/Invoices", "10 Legal"],
+                        files={"08 OUT/Invoices/inv.pdf": "i"})
+
+
+async def open_invoices(app, pilot):
+    await settle(app, pilot)
+    await pilot.press("enter")
+    await settle(app, pilot)
+    view = app.query_one(ProjectTreeView)
+    view.node_for("08 OUT").expand()
+    await settle(app, pilot)
+    view.select_key("08 OUT/Invoices")
+    await settle(app, pilot)
+    assert view.cursor_node.data == "08 OUT/Invoices"
+    return view
+
+
+@pytest.mark.parametrize("action", [
+    "action_cycle_companion", "action_show_health", "action_toggle_mark", "action_cycle_sort",
+])
+async def test_switching_what_the_companion_shows_keeps_the_tree(fixture_drive, action):
+    """Issue #40. `d`, health, mark and sort rebuilt the tree from the top, so
+    the operator lost the open folder and the cursor, and the next `f` had
+    nothing to act on."""
+    invoices_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        view = await open_invoices(app, pilot)
+
+        getattr(app, action)()
+        await settle(app, pilot)
+
+        assert view.node_for("08 OUT").is_expanded
+        assert view.cursor_node is not None and view.cursor_node.data == "08 OUT/Invoices"
+
+
+async def test_a_refresh_keeps_what_was_open_and_where_the_cursor_was(fixture_drive):
+    """Where a rebuild cannot be avoided, it restores by Node Key."""
+    invoices_project(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        view = await open_invoices(app, pilot)
+
+        await pilot.press("r")
+        await settle(app, pilot)
+
+        assert view.node_for("08 OUT") is not None and view.node_for("08 OUT").is_expanded
+        assert view.cursor_node is not None and view.cursor_node.data == "08 OUT/Invoices"
+
+
 # ------------------------------------------------------ the drive switch
 
 

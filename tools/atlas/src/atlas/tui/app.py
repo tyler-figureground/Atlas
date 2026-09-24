@@ -1212,6 +1212,7 @@ class AtlasApp(App):
             return
         self._inventory = inventory
         self._rows = rows
+        self._refresh_trees(inventory, rows)
         current_names = {row.key for row in rows}
         self._marked.intersection_update(current_names)
         self._busy = False
@@ -1229,6 +1230,28 @@ class AtlasApp(App):
             self._set_operation(f"Scan complete - {len(self._rows)} project(s)")
         table.focus()
         self.refresh_bindings()
+
+    def _refresh_trees(self, inventory: DriveInventory, rows: tuple[ProjectRow, ...]) -> None:
+        """Hand every cached tree the fresh scan (#12).
+
+        A rescan - `r`, or the one every project-wide operation ends with - is
+        the moment the tree's facts may have changed under it. ADR 0007: a
+        project-wide conform invalidates the whole project, and CONTEXT.md: the
+        tree picks up outside changes when the operator refreshes. A tree whose
+        project is gone is dropped. The one on screen is rebuilt in place,
+        keeping its open folders and cursor.
+        """
+        fresh = {row.key: row for row in rows}
+        paths = {project.name: project.path for project in inventory.projects}
+        for name, tree in list(self._trees.items()):
+            row = fresh.get(name)
+            if row is None or paths.get(name) != tree.project:
+                del self._trees[name]
+                continue
+            tree.invalidate_all(row.report)
+        view = self.query_one(ProjectTreeView)
+        if view.source is not None and view.source in self._trees.values():
+            view.reload()
 
     def _scan_failed(self, generation: int, root: Path, error: Exception) -> None:
         if generation != self._scan_generation:
@@ -1374,8 +1397,15 @@ class AtlasApp(App):
         if row.key != self._workspace_project:
             return      # the cursor moved on while this was pending
         tree = self._project_tree(row)
-        self.query_one(ProjectTreeView).set_source(
-            tree, narrow=(self.size.width or 80) < ABBREVIATE_COLUMNS)
+        view = self.query_one(ProjectTreeView)
+        narrow = (self.size.width or 80) < ABBREVIATE_COLUMNS
+        # Only a different project earns a rebuild. `d`, health, mark, sort and
+        # the filter all come through here for the same project, and rebuilding
+        # threw away the open folders and the cursor every time (#40).
+        if view.source is not tree:
+            view.set_source(tree, narrow=narrow)
+        elif view.narrow != narrow:
+            view.reload(narrow=narrow)
         mode = self._companion_mode
         self.query_one("#companion-title", Static).update(MODE_LABELS[mode])
         if mode == HEALTH:
@@ -2312,7 +2342,10 @@ class AtlasApp(App):
             # keeps drawing the project whose title is above it (#3).
             return
         view = self.query_one(ProjectTreeView)
-        view.set_source(tree, narrow=(self.size.width or 80) < ABBREVIATE_COLUMNS)
+        if view.source is tree:
+            view.reload()   # keep the folders the operator had open (#40)
+        else:
+            view.set_source(tree, narrow=(self.size.width or 80) < ABBREVIATE_COLUMNS)
         view.select_key(landed)
 
     def action_conform(self) -> None:
