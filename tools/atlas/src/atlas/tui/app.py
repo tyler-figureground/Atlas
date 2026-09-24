@@ -77,7 +77,7 @@ from ..core.scan import (
     list_entries,
     scan_drive,
 )
-from ..core.tree import ProjectTree, open_project_tree
+from ..core.tree import CONTRACT, ProjectTree, open_project_tree
 from . import tokens
 from .wordmark import BAR, composition_for, mark_width, render_mark
 from .layout import (
@@ -1445,7 +1445,7 @@ class AtlasApp(App):
             unmet = tree.expectations() if tree is not None else ()
             count = len(unmet)
             body = "\n".join(
-                f"  {e.path}" + ("" if e.repairable else "   (add folders)")
+                f"  {e.label}" + ("" if e.repairable or e.kind == CONTRACT else "   (add folders)")
                 for e in unmet
             ) or "  Nothing missing - the project has what the map expects."
         else:

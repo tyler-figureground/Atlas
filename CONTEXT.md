@@ -50,6 +50,12 @@ A folder the drive map requires a Project to have. Met when a Tree Node exists a
 that path; unmet otherwise. Unmet Expectations are listed beside the tree, never
 drawn inside it.
 
+**Contract Expectation**
+A control-plane file that is on disk but lacks its machine contract - a
+`PROJECT.md` with no YAML front matter. Listed in the Companion with what is
+wrong (`PROJECT.md - no front matter`), never as missing, and never offered as a
+Repair: backfill leaves an existing `PROJECT.md` unchanged.
+
 **Filing State**
 What the drive map says about a Tree Node that exists. Exactly one of Mapped,
 Drifted, Misplaced, Loose, or Unfiled, decided by the first map rule that matches

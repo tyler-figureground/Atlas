@@ -25,7 +25,7 @@ from ..core.conform import (
     Plan,
     invert_plan,
 )
-from ..core.tree import DRIFTED, LOOSE, MISPLACED, UNFILED, Expectation, TreeNode
+from ..core.tree import CONTRACT, DRIFTED, LOOSE, MISPLACED, UNFILED, Expectation, TreeNode
 
 # The Filing States a repair key acts on. Mapped has nothing wrong with it, and
 # Unfiled is the one state Atlas must never act on.
@@ -50,6 +50,14 @@ def repair_offer(subject: TreeNode | Expectation) -> Offer:
     if isinstance(subject, Expectation):
         if subject.repairable:
             return Offer(target=subject.path, repairable=True)
+        if subject.kind == CONTRACT:
+            # Backfill leaves an existing PROJECT.md unchanged, as a conflict:
+            # offering it would appear to work and do nothing.
+            return Offer(
+                target=subject.path,
+                repairable=False,
+                reason=f"{subject.path} has no front matter - Atlas never rewrites it; add the YAML by hand",
+            )
         # ADR 0007's correction to ADR 0006: conform has never created a mapped
         # section. It would report an unknown item and skip it, so the key would
         # appear to work and do nothing.

@@ -39,6 +39,12 @@ DEFAULT_TTL = 60.0
 # only one of the two can be offered as a Repair.
 CONTROL_PLANE = "control-plane"
 SECTION = "section"
+# Present on disk but without its machine contract - the PROJECT.md that has no
+# YAML front matter. Not absent, so not really unmet in ADR 0004's sense, and
+# not repairable: backfill leaves an existing PROJECT.md alone as a conflict.
+# Listed so the Companion can say what is wrong with it rather than claim it is
+# missing beside a tree that shows it filed.
+CONTRACT = "contract"
 
 
 def _sort_key(entry) -> tuple[int, str]:
@@ -89,6 +95,12 @@ class Expectation:
     @property
     def repairable(self) -> bool:
         return self.kind == CONTROL_PLANE
+
+    @property
+    def label(self) -> str:
+        """How the Companion names it: a path, and what is wrong when the path
+        is there but wrong."""
+        return f"{self.path} - no front matter" if self.kind == CONTRACT else self.path
 
 
 def _root_filing_states(report: ProjectReport) -> dict[str, str]:
@@ -174,9 +186,14 @@ class ProjectTree:
         about to expand anyway. A section that is absent is reported without
         looking inside it - there is nothing to look inside.
         """
-        unmet = [Expectation(path=item, kind=CONTROL_PLANE)
+        root = self._listing("")
+        files = {e.name for e in root if not e.is_dir}
+        unmet = [Expectation(
+                     path=item,
+                     kind=CONTRACT if (item == self.drive_map.project_file and item in files)
+                     else CONTROL_PLANE)
                  for item in self.report.missing_control_plane]
-        present = {e.name for e in self._listing("") if e.is_dir}
+        present = {e.name for e in root if e.is_dir}
         for section in self.drive_map.sections:
             if section.id not in present:
                 unmet.append(Expectation(path=section.id, kind=SECTION))
