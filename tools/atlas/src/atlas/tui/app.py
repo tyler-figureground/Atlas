@@ -1102,6 +1102,10 @@ class AtlasApp(App):
             if self.screen is not self.screen_stack[0] or isinstance(self.focused, Input):
                 return False
             return True if self._showing == "projects" else None
+        if action in {"collapse_list", "collapse_companion", "zoom_region"}:
+            # Regions exist only on the project screen. On the drive picker these
+            # moved focus to a hidden tree and stranded the arrow keys.
+            return True if self._showing == "projects" else None
         if action == "show_last_result":
             return True if self._last_result is not None else False
         return super().check_action(action, parameters)
@@ -1207,7 +1211,9 @@ class AtlasApp(App):
         self._fill()
         if generation == self._announced_scan_generation:
             self._set_operation(f"Scan complete - {len(self._rows)} project(s)")
-        table.focus()
+        # Through the Region model, never table.focus(): every modal write
+        # rescans, and in Single-Region Composition the list may be hidden.
+        self._focus_current_region()
         self.refresh_bindings()
 
     def _scan_failed(self, generation: int, root: Path, error: Exception) -> None:
@@ -1399,7 +1405,7 @@ class AtlasApp(App):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "filter":
-            self.query_one("#projects", DataTable).focus()
+            self._focus_current_region()
 
     # ------------------------------------------------------------- feedback and workers
 
@@ -1500,7 +1506,7 @@ class AtlasApp(App):
         if filter_input.display:
             filter_input.value = ""
             filter_input.display = False
-            self.query_one("#projects", DataTable).focus()
+            self._focus_current_region()
             return
         if self._zoomed is not None:
             self._zoomed = None

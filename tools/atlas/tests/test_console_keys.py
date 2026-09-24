@@ -141,3 +141,64 @@ async def test_enter_in_a_modal_never_commits_an_armed_repair(fixture_drive):
         await settle(app, pilot)
 
     assert (fixture_drive / "260813_Fixit" / "Meetings").is_dir(), "the repair behind the modal ran"
+
+
+# ------------------------------------------------ focus never lands hidden (#11)
+
+
+async def test_refresh_from_the_tree_keeps_focus_on_the_tree(fixture_drive):
+    """87 columns is Single-Region: the list is hidden while the tree is drawn.
+    A rescan used to hand focus to the hidden list, and the next Down moved its
+    cursor - silently swapping the tree on screen to another project."""
+    two_projects(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(87, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        assert app._focus_region == TREE
+        project = app._workspace_project
+
+        await pilot.press("r")
+        await settle(app, pilot)
+        assert isinstance(app.focused, ProjectTreeView)
+        await pilot.press("down")
+        await settle(app, pilot)
+        assert app._workspace_project == project
+
+
+async def test_escape_out_of_the_filter_focuses_a_drawn_region(fixture_drive):
+    two_projects(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(87, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+        await pilot.press("slash")
+        await pilot.pause()
+        await pilot.press("escape")
+        await settle(app, pilot)
+        assert isinstance(app.focused, ProjectTreeView)
+        assert app.query_one("#tree").display
+
+
+async def test_collapse_and_zoom_are_inert_on_the_drive_picker(fixture_drive, monkeypatch):
+    other = fixture_drive.parent / "OTHER"
+    other.mkdir()
+    monkeypatch.setattr("atlas.tui.app.discover_drives", lambda: [fixture_drive, other])
+    app = AtlasApp(follow_debounce=0)
+
+    async with app.run_test(size=(87, 51)) as pilot:
+        await settle(app, pilot)
+        drives = app.query_one("#drives")
+        assert app.focused is drives
+        for key in ("left_square_bracket", "right_square_bracket", "z"):
+            await pilot.press(key)
+            await pilot.pause()
+            assert app.focused is drives, key
+        before = drives.index
+        await pilot.press("down")
+        await pilot.pause()
+        assert drives.index != before, "arrow keys stopped moving the drive list"
