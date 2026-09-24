@@ -453,6 +453,31 @@ async def test_the_repair_key_refuses_when_the_tree_is_not_the_selected_project(
         assert untouched(alpha, bravo)
 
 
+# ------------------------------------------ the list follows the tree (#25)
+
+
+async def test_a_tree_repair_updates_the_list_row_so_a_project_conform_is_not_refused(fixture_drive):
+    """Issue #25. The row kept its pre-repair report, so `f` on the list
+    previewed the repair just done and the apply was refused as changed."""
+    project = make_project(fixture_drive, "260610_Row", sections=["01 Model", "Meetings"],
+                           files={"Meetings/k.md": "k", "HANDOFF-x.md": "h"})
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await repair_meetings(app, pilot)
+        row = app._selected_row()
+        assert row.report.drift == (), "the row took the fresh report"
+
+        app._move_to_region("projects")
+        await pilot.press("f")
+        await pilot.pause()
+        await pilot.click("#ok")
+        await settle(app, pilot)
+
+        assert (project / ".agent" / "handoff" / "HANDOFF-x.md").is_file()
+        assert (project / "11 Meetings" / "k.md").is_file()
+
+
 # ------------------------------------------ the line says what happened (#20)
 
 

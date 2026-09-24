@@ -8,7 +8,7 @@ safety contracts.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 import os
 from pathlib import Path
@@ -2386,12 +2386,26 @@ class AtlasApp(App):
             results_line(applied, node or project_name, undoable=undoable),
             "information" if settled and not conflicts else "warning")
 
+    def _adopt_project(self, fresh: ProjectInventory, report) -> None:
+        """Put one project's post-write facts into the list (#25).
+
+        The inventory entry and the row both carried the pre-repair scan, so the
+        row still counted the fix just made, and a project conform previewed it
+        and was then refused as changed - its root token no longer matched.
+        """
+        inventory = self._inventory
+        if inventory is None:
+            return
+        self._inventory = replace(inventory, projects=tuple(
+            fresh if p.name == fresh.name else p for p in inventory.projects))
+        self._rows = tuple(
+            ProjectRow(report, row.section_total) if row.key == fresh.name else row
+            for row in self._rows)
+        self._fill()
+
     def _reconcile_after(self, project_name: str, applied: Plan, node: str) -> None:
         """Forget the folders the Move Manifest names and follow the cursor to
         where the node went (ADR 0007). Two enumerations, not a walk."""
-        tree = self._trees.get(project_name)
-        if tree is None:
-            return
         inv = next((p for p in (self._inventory.projects if self._inventory else ())
                     if p.name == project_name), None)
         report = None
@@ -2399,6 +2413,10 @@ class AtlasApp(App):
             fresh = ProjectInventory(path=inv.path, name=inv.name,
                                      root_entries=list_entries(inv.path))
             report = report_project(fresh, self._inventory.map)
+            self._adopt_project(fresh, report)
+        tree = self._trees.get(project_name)
+        if tree is None:
+            return
         landed = tree.follow(node, applied)
         tree.reconcile(applied, report)
         if project_name != self._workspace_project:
