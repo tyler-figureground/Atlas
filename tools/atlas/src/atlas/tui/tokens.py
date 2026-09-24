@@ -258,5 +258,9 @@ def stylesheet(palette: Palette = PALETTE) -> str:
     DataTable > .datatable--odd-row {{ background: {p.ground}; }}
     DataTable > .datatable--cursor {{ background: {p.ember[2]}; color: {p.ground}; }}
     Tree > .tree--cursor {{ background: {p.ember[2]}; color: {p.ground}; text-style: bold; }}
+    OptionList {{ background: {p.ground}; color: {p.ink}; }}
+    OptionList:focus {{ background-tint: {p.ground} 0%; }}
+    OptionList > .option-list--option-hover {{ background: {p.ground}; }}
+    OptionList > .option-list--option-highlighted {{ background: {p.ember[2]}; color: {p.ground}; }}
     DataTable > .datatable--header {{ color: {p.muted}; }}
     """

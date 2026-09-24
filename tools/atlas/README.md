@@ -35,7 +35,8 @@ focused Region (projects by name or health; the tree by the names it has opened,
 Additional actions remain searchable in the palette.
 
 `f` acts on whatever has focus: the whole project from the list, one folder or file from the
-tree. A single repair previews on the operation line and waits for `Enter`; nothing is written
+tree, one unmet control-plane Expectation (a missing `decisions`, `AGENTS.md`...) from the
+Companion. A missing section says to use `a` instead - conform never creates sections. A single repair previews on the operation line and waits for `Enter`; nothing is written
 until then. `u` undoes the last repair in that project.
 
 Exit codes: `0` clean, `1` findings/pending work, `2` error. `--json` is the agent interface.

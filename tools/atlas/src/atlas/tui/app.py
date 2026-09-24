@@ -20,6 +20,7 @@ from textual.geometry import Size
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
+from textual.widgets.option_list import Option
 from textual.widgets import (
     Button,
     DataTable,
@@ -29,6 +30,7 @@ from textual.widgets import (
     Label,
     ListItem,
     ListView,
+    OptionList,
     Select,
     SelectionList,
     Static,
@@ -77,7 +79,7 @@ from ..core.scan import (
     list_entries,
     scan_drive,
 )
-from ..core.tree import CONTRACT, ProjectTree, open_project_tree
+from ..core.tree import CONTRACT, Expectation, ProjectTree, open_project_tree
 from . import tokens
 from .wordmark import BAR, composition_for, mark_width, render_mark
 from .layout import (
@@ -840,6 +842,7 @@ class AtlasApp(App):
     #companion { height: 1fr; padding: 0 2; }
     #companion-title { height: auto; }
     #companion-body { height: auto; }
+    #expectations { height: auto; display: none; border: none; padding: 0; }
     #refusal { height: 1fr; padding: 1 2; }
     #summary { height: 1; padding: 0 2; text-wrap: nowrap; text-overflow: ellipsis; }
     #operation { height: 1; padding: 0 2; text-wrap: nowrap; text-overflow: ellipsis; }
@@ -899,6 +902,8 @@ class AtlasApp(App):
         self._follow_debounce = follow_debounce
         self._follow_timer = None
         self._workspace_project = ""
+        # The unmet Expectations the Companion is listing, in list order.
+        self._unmet: tuple[Expectation, ...] = ()
         self._drives: list[Path] = []
         self._inventory: DriveInventory | None = None
         self._rows: tuple[ProjectRow, ...] = ()
@@ -929,6 +934,7 @@ class AtlasApp(App):
                                 id="tree-filter")
                 with VerticalScroll(id="companion"):
                     yield Static("", id="companion-title", markup=False)
+                    yield OptionList(id="expectations")
                     yield Static("", id="companion-body", markup=False)
         yield Static("", id="refusal", markup=False)
         yield Static("", id="summary", markup=False)
@@ -1075,9 +1081,11 @@ class AtlasApp(App):
         region = self.query_one(target[self._focus_region])
         if not region.display:
             return
-        widget = region if region.focusable else next(
+        # A drawn focusable child first - the Companion's Expectations list sits
+        # inside a scrollable container that could otherwise take focus itself.
+        widget = next(
             (child for child in region.query("*") if child.focusable and child.display),
-            None)
+            region if region.focusable else None)
         if widget is not None:
             widget.focus()
 
@@ -1349,6 +1357,9 @@ class AtlasApp(App):
             self.query_one(ProjectTreeView).set_source(None)
             self.query_one("#workspace-title", Static).update("No matching projects")
             self.query_one("#companion-title", Static).update("")
+            self._unmet = ()
+            self.query_one("#expectations", OptionList).display = False
+            self.query_one("#companion-body", Static).display = True
             self.query_one("#companion-body", Static).update(
                 "Change the filter or press Esc to show every project."
                 if query
@@ -1444,8 +1455,18 @@ class AtlasApp(App):
         tree = self._project_tree(row)
         self.query_one(ProjectTreeView).set_source(
             tree, narrow=(self.size.width or 80) < ABBREVIATE_COLUMNS)
+        self._render_companion(row, tree)
+
+    def _render_companion(self, row: ProjectRow, tree: ProjectTree | None) -> None:
+        """Draw the Companion's current mode for the Selected Project.
+
+        Unmet Expectations draw as a list with a cursor, so `f` can act on one
+        (ADR 0006, 0007). `#companion-body` carries the same words as text in
+        every mode; it is what is shown when there is nothing to select.
+        """
         mode = self._companion_mode
         self.query_one("#companion-title", Static).update(MODE_LABELS[mode])
+        unmet: tuple[Expectation, ...] = ()
         if mode == HEALTH:
             body = project_detail(row)
             count = row.fixes + row.review
@@ -1460,7 +1481,17 @@ class AtlasApp(App):
             body = "  The dossier lands here."
             count = 0
         self._companion_count = count
-        self.query_one("#companion-body", Static).update(body)
+        self._unmet = unmet
+        body_widget = self.query_one("#companion-body", Static)
+        body_widget.update(body)
+        choices = self.query_one("#expectations", OptionList)
+        highlighted = choices.highlighted
+        choices.clear_options()
+        choices.add_options(Option(Text(line)) for line in body.splitlines() if unmet)
+        if unmet:
+            choices.highlighted = min(highlighted or 0, len(unmet) - 1)
+        choices.display = bool(unmet)
+        body_widget.display = not unmet
         self._refresh_summary()
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
@@ -2340,6 +2371,10 @@ class AtlasApp(App):
         if remember:
             self._undo.push(project_name, applied)
         self._reconcile_after(project_name, applied, node)
+        row = self._selected_row()
+        if row is not None and row.key == project_name:
+            # The Companion lists what is still unmet; a repair changes that.
+            self._render_companion(row, self._trees.get(project_name))
 
         action = applied.actions[0] if applied.actions else None
         if conflicts:
@@ -2380,7 +2415,56 @@ class AtlasApp(App):
             # the whole project; in the tree it is the node under the cursor.
             self._arm_repair()
             return
+        if (self._focus_region == COMPANION and self._showing == "projects"
+                and self._companion_mode == EXPECTATIONS):
+            # ...and in the Companion, the unmet Expectation under the cursor.
+            self._arm_expectation()
+            return
         self._conform_project()
+
+    def _arm_expectation(self) -> None:
+        """Offer the Backfill for the unmet Expectation under the Companion's
+        cursor, or say why there is none (ADR 0006, 0007).
+
+        Only a control-plane Expectation is repairable - conform has never
+        created a mapped section - so a section says to use `a` instead. The
+        repair is the same one-Action slice of the conform Plan the tree arms,
+        confirmed the same way: on the operation line, with Enter.
+        """
+        row = self._selected_row()
+        inventory = self._inventory
+        if row is None or inventory is None:
+            return
+        if self._trees.get(self._workspace_project) is None:
+            self._set_operation("Tree still loading - try again in a moment", "warning")
+            return
+        index = self.query_one("#expectations", OptionList).highlighted
+        if not self._unmet or index is None or index >= len(self._unmet):
+            self._set_operation("Nothing unmet to repair here", "warning")
+            return
+        offer = repair_offer(self._unmet[index])
+        if not offer.repairable:
+            self._set_operation(offer.reason, "warning")
+            return
+        project = next((p for p in inventory.projects if p.name == row.key), None)
+        if project is None:
+            return
+        plan = build_repair_plan(row.report, inventory.map, offer.target,
+                                 project=project.path)
+        if plan.empty:
+            self._set_operation(f"{offer.target} needs no repair", "warning")
+            return
+        if not confirms_inline(plan):
+            self._conform_project()
+            return
+        self._armed = _ArmedRepair(
+            project=row.key,
+            plan=plan,
+            guard=Guard.for_action(inventory.root, row.key, inventory.map, plan),
+            node=offer.target,
+        )
+        room = (self.size.width or 0) - OPERATION_MARGIN
+        self._set_operation(confirm_line(plan, max(0, room)))
 
     def _conform_project(self) -> None:
         """Preview the whole Selected Project's repairs in the modal."""

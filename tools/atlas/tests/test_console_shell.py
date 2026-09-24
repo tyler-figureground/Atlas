@@ -399,7 +399,10 @@ async def test_enter_stays_atlas_key_when_the_tree_has_focus(fixture_drive):
         await pilot.press("enter")
         await settle(app, pilot)
 
-        assert app.focused is app.query_one("#companion"), "Enter drilled onward"
+        # The Companion Region, or the Expectations list inside it (#42).
+        companion = app.query_one("#companion")
+        assert app.focused is companion or companion in app.focused.ancestors, \
+            "Enter drilled onward"
 
 
 async def test_space_toggles_a_folder_once_the_tree_has_focus(fixture_drive):
