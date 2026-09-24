@@ -42,7 +42,15 @@ from .projectmd import (
     with_agents_block,
     write_crlf_no_bom,
 )
-from .scan import ProjectInventory, list_entries, long_path, scan_drive, tally_files, walk
+from .scan import (
+    Listing,
+    ProjectInventory,
+    list_entries,
+    long_path,
+    scan_drive,
+    tally_files,
+    walk,
+)
 
 # Action kinds, in apply order.
 BACKFILL = "backfill"
@@ -470,11 +478,21 @@ class Guard:
     derived: bool = True
 
     @classmethod
-    def for_project(cls, drive_root: Path, project: str, m: DriveMap, plan: Plan) -> Guard:
-        """Guard a whole-project conform: every action, and the project root."""
+    def for_project(cls, drive_root: Path, project: str, m: DriveMap, plan: Plan,
+                    root_listing: Listing | None = None) -> Guard:
+        """Guard a whole-project conform: every action, and the project root.
+
+        ``root_listing`` is the root as the preview's scan saw it. Pass it when
+        the plan came from that scan, so a change between scan and confirm is
+        caught too; without it the root is snapshotted now.
+        """
+        if root_listing is None:
+            watched = _snapshot(drive_root / project, ("",))
+        else:
+            watched = (("", root_listing.state,
+                        tuple(sorted((e.name, e.is_dir) for e in root_listing))),)
         return cls(project=project, drive_map=m, actions=plan.actions,
-                   watched=_snapshot(drive_root / project, ("",)),
-                   whole_project=True)
+                   watched=watched, whole_project=True)
 
     @classmethod
     def for_action(cls, drive_root: Path, project: str, m: DriveMap, plan: Plan) -> Guard:

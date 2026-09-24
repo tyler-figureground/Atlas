@@ -43,8 +43,13 @@ DEFAULT_TTL = 60.0
 #   expansion ever shows it, so the tree does not flicker.
 # CONCURRENCY_CAP: node loads in flight at once. Most of the measured gain
 #   (2.15x at 8 workers, already flat), and it leaves the shared pool free.
-# PREFETCH_CAP: nodes that may be read ahead of the cursor. The tree does not
-#   prefetch today; any prefetch that is added stays one level ahead, under this.
+# PREFETCH_CAP: nodes that may be read ahead of the cursor. Moot today, and on
+#   purpose: the tree reads a folder only when the operator opens it (ADR 0007),
+#   so nothing is ever read ahead and there is nothing for the cap to bound.
+#   Prefetch was left out because ticket 12 measured the gain as small (a warm
+#   read is ~0.5 ms) against a 9.4 s pathological tail for thirty cold
+#   siblings. A prefetch that is added later stays one level ahead, cancellable,
+#   and under this cap.
 # COUNT_CAP: entries read from one folder before its listing stops as PARTIAL.
 #   The pathological tail, not the median, is what this bounds.
 LOADING_DELAY = 0.120

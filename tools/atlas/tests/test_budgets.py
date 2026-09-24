@@ -180,3 +180,93 @@ def test_tree_loads_share_a_pool_capped_at_four():
     from atlas.tui import treeview
 
     assert treeview.LOAD_SLOTS._initial_value == CONCURRENCY_CAP
+
+
+def test_the_project_guard_watches_the_root_the_preview_scanned(fixture_drive):
+    """A change between the scan behind a preview and the confirm is caught,
+    not only a change after the guard was built."""
+    project = _busy_project(fixture_drive)
+    inventory = scan_drive(fixture_drive)
+    inv = next(p for p in inventory.projects if p.name == "260920_Busy")
+    from atlas.core.conform import build_plan
+
+    plan = build_plan(report_project(inv, inventory.map), inventory.map, project=inv.path)
+    assert Guard.for_project(fixture_drive, inv.name, inventory.map, plan,
+                             root_listing=inv.root_entries).check(fixture_drive) is None
+
+    (project / "desktop.ini").write_text("x", encoding="utf-8")   # tolerated: no new work
+    guard = Guard.for_project(fixture_drive, inv.name, inventory.map, plan,
+                              root_listing=inv.root_entries)
+    assert guard.check(fixture_drive) is not None
+
+
+# ------------------------------------------ the UI thread stays free (#46)
+
+
+async def _tree_app(drive, monkeypatch):
+    import threading
+
+    import atlas.tui.app as tui_app
+
+    main_thread = threading.main_thread()
+    seen: dict[str, bool] = {}
+
+    def spy(name, real):
+        def wrapped(*args, **kwargs):
+            seen[name] = threading.current_thread() is main_thread
+            return real(*args, **kwargs)
+        return wrapped
+
+    monkeypatch.setattr(tui_app, "build_repair_plan", spy("arm", tui_app.build_repair_plan))
+    monkeypatch.setattr(tui_app, "apply_plan", spy("apply", tui_app.apply_plan))
+    monkeypatch.setattr(Guard, "check", spy("check", Guard.check))
+    return seen
+
+
+async def test_arming_and_committing_a_repair_leave_the_ui_thread(fixture_drive, monkeypatch):
+    from atlas.tui.app import AtlasApp
+    from atlas.tui.treeview import ProjectTreeView
+
+    project = make_project(fixture_drive, "260924_Thread", sections=["01 Model", "Meetings"],
+                           files={"Meetings/kickoff.md": "z"})
+    seen = await _tree_app(fixture_drive, monkeypatch)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async def settle(pilot):
+        for _ in range(3):
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(pilot)
+        await pilot.press("enter")
+        await settle(pilot)
+        app.query_one(ProjectTreeView).select_key("Meetings")
+        await settle(pilot)
+        await pilot.press("f")
+        await settle(pilot)
+        assert app._armed is not None
+        await pilot.press("enter")
+        await settle(pilot)
+
+    assert (project / "11 Meetings" / "kickoff.md").is_file()
+    assert seen == {"arm": False, "check": False, "apply": False}, seen
+
+
+async def test_a_cancel_while_a_preview_is_building_drops_it(fixture_drive):
+    from atlas.core.conform import Plan
+    from atlas.tui.app import AtlasApp
+
+    make_project(fixture_drive, "260925_Drop", sections=["01 Model", "Meetings"])
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+    async with app.run_test(size=(120, 51)) as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        from atlas.core.conform import Action
+
+        plan = Plan("260925_Drop", (Action(kind="rename", src="Meetings", dst="11 Meetings"),))
+        generation = app._arm_generation
+        app._cancel_repair()
+        app._arm_ready(generation, app._workspace_project or "", plan, object(),
+                       "Meetings", "Meetings", None)
+        assert app._armed is None, "a stale preview never arms"
