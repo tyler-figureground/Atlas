@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Atlas `0.7.0` - `atlas runs (--project NAME | --all) [--days N] [--apply]`.** Lists agent runs under `controlPlane.runsDir` and zips closed ones (idle `runRetentionDays`, named by no task list or handoff) into `archiveDir`, verifying each zip before removing the folder. ADR 0011.
 - **Studio templates** `TASKS.md`, `Task List Template.md`, `AHJ-REGISTER.md`, `RESEARCH-INDEX.md`, `RUN-TEMPLATE.md`, `agents-rules.md`.
 - **Launchers** in `tools/atlas/launchers/`: every `_tools\*.bat` now goes through `Atlas.bat`; `Archive-Agent-Runs.bat` added.
+- **`Setup-New-Plus.bat`** - once-per-PC setup for dated `YYMMDD_Description` folders from right-click: installs PowerToys if missing, turns on New+ and its date variables, points it at `_tools\New+ Templates`. The one launcher that does not call Atlas.
 - ADRs 0011 (agent run folders), 0012 (project templates), 0013 (`00 Tasks` and `13 AHJ`). Research report `docs/research/project-folder-usage-and-agent-output.md`.
 
 ### Changed

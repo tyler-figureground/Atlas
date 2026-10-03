@@ -224,7 +224,7 @@ A redeploy writes to the production drive. Do it only with the user's go-ahead. 
 6. Verify: the deployed launcher reports `atlas <version>`, and `atlas lint` on the production map shows no new errors.
 7. Update the drive's `HOW-TO.md` for any key or command that changed.
 
-The launchers are in the repo at `tools/atlas/launchers/` and are copied to `_tools\` on deploy. `Atlas.bat` is the only version pin; every other `.bat` calls it - `New-Project`, `Add-Section`, `Clean-Empty` and `Conform-Project-APPLY` open the console, `Conform-Project` previews `conform --all`, and `Archive-Agent-Runs` runs `runs --all --apply`. The PowerShell tools they used to call are retired to `_tools\_deprecated\`: Atlas is the only thing that creates projects or folders.
+The launchers are in the repo at `tools/atlas/launchers/` and are copied to `_tools\` on deploy. `Atlas.bat` is the only version pin; every other `.bat` calls it - `New-Project`, `Add-Section`, `Clean-Empty` and `Conform-Project-APPLY` open the console, `Conform-Project` previews `conform --all`, and `Archive-Agent-Runs` runs `runs --all --apply`. The PowerShell tools they used to call are retired to `_tools\_deprecated\`: Atlas is the only thing that creates projects or folders. The one launcher that skips Atlas is `Setup-New-Plus.bat`, a once-per-PC setup: it installs PowerToys if missing, turns on New+ and its date variables, and points New+ at `_tools\New+ Templates` (resolved next to the .bat, so any drive letter works). Staff then make dated `YYMMDD_Description` folders from right-click; the templates are plain folders named like `$YY$MM$DD_Site Visit`.
 
 ## Dev
 
