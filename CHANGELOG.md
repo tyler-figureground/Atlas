@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Studio templates** `TASKS.md`, `Task List Template.md`, `AHJ-REGISTER.md`, `RESEARCH-INDEX.md`, `RUN-TEMPLATE.md`, `agents-rules.md`.
 - **Launchers** in `tools/atlas/launchers/`: every `_tools\*.bat` now goes through `Atlas.bat`; `Archive-Agent-Runs.bat` added.
 - **`Setup-New-Plus.bat`** - once-per-PC setup for dated `YYMMDD_Description` folders from right-click: installs PowerToys if missing, turns on New+ and its date variables, points it at `_tools\New+ Templates`. The one launcher that does not call Atlas.
+- **Research and asking** (Pyvoid grill #2899): `agents-rules.md` gains the client-job research rule (requirement row + done-test, 30 min per question, draw with best basis then ask, asks at the top of the receipt, parked findings); new template `INTAKE.md` holds the 12 day-1 intake questions (map entry `00 Tasks/INTAKE.md`); `TASKS.md` gains "Parked - outside sheet scope"; new PROJECT.md front matter carries `basis: []`, documented in **09-project-dossier**.
 - ADRs 0011 (agent run folders), 0012 (project templates), 0013 (`00 Tasks` and `13 AHJ`). Research report `docs/research/project-folder-usage-and-agent-output.md`.
 
 ### Changed
@@ -24,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - Atlas test `test_new_project_wizard_creates_complete_project` asserted a `260` date prefix and failed from October 2026; it now checks today's stamp.
+- `scripts/lint.sh` link check skips fenced code and HTML comments, where example links such as `Lists/YYMMDD-slug.md` are text.
 
 ## [1.8.0] - 2026-09-23
 

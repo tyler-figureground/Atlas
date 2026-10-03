@@ -127,7 +127,7 @@ def test_every_bundled_template_renders_without_leftover_placeholders():
     values = {"project_folder": "261002_1 Main St-Test", "project_name": "Test", "created": "2026-10-02"}
     names = sorted(p.name for p in template_dir().iterdir() if p.suffix == ".md")
     assert {"TASKS.md", "Task List Template.md", "AHJ-REGISTER.md", "RESEARCH-INDEX.md",
-            "RUN-TEMPLATE.md", "agents-rules.md"} <= set(names)
+            "RUN-TEMPLATE.md", "agents-rules.md", "INTAKE.md"} <= set(names)
     for name in names:
         text = "\n".join(render(read_template(name), values))
         assert "{{" not in text, name
@@ -204,6 +204,46 @@ def test_conform_backfills_templates_into_an_old_project_and_never_overwrites(v3
     # An absent seeded section with no template stays absent: 11 Meetings.
     assert not (project / "11 Meetings").exists()
     assert _report(project, m).missing_control_plane == ()
+
+
+INTAKE_ENTRY = {"path": "00 Tasks/INTAKE.md", "template": "INTAKE.md",
+                "index": "Day-1 intake questions - send to Tyler before research"}
+
+
+def test_research_and_asking_reaches_every_new_project(v3_drive):
+    # Pyvoid #2899/#2912: intake list, research rule, basis rows and the parked list.
+    data = copy.deepcopy(V3_MAP)
+    data["templates"].append(INTAKE_ENTRY)
+    write_map(v3_drive, data)
+    m = _load(v3_drive)
+    project = new_project(v3_drive, m, make_intake(v3_drive, "Ask House")).path
+    intake = (project / "00 Tasks/INTAKE.md").read_text(encoding="utf-8")
+    assert intake.startswith("# Day-1 intake - Ask House")
+    assert "12. Sheet list" in intake
+    agents = (project / "AGENTS.md").read_text(encoding="utf-8")
+    assert "## Research and asking" in agents
+    assert "`00 Tasks/INTAKE.md`" in agents
+    assert "| Day-1 intake questions - send to Tyler before research | `00 Tasks/INTAKE.md` |" in agents
+    assert agents_block_current(agents, m)
+    tasks = (project / "00 Tasks/TASKS.md").read_text(encoding="utf-8")
+    assert tasks.index("## Holds") < tasks.index("## Parked - outside sheet scope") < tasks.index("## Lists")
+    project_md = (project / "PROJECT.md").read_text(encoding="utf-8").splitlines()
+    assert "basis: []" in project_md
+    assert project_md.index("basis: []") < project_md.index("---", 1)
+
+
+def test_conform_backfills_the_intake_without_overwriting(v3_drive):
+    data = copy.deepcopy(V3_MAP)
+    data["templates"].append(INTAKE_ENTRY)
+    write_map(v3_drive, data)
+    m = _load(v3_drive)
+    project = make_project(v3_drive, "250101_Intake House", sections=["01 Model"],
+                           files={"00 Tasks/TASKS.md": "# ours\n"})
+    report = _report(project, m)
+    assert "00 Tasks/INTAKE.md" in report.missing_control_plane
+    apply_plan(v3_drive, project, m, build_plan(report, m, project))
+    assert (project / "00 Tasks/INTAKE.md").read_text(encoding="utf-8").startswith("# Day-1 intake - Intake House")
+    assert (project / "00 Tasks/TASKS.md").read_text(encoding="utf-8") == "# ours\n"
 
 
 def test_seeded_children_of_a_present_section_are_backfilled(v3_drive):

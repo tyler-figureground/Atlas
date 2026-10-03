@@ -44,6 +44,10 @@ FRONT_MATTER_KEYS = (
     "existing_exits:",
     "place_of_assembly_strategy:",
     "tenancy:",
+    "# basis: values an agent drew without confirmation, one row each -",
+    "# {fact, value, source, requirement_row, printed: yes|no, status: open|confirmed}.",
+    "# An open row with printed: yes blocks a submittal export. Never printed on a sheet.",
+    "basis: []",
     "---",
 )
 

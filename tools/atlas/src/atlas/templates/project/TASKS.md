@@ -36,6 +36,12 @@ copied from `00 Tasks/_Task List Template.md` and linked below.
 | ID | Hold | Why | Evidence that clears it | Blocks |
 |---|---|---|---|---|
 
+## Parked - outside sheet scope
+
+Research findings no sheet item needs. No further work; never on a sheet. Tyler reviews the list at issue-ready; a promoted item becomes a task with a requirement and a fresh time-box.
+
+<!-- One line each: finding - source path - why it may matter -->
+
 ## Lists
 
 <!-- One line per list in 00 Tasks/Lists/: [YYMMDD-slug](Lists/YYMMDD-slug.md) - what it covers - parent T-NNN -->

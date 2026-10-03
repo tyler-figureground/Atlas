@@ -179,10 +179,12 @@ python3 - <<'PYEOF'
 import sys, re, pathlib, subprocess
 md_files = subprocess.check_output(['git', 'ls-files', '*.md']).decode().strip().split('\n')
 link_re = re.compile(r'\]\((?!https?://|mailto:|#)([^)\s]+)(?:\s+"[^"]*")?\)')
+# Example links inside fenced code or HTML comments are text, not links.
+not_links_re = re.compile(r'^```.*?^```|<!--.*?-->', re.S | re.M)
 errors = 0
 for f in md_files:
     p = pathlib.Path(f)
-    text = p.read_text()
+    text = not_links_re.sub('', p.read_text())
     base = p.parent
     for m in link_re.finditer(text):
         target = m.group(1).split('#')[0]

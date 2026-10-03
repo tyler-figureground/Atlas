@@ -62,11 +62,12 @@ The YAML block at the top of `PROJECT.md` is the contract every architect skill 
 | `existing_exits` | integer | Code → Existing exits | exits serving the space today |
 | `place_of_assembly_strategy` | free text | Code → Place-of-assembly strategy | e.g. "stay under 75 occ" |
 | `tenancy` | `single` \| `multi` | Code → Tenancy | tenant configuration |
+| `basis` | list of rows | - | values an agent drew without confirmation; each row `{fact, value, source, requirement_row, printed: yes\|no, status: open\|confirmed}`. An open `printed: yes` row blocks a submittal export. Never printed on a sheet; a confirmed row folds into its plain fact |
 
 Rules for the block:
 - **Blank means unknown, not a default.** Norma ignores blank fields and falls back to its own examples; it never assumes a value you didn't write. (So don't pre-fill `jurisdiction: other` on a project you haven't scoped — leave it blank.)
 - `jurisdiction` is canonical — write `nyc`, `california`, or `other`. Free-form forms ("New York City", "ca") are tolerated but normalize to those three.
-- This block carries **values only** — no source/date. Provenance lives in the matching table row.
+- This block carries **values only** — no source/date. Provenance lives in the matching table row. The one exception is `basis:`, whose rows carry their own `source` because they record what is not yet confirmed.
 - **Quote ZIP codes:** `address_postal_code: "02134"`. Unquoted, a YAML reader turns `02134` into the number 1116 and drops the leading zero.
 
 ### Atlas-owned keys and rows
@@ -142,6 +143,7 @@ existing_co_occupant_load:   # occupant load on the existing Certificate of Occu
 existing_exits:              # number of existing exits serving the space, if known
 place_of_assembly_strategy:  # PA approach, e.g. "stay under 75 occ" or "file PA permit"
 tenancy:                     # single | multi  (tenant configuration)
+basis: []                    # unconfirmed drawn values: {fact, value, source, requirement_row, printed, status}
 ---
 
 # Project Dossier — {project name}
