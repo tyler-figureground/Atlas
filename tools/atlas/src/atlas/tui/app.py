@@ -2148,6 +2148,7 @@ class AtlasApp(App):
                     lines=(
                         f"Created: {created.path}",
                         f"Seeded: {', '.join(created.seeded)}",
+                        *((f"Templates: {', '.join(created.templates)}",) if created.templates else ()),
                         "Next: run /project-dossier in the new project folder.",
                     ),
                 )

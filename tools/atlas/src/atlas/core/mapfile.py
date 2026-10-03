@@ -1,4 +1,4 @@
-"""Load and validate <drive>-map.json (schema v2).
+"""Load and validate <drive>-map.json (schema v2, v3 keys optional).
 
 The map is the only brain: Atlas hard-codes zero folder names. See the spec's
 schema table (atlas-tui-spec.md section 8) for the contract this module reads.
@@ -21,6 +21,25 @@ class Section:
     id: str
     seed: bool = False
     children: tuple[str, ...] = ()
+    # Children a new project gets with the section. A child entry in the map
+    # is a name, or {"name": ..., "seed": true}; only seeded sections seed
+    # children. Clean leaves a seeded child alone, as it does a seeded top.
+    seed_children: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TemplateFile:
+    """A file every project carries, copied from a bundled template.
+
+    ``path`` is project-relative; ``template`` names a file in the template
+    folder (core/templates.py); ``index`` is the AGENTS.md index row's text, and
+    empty keeps the file out of the index. Doctor reports a missing one, and
+    conform creates it - with its folder - but never overwrites one. ADR 0012.
+    """
+
+    path: str
+    template: str
+    index: str = ""
 
 
 @dataclass(frozen=True)
@@ -51,6 +70,7 @@ class DriveMap:
     relocations: dict[str, str] = field(default_factory=dict)
     control_plane: dict[str, str] = field(default_factory=dict)
     file_rules: tuple[FileRule, ...] = ()
+    templates: tuple[TemplateFile, ...] = ()
 
     @property
     def section_ids(self) -> tuple[str, ...]:
@@ -90,6 +110,41 @@ class DriveMap:
     def handoffs_dir(self) -> str:
         return self.control_plane.get("handoffsDir", "")
 
+    # The agent workspace (ADR 0011). Scratch from one agent run lives in a
+    # folder under runs_dir; closed runs are zipped into archive_dir.
+    @property
+    def runs_dir(self) -> str:
+        return self.control_plane.get("runsDir", "")
+
+    @property
+    def backups_dir(self) -> str:
+        return self.control_plane.get("backupsDir", "")
+
+    @property
+    def archive_dir(self) -> str:
+        return self.control_plane.get("archiveDir", "")
+
+    @property
+    def run_retention_days(self) -> int:
+        value = self.control_plane.get("runRetentionDays", 14)
+        return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 14
+
+    @property
+    def agents_rules(self) -> str:
+        """Template whose words go into the AGENTS.md Atlas block, after the
+        working style. Empty: no rules section, as before map v3."""
+        value = self.control_plane.get("agentsRules", "")
+        return value if isinstance(value, str) else ""
+
+    @property
+    def agent_dirs(self) -> tuple[str, ...]:
+        """Every agent-workspace folder the map names, handoffs included."""
+        return tuple(d for d in (self.handoffs_dir, self.runs_dir, self.backups_dir,
+                                 self.archive_dir) if d)
+
+    def seed_child_paths(self) -> tuple[str, ...]:
+        return tuple(f"{s.id}/{c}" for s in self.sections if s.seed for c in s.seed_children)
+
 
 def find_map(drive_root: Path) -> Path | None:
     """Locate the drive's map: _tools/*-map.json, ignoring _deprecated."""
@@ -122,14 +177,13 @@ def load_map(path: Path) -> DriveMap:
     for entry in raw["sections"]:
         if not isinstance(entry, dict) or not isinstance(entry.get("id"), str):
             raise MapError(f"section without a string 'id' in {path}")
-        children = entry.get("children", [])
-        if not isinstance(children, list) or not all(isinstance(c, str) for c in children):
-            raise MapError(f"section '{entry['id']}' children must be a list of names: {path}")
+        names, seeded = _parse_children(entry.get("children", []), entry["id"], path)
         sections.append(
             Section(
                 id=entry["id"],
                 seed=bool(entry.get("seed", False)),
-                children=tuple(children),
+                children=names,
+                seed_children=seeded,
             )
         )
 
@@ -149,7 +203,58 @@ def load_map(path: Path) -> DriveMap:
         relocations=relocations,
         control_plane=_string_map(raw, "controlPlane", path, strings=False),
         file_rules=_parse_file_rules(raw.get("fileRules", []), path),
+        templates=_parse_templates(raw.get("templates", []), path),
     )
+
+
+def _parse_children(raw: object, section_id: str, path: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(every child name, the seeded ones). A child is a name or an object
+    with a name and an optional ``seed``; anything else refuses the map."""
+    where = f"section '{section_id}' children"
+    if not isinstance(raw, list):
+        raise MapError(f"{where} must be a list of names: {path}")
+    names: list[str] = []
+    seeded: list[str] = []
+    for child in raw:
+        if isinstance(child, str):
+            names.append(child)
+            continue
+        if not isinstance(child, dict) or not isinstance(child.get("name"), str) or not child["name"].strip():
+            raise MapError(f"{where}: each child must be a name or {{\"name\": ...}}: {path}")
+        unknown = sorted(set(child) - {"name", "seed"})
+        if unknown:
+            raise MapError(f"{where} '{child['name']}': unknown key {', '.join(repr(k) for k in unknown)}: {path}")
+        names.append(child["name"])
+        if child.get("seed") is True:
+            seeded.append(child["name"])
+    return tuple(names), tuple(seeded)
+
+
+def _parse_templates(raw: object, path: Path) -> tuple[TemplateFile, ...]:
+    """Strictly, like File Rules: a template entry writes into every project."""
+    if not isinstance(raw, list):
+        raise MapError(f"templates must be a list: {path}")
+    out: list[TemplateFile] = []
+    seen: set[str] = set()
+    for index, entry in enumerate(raw):
+        where = f"templates[{index}]"
+        if not isinstance(entry, dict):
+            raise MapError(f"{where} is not an object: {path}")
+        unknown = sorted(set(entry) - {"path", "template", "index"})
+        if unknown:
+            raise MapError(f"{where}: unknown key {', '.join(repr(k) for k in unknown)}: {path}")
+        target = _safe_target(entry.get("path"), where, path).replace("\\", "/").strip("/")
+        template = entry.get("template")
+        if not isinstance(template, str) or not template.strip() or "/" in template or "\\" in template:
+            raise MapError(f"{where} needs a 'template' file name: {path}")
+        note = entry.get("index", "")
+        if not isinstance(note, str):
+            raise MapError(f"{where} 'index' must be text: {path}")
+        if target.lower() in seen:
+            raise MapError(f"{where}: '{target}' is listed twice: {path}")
+        seen.add(target.lower())
+        out.append(TemplateFile(path=target, template=template, index=note))
+    return tuple(out)
 
 
 def _string_map(raw: dict, key: str, path: Path, *, strings: bool = True) -> dict[str, str]:

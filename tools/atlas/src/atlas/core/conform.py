@@ -21,10 +21,12 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, replace
+from datetime import date
 from pathlib import Path
 
 from .doctor import ProjectReport, report_project
-from .mapfile import DriveMap, find_map, load_map
+from .mapfile import DriveMap, TemplateFile, find_map, load_map
+from .templates import TemplateError, render_template, template_values
 from .ops import OpsError, append_log, mkdir_below
 from .projectmd import (
     FRONT_MATTER_HEAD,
@@ -737,7 +739,31 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
     if target == m.analysis_dir:
         mkdir_below(project, m.analysis_dir)
         return replace(action, status=DONE)
+    template = next((t for t in m.templates if t.path == target), None)
+    if template is not None:
+        return _backfill_template(project, template, action)
+    if target in m.seed_child_paths():
+        if not (project / target.split("/")[0]).is_dir():
+            return replace(action, status=SKIPPED, note="its section is gone; rerun")
+        mkdir_below(project, target)
+        return replace(action, status=DONE, note="seeded folder")
     return replace(action, status=SKIPPED, note=f"unknown control-plane item '{target}'")
+
+
+def _backfill_template(project: Path, template: TemplateFile, action: Action) -> Action:
+    """Create a template file and its folder. Create-only: a file already there
+    is the project's own, however different, and stays (ADR 0012)."""
+    try:
+        lines = render_template(template.template,
+                                template_values(project.name, created=date.today().isoformat()))
+    except TemplateError as error:
+        return replace(action, status=SKIPPED, note=str(error))
+    parent = template.path.rpartition("/")[0]
+    if parent:
+        mkdir_below(project, parent)
+    if not create_crlf_no_bom(project / template.path, lines):
+        return replace(action, status=SKIPPED, note="already there; left unchanged")
+    return replace(action, status=DONE, note=f"from template {template.template}")
 
 
 # ---- agent files (ADR 0010) ---------------------------------------------------

@@ -39,6 +39,7 @@ from .projectmd import (
     decisions_readme_lines,
     project_md_lines,
 )
+from .templates import TemplateError, render_template, template_values
 
 
 class OpsError(Exception):
@@ -92,6 +93,7 @@ class NewProjectResult:
     folder_name: str
     seeded: tuple[str, ...]
     intake: ResolvedProjectIntake
+    templates: tuple[str, ...] = ()
 
 
 def _contact_snapshot(contact: Contact) -> ContactSnapshot:
@@ -153,6 +155,16 @@ def new_project(drive_root: Path, m: DriveMap, request: ProjectIntake) -> NewPro
     if m.analysis_dir:
         planned_paths.append(m.analysis_dir)
     planned_paths.extend(section.id for section in m.sections if section.seed)
+    planned_paths.extend(m.seed_child_paths())
+    planned_paths.extend(m.agent_dirs)
+    planned_paths.extend(t.path for t in m.templates)
+    values = template_values(folder_name, name, created.isoformat())
+    try:
+        # Read every template before anything is created: a missing one stops
+        # the intake here, not half-way through a project folder.
+        rendered = [(t.path, render_template(t.template, values)) for t in m.templates]
+    except TemplateError as error:
+        raise OpsError(str(error)) from error
     try:
         for relative in planned_paths:
             validate_project_child_path(project, relative)
@@ -176,6 +188,16 @@ def new_project(drive_root: Path, m: DriveMap, request: ProjectIntake) -> NewPro
                 continue
             mkdir_below(project, section.id)
             seeded.append(section.id)
+        for child in m.seed_child_paths():
+            mkdir_below(project, child)
+        for agent_dir in m.agent_dirs:
+            mkdir_below(project, agent_dir)
+        for relative, lines in rendered:
+            parent = relative.rpartition("/")[0]
+            if parent:
+                mkdir_below(project, parent)
+            if not create_crlf_no_bom(project / relative, lines):
+                raise OpsError(f"{relative} appeared while creating the project; left unchanged")
 
         if not create_crlf_no_bom(
             project / m.project_file,
@@ -203,6 +225,7 @@ def new_project(drive_root: Path, m: DriveMap, request: ProjectIntake) -> NewPro
         folder_name=folder_name,
         seeded=tuple(seeded),
         intake=resolved,
+        templates=tuple(path for path, _lines in rendered),
     )
 
 
@@ -244,12 +267,12 @@ def find_empty_dirs(project: Path, m: DriveMap, include_seeds: bool = False) -> 
     """Directories removable by pure rmdir cascade: no file anywhere beneath.
     Control-plane dirs are always kept; seed section tops kept unless asked."""
     protected_tops = {m.decisions_dir}
-    if m.handoffs_dir:
-        protected_tops.add(m.handoffs_dir.replace("\\", "/").split("/")[0])
+    for agent_dir in m.agent_dirs:
+        protected_tops.add(agent_dir.replace("\\", "/").split("/")[0])
     # The analysisDir is control plane: doctor reports it missing, so clean
     # must never be the thing that removes it.
     analysis_rel = m.analysis_dir.replace("\\", "/") if m.analysis_dir else None
-    seed_ids = {s.id for s in m.sections if s.seed}
+    seed_ids = {s.id for s in m.sections if s.seed} | set(m.seed_child_paths())
 
     empties: list[str] = []
     # Bottom-up, never through a link: a junction's target lives outside the

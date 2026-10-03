@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 
 from .mapfile import DriveMap
+from .templates import template_path
 
 # Levels: "error" = the map contradicts itself and tools may misbehave;
 # "warn" = legal but suspicious, a human should look once.
@@ -158,5 +159,32 @@ def lint_map(m: DriveMap) -> list[Finding]:
             findings.append(
                 Finding(WARN, "MIXED-PREFIX", f"section '{s.id}' mixes numeric prefix widths {sorted(widths)}; sort order will lie")
             )
+
+    # -- seeded children only take effect under a seeded section ---------------
+    for s in m.sections:
+        if s.seed_children and not s.seed:
+            findings.append(
+                Finding(WARN, "SEED-CHILD-UNSEEDED", f"section '{s.id}' seeds {', '.join(s.seed_children)} but is not itself seeded; a new project gets neither")
+            )
+
+    # -- templates: a real template, landing in a blessed place ----------------
+    for t in m.templates:
+        parent = t.path.rpartition("/")[0]
+        if parent and _landing(m, parent) == _NOWHERE:
+            findings.append(
+                Finding(ERROR, "TEMPLATE-TARGET", f"template '{t.template}' -> '{t.path}': '{_first_segment(parent)}' is neither a canonical section nor a control-plane dir")
+            )
+        elif parent and _landing(m, parent) == _UNBLESSED_CHILD:
+            findings.append(
+                Finding(WARN, "TEMPLATE-UNBLESSED-CHILD", f"template '{t.template}' -> '{t.path}': '{parent}' is not a blessed folder")
+            )
+        if not template_path(t.template).is_file():
+            findings.append(
+                Finding(ERROR, "TEMPLATE-MISSING", f"template '{t.template}' is not in {template_path(t.template).parent}")
+            )
+    if m.agents_rules and not template_path(m.agents_rules).is_file():
+        findings.append(
+            Finding(ERROR, "TEMPLATE-MISSING", f"controlPlane.agentsRules '{m.agents_rules}' is not in {template_path(m.agents_rules).parent}")
+        )
 
     return findings

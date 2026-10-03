@@ -46,6 +46,8 @@ from .core.intake import (
 from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
+from .core.runs import archive_run, list_runs
+from .core.templates import TemplateError
 from .core.project_data import (
     ProjectDataError,
     ProjectUpdatePlan,
@@ -489,6 +491,7 @@ def cmd_new(args: argparse.Namespace) -> int:
                     "created": result.folder_name,
                     "path": str(result.path),
                     "seeded": list(result.seeded),
+                    "templates": list(result.templates),
                     "project_name": result.intake.project_name,
                     "address": result.intake.project_address.formatted,
                     "description": result.intake.description,
@@ -507,6 +510,8 @@ def cmd_new(args: argparse.Namespace) -> int:
         print(f"billing: {result.intake.billing_contact.full_name}")
         print(f"client:  {result.intake.client_contact.full_name}")
         print(f"seed:    {', '.join(result.seeded)}")
+        if result.templates:
+            print(f"files:   {', '.join(result.templates)}")
         agents = f"{drive_map.agents_file}, " if drive_map.agents_file else ""
         print(f"control: {drive_map.project_file}, {drive_map.decisions_dir}\\, "
               f"{agents}{drive_map.claude_file}, {drive_map.analysis_dir}\\")
@@ -772,6 +777,65 @@ def cmd_clean(args: argparse.Namespace) -> int:
         for rel in removed:
             print(f"removed: {rel}")
     return 0
+
+
+def cmd_runs(args: argparse.Namespace) -> int:
+    """List agent runs and zip the closed ones (ADR 0011). Dry run by default."""
+    root = _resolve_drive(args.drive)
+    m = load_map(find_map(root))
+    if args.all and args.project:
+        raise UsageError("--all cannot be combined with --project")
+    if args.all:
+        projects = [p.path for p in _scan(root).projects]
+    elif args.project:
+        projects = [_resolve_project(root, args.project)]
+    else:
+        raise UsageError("pass --project <name> or --all")
+    days = args.days if args.days is not None else m.run_retention_days
+    if days < 1:
+        raise UsageError("--days must be 1 or more")
+
+    report = []
+    pending = 0
+    for project in projects:
+        runs = list_runs(project, m)
+        entries = []
+        for run in runs:
+            closed = run.closed(days)
+            entry = {"run": run.name, "files": run.files, "bytes": run.bytes,
+                     "idle_days": run.idle_days, "referenced_by": list(run.referenced_by),
+                     "unreadable": list(run.unreadable), "closed": closed}
+            if closed and args.apply:
+                result = archive_run(root, project, m, run)
+                entry.update(status=result.status, note=result.note, archive=result.archive or None)
+            elif closed:
+                pending += 1
+            entries.append(entry)
+        if entries:
+            report.append({"project": project.name, "runs": entries})
+
+    if args.json:
+        print(json.dumps({"retention_days": days, "applied": args.apply, "projects": report}, indent=2))
+    else:
+        for item in report:
+            print(item["project"])
+            for e in item["runs"]:
+                if "status" in e:
+                    state = f"{e['status']}: {e['note']}"
+                elif e["closed"]:
+                    state = "closed - would archive"
+                elif e["referenced_by"]:
+                    state = f"open - named in {', '.join(e['referenced_by'])}"
+                elif e["unreadable"]:
+                    state = "open - part could not be read"
+                else:
+                    state = f"open - idle {e['idle_days']} of {days} days"
+                print(f"  {e['run']}  ({e['files']} files)  {state}")
+        if not report:
+            print("no agent runs")
+        elif pending:
+            print(f"\n{pending} closed run(s) (dry run - pass --apply to zip them)")
+    return 1 if pending else 0
 
 
 def cmd_tree(args: argparse.Namespace) -> int:
@@ -1078,6 +1142,7 @@ def main(argv: list[str] | None = None) -> int:
         ("conform", cmd_conform, "plan/apply conformance: backfill, renames, relocations, sweeps"),
         ("tree", cmd_tree, "one project's folders and files: Filing State, Load State, "
                            "unmet Expectations (read-only)"),
+        ("runs", cmd_runs, "list agent runs; zip closed ones into the archive (dry run by default)"),
     ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--drive", help="drive root (default: walk up from cwd, else auto-discover)")
@@ -1205,6 +1270,11 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["clean"].add_argument("--apply", action="store_true", help="actually remove")
     sub.choices["clean"].add_argument("--include-seeds", action="store_true",
                                       help="allow removing empty seed sections too")
+    sub.choices["runs"].add_argument("--project", help="project folder name")
+    sub.choices["runs"].add_argument("--all", action="store_true", help="every project on the drive")
+    sub.choices["runs"].add_argument("--apply", action="store_true", help="zip closed runs and remove their folders")
+    sub.choices["runs"].add_argument("--days", type=int,
+                                     help="idle days before a run is closed (default: the map's runRetentionDays, else 14)")
     sub.choices["conform"].add_argument("--project", help="project folder name")
     sub.choices["conform"].add_argument(
         "--revert", metavar="FILE",
@@ -1227,7 +1297,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.fn(args)
     except (ContactError, IntakeError, OpsError, ProjectDataError, MapError,
-            UsageError, OSError) as error:
+            TemplateError, UsageError, OSError) as error:
         # Every error exits 2, never 1: 1 means the drive has findings. An
         # OSError here is the backstop - a locked file, a vanished mount - and is
         # reported, not raised as a traceback over empty --json stdout.

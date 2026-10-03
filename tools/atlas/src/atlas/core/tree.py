@@ -238,9 +238,13 @@ class ProjectTree:
                 # what was read is not known to be absent from disk.
                 continue
             here = {e.name for e in listing}
+            # A seeded child that conform will backfill is already listed above,
+            # as control plane; once is enough.
+            backfilled = set(self.report.missing_control_plane)
             unmet.extend(
                 Expectation(path=f"{section.id}/{child}", kind=SECTION)
-                for child in section.children if child not in here
+                for child in section.children
+                if child not in here and f"{section.id}/{child}" not in backfilled
             )
         return tuple(sorted(unmet, key=lambda e: e.path))
 

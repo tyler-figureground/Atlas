@@ -55,6 +55,7 @@ pip install pyyaml
 
 - `plugins/` - installable plugin bundles, numbered by project lifecycle. Skills live in `plugins/<n>-<name>/skills/<skill>/SKILL.md`; agents in `plugins/<n>-<name>/agents/`.
 - `tools/` - application code, the one exception to content-is-Markdown (ADR 0002). `tools/atlas/` is the studio drive/project TUI-CLI: self-contained uv project, own tests (`cd tools/atlas && uv run pytest`), not a plugin, not covered by `scripts/lint.sh`. CI runs the suite on `ubuntu-latest` via `.github/workflows/atlas.yml` when `tools/atlas/**` changes.
+- `tools/atlas/src/atlas/templates/project/` - the studio's project template files (`TASKS.md`, `AHJ-REGISTER.md`, `RESEARCH-INDEX.md`, run log, the AGENTS.md filing rules). Edit here; Atlas copies them into every new project (ADR 0012). `tools/atlas/launchers/` holds the `_tools\*.bat` launchers.
 - `agents/` - agents index.
 - `rules/` - cross-cutting conventions.
 - `docs/adr/` - architecture decision records.
@@ -82,6 +83,7 @@ than a fresh search, and says what was measured rather than assumed.
 | `atlas-tree-widget-evidence.md` | Textual 8.2.8 trees: build on plain `Tree`, never `DirectoryTree`; how lazy loading works; two silent-corruption traps (`str` labels, cursor restore by line number). | ADR 0007, ticket 05. |
 | `atlas-drive-tree-read-cost.md` | Reading a tree over Google Drive File Stream: enumeration is the unit of cost, filesystem watching is not a dependable staleness signal, `Path.rglob` is banned. | ADR 0007, ticket 06, ticket 11. |
 | `atlas-drive-latency-measurement.md` | The measured drive: 7,956 folders, 18,536 files, 4.24s for a full walk; the cost is all in the tail. Found two live MAX_PATH failures. | Ticket 12, ADR 0006. |
+| `project-folder-usage-and-agent-output.md` | How 2026 projects actually use their folders: 75% of files in agent-heavy projects are agent scratch, task lists live in seven places, AHJ material in five sections, research outgrew `06`. Proposes `tasks/`, `.agent/runs/`, `13 AHJ`, a fuller `06` seed and the agent filing contract. | Its **Implementation plan** (phases 0-5) and **Open questions** Q1-Q5. |
 | `atlas-tui-ux-evidence.md` | Console direction - an expert operations console - plus "do not preload files on the shared drive", because a preview downloads remote content. | ADR 0005, `.agent/handoff/atlas-tui-research.md`. |
 
 Atlas work is tracked in `.scratch/atlas-console/map.md` (destination, closed decisions,

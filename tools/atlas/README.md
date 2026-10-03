@@ -29,6 +29,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 | `atlas conform --project NAME [--apply]` | Preview or apply mapped repairs |
 | `atlas conform --project NAME --node PATH [--apply]` | Preview or apply the repair for one node, by project-relative path |
 | `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
+| `atlas runs (--project NAME \| --all) [--days N] [--apply]` | List agent runs; zip the closed ones into `.agent/archive/` (ADR 0011). Preview by default |
 
 TUI keys:
 
@@ -54,7 +55,8 @@ TUI keys:
 
 `f` acts on whatever has focus: the whole project from the list, one folder or file from the
 tree, one unmet control-plane Expectation (a missing `decisions`, `AGENTS.md`...) from the
-Companion. A missing section says to use `a` instead - conform never creates sections.
+Companion. A missing section says to use `a` instead - conform creates a section only as
+the folder of a template file the map says every project carries (`00 Tasks`, `13 AHJ`).
 
 `o` opens what has focus - the project folder from the list, the file or folder under the
 cursor in the tree. An Unfiled node is revealed in Explorer instead of opened. `y` copies the
@@ -134,6 +136,44 @@ Atlas owns the block between `<!-- atlas:agents-begin -->` and `<!-- atlas:agent
 
 Doctor reports `AGENTS.md` when it is absent or its block is stale, and `CLAUDE.md` when it is anything but the pointer. Conform backfills both. A project carrying a hand-written `CLAUDE.md` is migrated: its words move into `AGENTS.md` first, and `CLAUDE.md` becomes the pointer only once every line of it is provably present there - otherwise it is left alone as a conflict for a person to merge. A hand-saved `Agents.md` is renamed to the canonical spelling rather than duplicated.
 
+## Project templates
+
+Every project carries a few standard files - the task list, the AHJ register, the research
+index, the run log template. Their words live here, in the repo:
+
+`tools/atlas/src/atlas/templates/project/`
+
+Edit a file there and every project created afterwards gets the new version: at once on an
+editable install, and for staff with the next wheel. Existing projects keep their copy -
+conform creates a template file only when it is absent, never over one that exists.
+
+The drive map says which templates a project carries and where (ADR 0012):
+
+```json
+"templates": [
+  {"path": "00 Tasks/TASKS.md", "template": "TASKS.md", "index": "Live task list"}
+]
+```
+
+`index` adds a row to the AGENTS.md index. `{{project_name}}`, `{{project_folder}}` and
+`{{created}}` are filled in. `controlPlane.agentsRules` names the one template that is not
+copied: `agents-rules.md`, whose words become the "Where agent work goes" section of every
+AGENTS.md Atlas block - edit it and conform refreshes the block in every project.
+
+To try a template change on the real drive before releasing, point `ATLAS_TEMPLATES` at a
+folder of templates.
+
+A child in the map may be `{"name": "Lists", "seed": true}`. Seeded children of a seeded
+section are created with a new project, kept by clean, and backfilled by conform.
+
+## Agent runs
+
+Agents keep scratch in `.agent/runs/YYMMDD-<slug>/` (ADR 0011). `atlas runs` lists every run
+and why it is open or closed. A run is closed after `runRetentionDays` (14) with no change,
+when nothing in `00 Tasks/` or `.agent/handoff/` names it. `--apply` zips each closed run
+into `.agent/archive/<run>.zip`, reads the zip back, checks it holds every file, and only
+then removes the folder. Staff run it drive-wide with `_tools\Archive-Agent-Runs.bat`.
+
 ## Editing projects and contacts
 
 Select a project and press `e`. Atlas pre-populates every intake field, shows the derived folder name, then requires a second confirmation when Address or Description changes the folder path. It refuses collisions and updates `PROJECT.md` plus the project-index row together. Project contact reassignment refreshes that project's snapshots only.
@@ -180,11 +220,11 @@ A redeploy writes to the production drive. Do it only with the user's go-ahead. 
 2. Build: `uv build` in `tools/atlas` writes `dist/studio_atlas-<version>-py3-none-any.whl`.
 3. Back up the drive's `_tools` launchers, map and instructions to `_tools\logs\atlas-<version>-deploy-<YYYYMMDD-HHMMSS>\`.
 4. Copy the wheel to `_tools\atlas\` and record its SHA-256.
-5. Repin `Atlas.bat` to the new version.
+5. Copy `tools/atlas/launchers/*.bat` to `_tools\`; `Atlas.bat` carries the version pin.
 6. Verify: the deployed launcher reports `atlas <version>`, and `atlas lint` on the production map shows no new errors.
 7. Update the drive's `HOW-TO.md` for any key or command that changed.
 
-Not recorded in the repo: the body of `Atlas.bat` - how it installs or runs the pinned wheel. Read it on the drive before changing it.
+The launchers are in the repo at `tools/atlas/launchers/` and are copied to `_tools\` on deploy. `Atlas.bat` is the only version pin; every other `.bat` calls it - `New-Project`, `Add-Section`, `Clean-Empty` and `Conform-Project-APPLY` open the console, `Conform-Project` previews `conform --all`, and `Archive-Agent-Runs` runs `runs --all --apply`. The PowerShell tools they used to call are retired to `_tools\_deprecated\`: Atlas is the only thing that creates projects or folders.
 
 ## Dev
 

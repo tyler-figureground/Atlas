@@ -212,6 +212,25 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
             unreadable.append(str(error))
     if m.analysis_dir and not (inv.path / m.analysis_dir).exists():
         missing.append(m.analysis_dir)
+    # Template files every project carries (ADR 0012). Missing means absent:
+    # one that exists is the project's own, however far it has drifted from
+    # the template, and conform never overwrites it.
+    for template in m.templates:
+        if not (inv.path / template.path).exists():
+            missing.append(template.path)
+    # Seeded children of a seeded section that is here, or that a template
+    # backfill above is about to create (it applies first: backfills keep
+    # their order). Not of any other absent section: conform never creates a
+    # section for its own sake.
+    present = {e.name for e in inv.root_entries if e.is_dir}
+    present.update(t.path.split("/")[0] for t in m.templates if t.path in missing)
+    for section in m.sections:
+        if not section.seed or section.id not in present:
+            continue
+        for child in section.seed_children:
+            rel = f"{section.id}/{child}"
+            if not (inv.path / rel).is_dir():
+                missing.append(rel)
 
     # driftMap: top-level dirs whose (case-insensitive) name is a known drift.
     drift: list[tuple[str, str]] = []
@@ -245,8 +264,9 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
     # tolerated set do not explain.
     explained = set(section_ids)
     explained.update(p.split("/")[0].split("\\")[0] for p in _control_plane_paths(m))
-    if m.handoffs_dir:
-        explained.add(m.handoffs_dir.replace("\\", "/").split("/")[0])
+    for agent_dir in m.agent_dirs:
+        explained.add(agent_dir.replace("\\", "/").split("/")[0])
+    explained.update(t.path.split("/")[0] for t in m.templates)
     explained.update(name for name, _ in drift)
     explained.update(h.source for h in reloc_hits)
     swept = {name for name, _ in sweeps}

@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Atlas `0.7.0` - project templates.** A drive map's `templates` list names files every project carries; the words live in `tools/atlas/src/atlas/templates/project/` and ship in the wheel. `atlas new` writes them, doctor reports an absent one, conform creates it and never overwrites. `controlPlane.agentsRules` puts the agent filing rules into every AGENTS.md Atlas block. ADR 0012.
+- **Atlas `0.7.0` - seeded children.** A map child may be `{"name": ..., "seed": true}`: made with a new project, kept by clean, backfilled by conform when its section exists.
+- **Atlas `0.7.0` - `atlas runs (--project NAME | --all) [--days N] [--apply]`.** Lists agent runs under `controlPlane.runsDir` and zips closed ones (idle `runRetentionDays`, named by no task list or handoff) into `archiveDir`, verifying each zip before removing the folder. ADR 0011.
+- **Studio templates** `TASKS.md`, `Task List Template.md`, `AHJ-REGISTER.md`, `RESEARCH-INDEX.md`, `RUN-TEMPLATE.md`, `agents-rules.md`.
+- **Launchers** in `tools/atlas/launchers/`: every `_tools\*.bat` now goes through `Atlas.bat`; `Archive-Agent-Runs.bat` added.
+- ADRs 0011 (agent run folders), 0012 (project templates), 0013 (`00 Tasks` and `13 AHJ`). Research report `docs/research/project-folder-usage-and-agent-output.md`.
+
+### Changed
+
+- **09-project-dossier `1.4.0`:** PROJECT.md holds no tasks and no session logs; they go to `00 Tasks/TASKS.md` and the run's `RUN.md`.
+- Atlas: the PROJECT.md canonical-map block points at Atlas, not `Add-Section.bat`, and tags seeded children.
+
+### Fixed
+
+- Atlas test `test_new_project_wizard_creates_complete_project` asserted a `260` date prefix and failed from October 2026; it now checks today's stamp.
+
 ## [1.8.0] - 2026-09-23
 
 Studio drive release. Atlas `0.2.0` through `0.6.0`, the dispatcher's marker-driven metadata hook, and the report-marker patch bumps it needed. Atlas `0.6.0` closes the 2026-09 audit (#62): about 55 fixes to writes, undo, drive reads, the console and the CLI contract.

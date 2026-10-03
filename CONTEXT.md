@@ -380,3 +380,48 @@ What conform does with a project whose CLAUDE.md still holds instructions: the
 words move into AGENTS.md first, and CLAUDE.md becomes the Pointer only once every
 non-blank line of it is provably present there, or it is stock generator output.
 Anything else is left in place as a conflict for a person to merge.
+
+## Atlas Project Templates
+
+**Template File**
+A file every project carries, copied by Atlas from the studio template folder in the
+repo (tools/atlas/src/atlas/templates/project/). The drive map names where each one goes.
+Created with a new project, backfilled by conform when absent, never overwritten. ADR 0012.
+
+**Seeded Child**
+A child folder created with its section when a project is started, and kept by clean.
+Conform backfills it when its section exists. A child in the map is a name, or a name
+marked seed.
+
+**Task List**
+00 Tasks/TASKS.md: the one live list of what is next on a project, in lanes TYLER,
+AGENT, MODEL and WAIT. Facts go in PROJECT.md and reasons in decisions/; neither holds
+tasks. ADR 0013.
+
+**Scoped List**
+A longer list for one scope - an audit, a revision round - in 00 Tasks/Lists/, copied from
+the task list template and linked from the Task List. Archived when its parent task is done.
+
+**AHJ Register**
+13 AHJ/AHJ-REGISTER.md: one row per application to an authority having jurisdiction, with
+its number, status and next action. The stage folders beside it hold the files. ADR 0013.
+
+**Research Index**
+06 Research & Existing Conditions/RESEARCH-INDEX.md: every source a person or agent may
+rely on, who it came from, and its authority - official, record, professional, client,
+derived or reference.
+
+## Atlas Agent Workspace
+
+**Run**
+One agent session's work on one task. Its scratch lives in a Run Folder; its result, if a
+person will read one, is filed in the numbered tree. ADR 0011.
+
+**Run Folder**
+.agent/runs/YYMMDD-slug/: everything a Run makes that no person will read, plus its RUN.md
+log.
+
+**Closed Run**
+A Run Folder untouched for the map's runRetentionDays (14), named by no task list or
+handoff, and fully readable. atlas runs --apply zips it into .agent/archive/ and removes the
+folder once the zip has been read back and matches it file for file.

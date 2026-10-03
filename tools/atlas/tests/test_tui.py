@@ -108,7 +108,7 @@ async def test_new_project_wizard_creates_complete_project(fixture_drive):
         assert app.screen.query_one("#client-contact", Select).value == contact.id
         app.screen.query_one("#next-contacts", Button).press()
         await pilot.pause()
-        assert "260" in str(app.screen.query_one("#review", Static).render())
+        assert date.today().strftime("%y%m%d") in str(app.screen.query_one("#review", Static).render())
         app.screen.query_one("#create-project", Button).press()
         await settle(app, pilot)
 
