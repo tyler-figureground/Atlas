@@ -425,3 +425,40 @@ log.
 A Run Folder untouched for the map's runRetentionDays (14), named by no task list or
 handoff, and fully readable. atlas runs --apply zips it into .agent/archive/ and removes the
 folder once the zip has been read back and matches it file for file.
+
+## Reference Sets
+
+**Deliverable Type**
+A kind of thing the studio issues or files, keyed by a slug - `code-analysis`,
+`meeting-minutes`, `g-series`. One type, one Reference Set. ADR 0015.
+
+**Reference Set**
+The curated package for one Deliverable Type: a Card, at most three Exemplars and one
+Near-miss, and a pointer to its Skeleton. House standard, approved by Tyler alone. Lives in
+LIBRARY - Reference/00 Office Standards and Administration/Reference Sets/.
+_Avoid_: library, samples, precedents.
+
+**Card**
+A Reference Set's SET.md: when to use, what good looks like, what not to carry over, a
+review checklist. The one file every agent and junior reads. Under 150 lines.
+
+**Exemplar**
+A frozen, approved copy of a real deliverable, with a NOTES.md saying why it was chosen.
+Looked at, never started from.
+
+**Near-miss**
+A real deliverable of the type that falls short in one or two named ways, kept with what
+holds it back.
+
+**Skeleton**
+The structure of a deliverable with placeholders: the file you start from. An Atlas
+project template is a Skeleton.
+
+**Leak List**
+The facts an Exemplar's project owns - name, address, parcel and permit numbers, client,
+entity, code edition. Present in a new draft means copied.
+
+**Precedent**
+Another organisation's material held for comparison, in a REF- package. Never a Reference
+Set and never copied into a deliverable. Other firms' drawing sets live in
+04 Design Process by Phase/04 Construction Documents/Precedent Sets/.
