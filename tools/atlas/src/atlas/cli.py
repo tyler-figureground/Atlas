@@ -46,6 +46,7 @@ from .core.intake import (
 from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
+from .core.refsets import RefSetError, check_draft, list_sets
 from .core.runs import archive_run, list_runs
 from .core.templates import TemplateError
 from .core.project_data import (
@@ -838,6 +839,75 @@ def cmd_runs(args: argparse.Namespace) -> int:
     return 1 if pending else 0
 
 
+REFERENCE_SETS_ENV = "ATLAS_REFERENCE_SETS"
+
+
+def _reference_root(args: argparse.Namespace) -> Path:
+    """--root, else $ATLAS_REFERENCE_SETS, else the drive map's top-level
+    ``referenceSets``. An absolute path, and deliberately not in controlPlane:
+    the sets live on the library drive, and every controlPlane path is
+    project-relative."""
+    if args.root:
+        return Path(os.path.abspath(args.root))
+    if os.environ.get(REFERENCE_SETS_ENV):
+        return Path(os.environ[REFERENCE_SETS_ENV])
+    raw = json.loads(find_map(_resolve_drive(args.drive)).read_text(encoding="utf-8"))
+    value = raw.get("referenceSets", "") if isinstance(raw, dict) else ""
+    if not isinstance(value, str) or not value:
+        raise UsageError("no reference sets folder: pass --root, set "
+                         f"{REFERENCE_SETS_ENV}, or add referenceSets to the map")
+    return Path(value)
+
+
+def cmd_refs(args: argparse.Namespace) -> int:
+    """List Reference Sets (ADR 0015): status, review dates, problems. Read-only."""
+    from datetime import date
+    root = _reference_root(args)
+    today = date.today()
+    rows = []
+    for refset in list_sets(root):
+        rows.append({
+            "type": refset.type, "title": refset.title, "status": refset.status,
+            "entity": refset.entity, "reviewed": refset.reviewed,
+            "next_review": refset.next_review, "stale": refset.stale(today),
+            "exemplars": [e.id for e in refset.exemplars],
+            "problems": refset.problems(), "folder": str(refset.folder),
+        })
+    flagged = sum(1 for r in rows if r["problems"] or r["stale"])
+    if args.json:
+        print(json.dumps({"root": str(root), "sets": rows}, indent=2))
+    else:
+        for r in rows:
+            state = r["status"] or "no status"
+            if r["stale"]:
+                state += ", STALE"
+            print(f"{r['type'] or '?':20} {state:22} {' '.join(r['exemplars'])}")
+            for problem in r["problems"]:
+                print(f"  - {problem}")
+        if not rows:
+            print(f"no reference sets under {root}")
+    return 1 if flagged else 0
+
+
+def cmd_refs_check(args: argparse.Namespace) -> int:
+    """Grep a draft for every opened exemplar's leak list. 1 = leaks found."""
+    root = _reference_root(args)
+    draft = Path(args.draft)
+    if not draft.is_file():
+        raise UsageError(f"no such draft: {draft}")
+    leaks, checked = check_draft(draft, list_sets(root), set_type=args.type,
+                                 exemplar_ids=tuple(args.exemplar or ()))
+    if args.json:
+        print(json.dumps({"draft": str(draft), "checked": checked,
+                          "leaks": [vars(leak) for leak in leaks]}, indent=2))
+    else:
+        for leak in leaks:
+            print(f"{draft.name}:{leak.line}: {leak.set} {leak.exemplar} owns "
+                  f"{leak.string!r} - {leak.text}")
+        print(f"{len(leaks)} leak(s); checked {', '.join(checked) or 'no exemplars'}")
+    return 1 if leaks else 0
+
+
 def cmd_tree(args: argparse.Namespace) -> int:
     """The tree's facts: Filing State and Load State below the project root.
 
@@ -1248,6 +1318,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     project_edit.set_defaults(fn=cmd_project_edit)
 
+    refs = sub.add_parser("refs", help="reference sets: list them, check a draft for leaks (read-only)")
+    refs.add_argument("--root", help="reference sets folder (default: $ATLAS_REFERENCE_SETS, "
+                                     "else the map's referenceSets)")
+    refs.add_argument("--drive", help="drive root whose map names the reference sets folder")
+    refs.add_argument("--json", action="store_true", help="machine-readable output")
+    refs.set_defaults(fn=cmd_refs)
+    refs_commands = refs.add_subparsers(dest="refs_command")
+    refs_check = refs_commands.add_parser(
+        "check", help="grep a draft for the leak lists of the exemplars it used")
+    refs_check.add_argument("draft", help="the file to check")
+    refs_check.add_argument("--type", help="only this set (default: the draft's reference "
+                                           "marker, else every set)")
+    refs_check.add_argument("--exemplar", action="append", help="only this exemplar ID (repeatable)")
+    refs_check.add_argument("--root", default=argparse.SUPPRESS)
+    refs_check.add_argument("--drive", default=argparse.SUPPRESS)
+    refs_check.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    refs_check.set_defaults(fn=cmd_refs_check)
+
     sub.choices["new"].add_argument("--name", required=True, help="project name")
     sub.choices["new"].add_argument("--street", required=True, help="project street address")
     sub.choices["new"].add_argument("--unit", default="", help="project address unit")
@@ -1297,7 +1385,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.fn(args)
     except (ContactError, IntakeError, OpsError, ProjectDataError, MapError,
-            TemplateError, UsageError, OSError) as error:
+            TemplateError, UsageError, RefSetError, OSError) as error:
         # Every error exits 2, never 1: 1 means the drive has findings. An
         # OSError here is the backstop - a locked file, a vanished mount - and is
         # reported, not raised as a traceback over empty --json stdout.
