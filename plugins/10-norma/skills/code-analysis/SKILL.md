@@ -16,8 +16,8 @@ This is the *generator* sibling of `/ibc`. `/ibc` answers one question; `/code-a
 ## Document-specific rules
 
 - **State the governing edition + jurisdiction up front and on every line.** Every value-bearing line cites `<edition> <section>`, e.g. `2022 NYC Building Code Table 1004.1.3`. A line with a number and no citation is a bug.
-- **Flag every table-derived number** with a trailing ` — verify against published code`.
-- **A cover sheet for a locality must carry the local layer.** In a California locality (`-j napa`, `napa-city`, `sonoma`, `calistoga`, `yountville`, `american-canyon`) the ordinance overrides the state base, and under `-j napa` the **adopted regulatory instruments** - Napa County Road & Street Standards (2023), Napa County Defensible Space Guidelines (May 2021) - are governing, citable law incorporated by county ordinance. A sheet built from `-j ca` for a Napa County project is wrong on its face. Values taken from an instrument carry a trailing ` — verify tables, charts, and plates against the published instrument`.
+- **Flag every table-derived number** with a trailing ` - verify against published code`.
+- **A cover sheet for a locality must carry the local layer.** In a California locality (`-j napa`, `napa-city`, `sonoma`, `calistoga`, `yountville`, `american-canyon`) the ordinance overrides the state base, and under `-j napa` the **adopted regulatory instruments** - Napa County Road & Street Standards (2023), Napa County Defensible Space Guidelines (May 2021) - are governing, citable law incorporated by county ordinance. A sheet built from `-j ca` for a Napa County project is wrong on its face. Values taken from an instrument carry a trailing ` - verify tables, charts, and plates against the published instrument`.
 - **Never cite the advisory layers.** The DGS `dgs` block (state Title 24 guidance) and the AHPP `advisory` block inform the work; neither governs and neither belongs in the Code References list.
 - **Run `norma guard` on the finished draft before presenting.** If any citation comes back UNVERIFIED, the document is not done - locate the real section in the corpus and fix it, then re-run until it passes.
 
@@ -113,9 +113,27 @@ Write Markdown into the project's code dir. Get the destination with **`norma pr
 8. **Accessibility scope** - applicable chapter: IBC/NYC Ch. 11; **California splits 11A (housing) vs 11B (public/commercial)** - pick the right one and say which. Cite the governing section.
 9. **Code References** - consolidated list of every `<edition> <section>` cited above, deduped.
 
+### Dwellings: the residential code variant
+
+When the work is a detached one- or two-family dwelling, a townhouse, or an accessory structure inside the residential code's scope (CRC / IRC § R101.2), the commercial battery does not apply. Confirm scope first and cite it in section 1. Keep the same nine headings, in order, so the sheet reads like every other code analysis. A heading whose subject the residential code does not regulate stays in place with one line saying why, cited. Never drop it and never compute it anyway.
+
+| # | Heading | What goes under it for a dwelling |
+|---|---|---|
+| 1 | Project & Jurisdiction | As above, plus the scope finding (`<edition> § R101.2`) and, in California, a per-part table: CRC, Energy Code, CALGreen, CFC / WUI, each with its edition and local amending section. |
+| 2 | Occupancy Classification | `R-3` dwelling and `U` garage or accessory, stated for reference. Note that the residential code governs in place of the building code's Chapter 3. |
+| 3 | Construction Type | One line: the residential code does not assign a Chapter 6 type. Then state the construction method and the prescriptive path relied on, with its limits (`R301`). Say whether an engineer is required. |
+| 4 | Allowable vs. Actual | Replace the Chapter 5 table with the scope limits: stories above grade plane, height, and the prescriptive-path conditions (wind, seismic design category, snow, flood). Each row gets the limit, the actual and pass/fail. Do not run `allowable`. |
+| 5 | Occupant Load | One line: not computed, because the residential code has no occupant-load provisions. Do not run `occupant-load`. |
+| 6 | Means of Egress | Emergency escape and rescue openings (`R310`), egress door, hallways, stairs and handrails (`R311`), guards and window-fall protection (`R312`). Flag any EERO an addition makes non-compliant; it is often the item that moves walls. |
+| 7 | Fire-Resistance Ratings | Fire separation distance and exterior walls (`R302.1`), dwelling-to-garage separation (`R302.6`), two-family or townhouse separation, sprinklers (`R313` plus any local trigger, with the arithmetic shown), smoke and CO alarms (`R314`, `R315`), and wildland-urban interface (`R337` / CWUIC) where mapped. |
+| 8 | Accessibility scope | Usually not applicable: say why and cite the scoping section. California 11A reaches covered multifamily, not a private single-family dwelling. Say what would change that: a public or commercial use brings in 11B, a covered multifamily building 11A. |
+| 9 | Code References | As above. |
+
+Energy, CALGreen and flood findings go under 7 or as a short item after 8, cited like any other line. If a dwelling sheet runs `allowable`, `occupant-load` or `egress-width`, the scope test was skipped. Studio users: the Code Analysis reference set shows this variant on real projects (E1, E2, and N1 section 12).
+
 Formatting conventions:
 - Header line: `Governing code: <edition> (<jurisdiction>). All citations are to this edition unless noted.`
-- Every table-derived line: trailing ` — verify against published code`.
+- Every table-derived line: trailing ` - verify against published code`.
 - Where a calculator returned `verify`, append `verify: <text>`.
 - No em dashes; use a spaced hyphen.
 
