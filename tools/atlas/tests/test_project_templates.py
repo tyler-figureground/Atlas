@@ -127,7 +127,7 @@ def test_every_bundled_template_renders_without_leftover_placeholders():
     values = {"project_folder": "261002_1 Main St-Test", "project_name": "Test", "created": "2026-10-02"}
     names = sorted(p.name for p in template_dir().iterdir() if p.suffix == ".md")
     assert {"TASKS.md", "Task List Template.md", "AHJ-REGISTER.md", "RESEARCH-INDEX.md",
-            "RUN-TEMPLATE.md", "agents-rules.md", "INTAKE.md"} <= set(names)
+            "RUN-TEMPLATE.md", "agents-rules.md", "INTAKE.md", "BRIEF.md"} <= set(names)
     for name in names:
         text = "\n".join(render(read_template(name), values))
         assert "{{" not in text, name
@@ -345,3 +345,53 @@ def test_runs_cli_previews_then_applies(run_project, capsys):
 def test_runs_cli_needs_a_target(run_project, capsys):
     drive, _m, _project = run_project
     assert main(["runs", "--drive", str(drive)]) == 2
+
+
+BRIEF_ENTRY = {"path": "BRIEF.md", "template": "BRIEF.md",
+               "index": "Read first - settled (do not ask), open questions, holds"}
+
+
+def test_brief_and_ask_last_rules_reach_every_project(v3_drive):
+    # Agents re-asked settled scope (Montez 2026-10-03): the brief, the ask gate,
+    # the after-meeting steps and the size limits ride in every AGENTS.md block.
+    data = copy.deepcopy(V3_MAP)
+    data["templates"].append(BRIEF_ENTRY)
+    write_map(v3_drive, data)
+    m = _load(v3_drive)
+    project = new_project(v3_drive, m, make_intake(v3_drive, "Brief House")).path
+    brief = (project / "BRIEF.md").read_text(encoding="utf-8")
+    assert "# Brief - Brief House" in brief
+    assert brief.index("## Settled - do not ask") < brief.index("## Open - ask only these")
+    agents = (project / "AGENTS.md").read_text(encoding="utf-8")
+    for heading in ("## Read first, ask last", "## After every meeting", "## Control files stay small"):
+        assert heading in agents, heading
+    assert "4. To-do list:" in agents
+    assert "| Read first - settled (do not ask), open questions, holds | `BRIEF.md` |" in agents
+    assert agents_block_current(agents, m)
+
+
+def test_conform_backfills_the_brief_without_overwriting(v3_drive):
+    data = copy.deepcopy(V3_MAP)
+    data["templates"].append(BRIEF_ENTRY)
+    write_map(v3_drive, data)
+    m = _load(v3_drive)
+    fresh = make_project(v3_drive, "250101_Brief House", sections=["01 Model"])
+    kept = make_project(v3_drive, "250101_Kept House", sections=["01 Model"],
+                        files={"BRIEF.md": "# ours\n"})
+    for project in (fresh, kept):
+        apply_plan(v3_drive, project, m, build_plan(_report(project, m), m, project))
+    assert (fresh / "BRIEF.md").read_text(encoding="utf-8").startswith("---")
+    assert (kept / "BRIEF.md").read_text(encoding="utf-8") == "# ours\n"
+
+
+def test_conform_backfills_the_agent_workspace_into_an_old_project(v3_drive):
+    # AGENTS.md says "copy it to .agent/backups/" - a project made before the
+    # workspace existed must get the folder, or the backup rule has nowhere to go.
+    m = _load(v3_drive)
+    project = make_project(v3_drive, "250101_Workspace House", sections=["01 Model"])
+    report = _report(project, m)
+    assert ".agent/backups" in report.missing_control_plane
+    assert ".agent/archive" not in report.missing_control_plane
+    apply_plan(v3_drive, project, m, build_plan(report, m, project))
+    assert (project / ".agent/backups").is_dir() and (project / ".agent/runs").is_dir()
+    assert _report(project, m).missing_control_plane == ()

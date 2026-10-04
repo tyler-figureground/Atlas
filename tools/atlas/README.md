@@ -157,8 +157,13 @@ The drive map says which templates a project carries and where (ADR 0012):
 
 `index` adds a row to the AGENTS.md index. `{{project_name}}`, `{{project_folder}}` and
 `{{created}}` are filled in. `controlPlane.agentsRules` names the one template that is not
-copied: `agents-rules.md`, whose words become the "Where agent work goes" section of every
-AGENTS.md Atlas block - edit it and conform refreshes the block in every project.
+copied: `agents-rules.md`, whose words become the rules sections of every AGENTS.md Atlas
+block - read first and ask last, after every meeting, control-file limits, where agent work
+goes, research and asking. Edit it and conform refreshes the block in every project.
+
+`BRIEF.md` sits at the project root: now, settled (do not ask), open, holds, latest meeting.
+Agents read it first and rebuild it after every meeting, so a decision made in a meeting
+reaches the next agent without it digging through the register.
 
 To try a template change on the real drive before releasing, point `ATLAS_TEMPLATES` at a
 folder of templates.

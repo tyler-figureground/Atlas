@@ -142,6 +142,12 @@ class DriveMap:
         return tuple(d for d in (self.handoffs_dir, self.runs_dir, self.backups_dir,
                                  self.archive_dir) if d)
 
+    @property
+    def workspace_dirs(self) -> tuple[str, ...]:
+        """The agent folders AGENTS.md tells agents to write into - runs and
+        backups. Conform backfills these; handoffs and archive stay on demand."""
+        return tuple(d for d in (self.runs_dir, self.backups_dir) if d)
+
     def seed_child_paths(self) -> tuple[str, ...]:
         return tuple(f"{s.id}/{c}" for s in self.sections if s.seed for c in s.seed_children)
 

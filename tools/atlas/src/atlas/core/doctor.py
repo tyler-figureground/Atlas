@@ -212,6 +212,12 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
             unreadable.append(str(error))
     if m.analysis_dir and not (inv.path / m.analysis_dir).exists():
         missing.append(m.analysis_dir)
+    # The agent workspace agents write into (ADR 0011). `atlas new` makes it; a
+    # project older than the map's runsDir/backupsDir never got it, and AGENTS.md
+    # tells agents to back up into it - so conform makes it too.
+    for agent_dir in m.workspace_dirs:
+        if not (inv.path / agent_dir).is_dir():
+            missing.append(agent_dir)
     # Template files every project carries (ADR 0012). Missing means absent:
     # one that exists is the project's own, however far it has drifted from
     # the template, and conform never overwrites it.

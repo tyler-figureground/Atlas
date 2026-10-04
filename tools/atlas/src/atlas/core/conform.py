@@ -739,6 +739,9 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
     if target == m.analysis_dir:
         mkdir_below(project, m.analysis_dir)
         return replace(action, status=DONE)
+    if target in m.workspace_dirs:
+        mkdir_below(project, target)
+        return replace(action, status=DONE, note="agent workspace")
     template = next((t for t in m.templates if t.path == target), None)
     if template is not None:
         return _backfill_template(project, template, action)
