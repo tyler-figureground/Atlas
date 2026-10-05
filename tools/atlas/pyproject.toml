@@ -1,9 +1,10 @@
 [project]
 name = "studio-atlas"
-version = "0.9.1"
+version = "0.9.2"
 description = "Atlas - map-driven TUI/CLI for studio shared-drive project tooling (spec: LIBRARY - Reference/_House Standard/atlas-tui-spec.md)"
 requires-python = ">=3.12"
 dependencies = [
+    "markdown-it-py>=3",
     "pypdf[crypto]>=6.18,<7",
     "textual>=8.2,<9",
 ]
