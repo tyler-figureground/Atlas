@@ -228,3 +228,16 @@ def test_studio_ignore_covers_phrases_containing_the_name(sets_root: Path, tmp_p
     draft.write_text("Per the iGUIDE survey of 262 Monte Vista.\n", encoding="utf-8")
     leaks, _ = check_draft(draft, list_sets(sets_root), ignore=studio_ignore(sets_root))
     assert [l.string for l in leaks] == ["262 Monte Vista"]
+
+
+def test_retired_exemplar_is_listed_apart_and_never_checked(sets_root: Path, tmp_path: Path):
+    x = sets_root / "Code Analysis" / "X1 Old"
+    x.mkdir()
+    (x / "NOTES.md").write_text("---\nid: X1\nstatus: retired\nleak_list: [\"Old Barn\"]\n---\n",
+                                encoding="utf-8")
+    [refset] = list_sets(sets_root)
+    assert refset.retired == ("X1",) and "X1" not in [e.id for e in refset.exemplars]
+    draft = tmp_path / "d.md"
+    draft.write_text("Old Barn\n", encoding="utf-8")
+    leaks, checked = check_draft(draft, [refset])
+    assert leaks == [] and "code-analysis X1" not in checked

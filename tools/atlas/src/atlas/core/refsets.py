@@ -146,6 +146,7 @@ class RefSet:
     next_review: str
     folder: Path
     exemplars: tuple[Exemplar, ...] = field(default_factory=tuple)
+    retired: tuple[str, ...] = field(default_factory=tuple)  # ids kept for lineage, never checked
 
     def stale(self, today: date) -> bool:
         try:
@@ -175,7 +176,7 @@ def _text(path: Path) -> str:
 
 def load_set(folder: Path) -> RefSet:
     card = front_matter(_text(folder / CARD))
-    exemplars = []
+    exemplars, retired = [], []
     for child in sorted(p for p in folder.iterdir() if p.is_dir()):
         notes = child / NOTES
         if not notes.is_file():
@@ -183,6 +184,9 @@ def load_set(folder: Path) -> RefSet:
                 exemplars.append(Exemplar(child.name.split()[0], child, "", (), False))
             continue
         fm = front_matter(_text(notes))
+        if str(fm.get("status", "")).lower() == "retired":
+            retired.append(str(fm.get("id") or child.name.split()[0]))
+            continue
         leaks = fm.get("leak_list", [])
         leaks = tuple(s for s in (leaks if isinstance(leaks, list) else [leaks]) if s)
         exemplars.append(Exemplar(
@@ -201,6 +205,7 @@ def load_set(folder: Path) -> RefSet:
         next_review=str(card.get("next_review", "")),
         folder=folder,
         exemplars=tuple(exemplars),
+        retired=tuple(retired),
     )
 
 
