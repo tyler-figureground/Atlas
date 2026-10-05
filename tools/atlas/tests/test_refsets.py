@@ -188,3 +188,43 @@ def test_short_words_and_cross_project_names_skipped(tmp_path: Path):
     draft.write_text("Ron Cox attended. Max. 35% coverage. Lot 12. Alpha House.\n", encoding="utf-8")
     leaks, _ = check_draft(draft, list_sets(root))
     assert sorted(l.string for l in leaks) == ["Alpha House", "Lot 12"]
+
+
+def test_generic_strings_never_leak(tmp_path: Path):
+    root = tmp_path / "Reference Sets"
+    s = root / "Minutes"
+    (s / "E1 A").mkdir(parents=True)
+    (s / "SET.md").write_text("---\ntype: meeting-minutes\n---\n", encoding="utf-8")
+    (s / "E1 A" / "NOTES.md").write_text(_notes(
+        "E1", r"G:\Shared drives\ARCHITECTURE\P1 Alpha\11 Meetings\m.md",
+        '["260916", "2026-09-16", "50:10", "$100", "DR-019", "15\'\'-7\\"", "873.30 sf", '
+        '"052-123-004", "Alpha House"]'), encoding="utf-8")
+    draft = tmp_path / "draft.md"
+    draft.write_text("260916 2026-09-16 [50:10] $100 DR-019 15'-7\" 873.30 sf\n"
+                     "APN 052-123-004, Alpha House\n", encoding="utf-8")
+    leaks, _ = check_draft(draft, list_sets(root))
+    assert sorted(l.string for l in leaks) == ["052-123-004", "Alpha House"]
+
+
+def test_project_flag_and_studio_ignore(sets_root: Path, tmp_path: Path, capsys):
+    (sets_root / "README.md").write_text("---\nleak_ignore: [Smith, OutKast]\n---\n# Sets\n",
+                                         encoding="utf-8")
+    draft = tmp_path / "draft.md"
+    draft.write_text("211 Centre and Smith, surveyed by OutKast\n", encoding="utf-8")
+    assert main(["refs", "check", str(draft), "--root", str(sets_root), "--json"]) == 1
+    assert [l["string"] for l in json.loads(capsys.readouterr().out)["leaks"]] == ["211 Centre"]
+    own = r"G:\Shared drives\ARCHITECTURE\260527_211 centre street"
+    assert main(["refs", "check", str(draft), "--root", str(sets_root),
+                 "--project", own]) == 0
+
+
+def test_studio_ignore_covers_phrases_containing_the_name(sets_root: Path, tmp_path: Path):
+    from atlas.core.refsets import studio_ignore
+    e1 = sets_root / "Code Analysis" / "E1 Monte Vista - CRC" / "NOTES.md"
+    e1.write_text(_notes("E1", r"G:\Shared drives\ARCHITECTURE\260203_262 Monte Vista Dr\x.md",
+                         '["iGUIDE survey", "262 Monte Vista"]'), encoding="utf-8")
+    (sets_root / "README.md").write_text("---\nleak_ignore: [iGUIDE]\n---\n", encoding="utf-8")
+    draft = tmp_path / "d.md"
+    draft.write_text("Per the iGUIDE survey of 262 Monte Vista.\n", encoding="utf-8")
+    leaks, _ = check_draft(draft, list_sets(sets_root), ignore=studio_ignore(sets_root))
+    assert [l.string for l in leaks] == ["262 Monte Vista"]

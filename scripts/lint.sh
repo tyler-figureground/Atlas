@@ -254,6 +254,20 @@ else
   fail_check "post-output-metadata hook check failed"
 fi
 
+# 9. post-write-reference-check hook behavior - marker-driven leak check. Stub
+#    atlas on PATH; temp files only.
+echo "→ post-write-reference-check hook (marker-driven leak check)"
+if PRC_OUT=$(python3 plugins/08-dispatcher/hooks/tests/check_post_write_reference.py 2>&1); then
+  PRC_LAST=$(printf '%s\n' "$PRC_OUT" | tail -n 1)
+  case "$PRC_LAST" in
+    *"!"*) echo "$PRC_LAST" ;;
+    *) pass_check "${PRC_LAST#"${PRC_LAST%%[![:space:]]*}"}" ;;
+  esac
+else
+  printf '%s\n' "$PRC_OUT"
+  fail_check "post-write-reference-check hook check failed"
+fi
+
 echo
 if [ "$FAIL" -ne 0 ]; then
   echo "lint failed"

@@ -10,7 +10,9 @@ jurisdiction:
 code_edition:
 entity:
 tier: full                 # full | partial | principles
-leak_list: []              # exact strings: project name, street, parcel/BIN, permit/job no., client, contractor
+leak_list: []              # identity facts only: project name, street, parcel/BIN, permit/job no., client, contractor.
+                           # Not dates, times, sums, dimensions or short IDs (DR-019) - every project has its own
+                           # and atlas ignores them. Not studio names - those go in the root README's leak_ignore.
 ---
 
 # {{id}} - {{project}}

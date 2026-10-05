@@ -46,7 +46,7 @@ from .core.intake import (
 from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
-from .core.refsets import RefSetError, check_draft, list_sets
+from .core.refsets import RefSetError, check_draft, list_sets, studio_ignore
 from .core.runs import archive_run, list_runs
 from .core.templates import TemplateError
 from .core.project_data import (
@@ -896,7 +896,8 @@ def cmd_refs_check(args: argparse.Namespace) -> int:
     if not draft.is_file():
         raise UsageError(f"no such draft: {draft}")
     leaks, checked = check_draft(draft, list_sets(root), set_type=args.type,
-                                 exemplar_ids=tuple(args.exemplar or ()))
+                                 exemplar_ids=tuple(args.exemplar or ()),
+                                 project=args.project, ignore=studio_ignore(root))
     if args.json:
         print(json.dumps({"draft": str(draft), "checked": checked,
                           "leaks": [vars(leak) for leak in leaks]}, indent=2))
@@ -1331,6 +1332,8 @@ def main(argv: list[str] | None = None) -> int:
     refs_check.add_argument("--type", help="only this set (default: the draft's reference "
                                            "marker, else every set)")
     refs_check.add_argument("--exemplar", action="append", help="only this exemplar ID (repeatable)")
+    refs_check.add_argument("--project", help="the project the draft is for, when it is kept "
+                                              "outside that project's folder: its own exemplars are skipped")
     refs_check.add_argument("--root", default=argparse.SUPPRESS)
     refs_check.add_argument("--drive", default=argparse.SUPPRESS)
     refs_check.add_argument("--json", action="store_true", default=argparse.SUPPRESS)

@@ -473,24 +473,34 @@ held.
 
 | # | Work | Done when |
 |---|---|---|
-| 2.1 | "Look before you make" section into `agents-rules.md` | Atlas tests green |
-| 2.2 | Atlas release; conform refreshes every AGENTS.md block | Block present in all active projects |
-| 2.3 | `## Reference` step in `code-analysis`, `decision`, `project-dossier`, `slide-deck-generator` skills; bundled fictional `examples/` for outside users | `./scripts/lint.sh` green |
+| 2.1 | "Look before you make" section into `agents-rules.md` | Done 2026-10-04 |
+| 2.2 | Atlas release; conform refreshes every AGENTS.md block | Done 2026-10-04: Atlas 0.9.0, block in all 14 projects (`_tools\logs\atlas-0.9.0-deploy-20261004-192532`) |
+| 2.3 | Reference step in deliverable skills; bundled fictional `examples/` for outside users | Partial: `code-analysis` has its step and marker; `rules/reference-sets.md` covers every skill. Other skills get a step when their type gets a set; fictional examples open |
 | 2.4 | Leak check: `atlas refs check <draft>` - scope from the draft's marker or `--type` / `--exemplar`, else every set; skips exemplars from the draft's own project; exit 1 on a hit | Done 2026-10-04, `tools/atlas/tests/test_refsets.py` |
-| 2.5 | Dispatcher post-write hook calling 2.4 on files with the reference marker | Hook tests in `plugins/08-dispatcher/hooks/tests/` |
-| 2.6 | Run template gains a `Reference:` line | `_RUN-TEMPLATE.md` updated |
+| 2.5 | Dispatcher post-write hook calling 2.4 on files with the reference marker | Done 2026-10-04: `post-write-reference-check`, 18 cases; exit 2 hands leaks to the agent |
+| 2.6 | Run template gains a `Reference:` line | Done for new projects; existing projects keep their copy (conform never overwrites a template) - the AGENTS.md rule asks for the line anyway |
 
 ### Phase 3 - Measure the pilot (1 day agent, 1 h Tyler)
 
 | # | Work | Done when |
 |---|---|---|
-| 3.1 | Per pilot type, 3 holdout inputs from projects that are **not** exemplar sources (e.g. minutes from a Pestoni recording; a code memo for 1673 St. Helena) | Inputs listed |
-| 3.2 | Run each twice: with the set, without it (same skill, same model) | 18 drafts in a run folder |
-| 3.3 | Grade blind: card checklist (Tyler for a sample, an LLM judge calibrated on it for the rest) + leak check | Scores per draft |
-| 3.4 | Decide per type: keep, fix, or drop the set | Decision recorded in the ADR |
+| 3.1 | Per pilot type, 3 holdout inputs from projects that are **not** exemplar sources (e.g. minutes from a Pestoni recording; a code memo for 1673 St. Helena) | Done 2026-10-04: code analysis 3 (Grove, Bucktown, Pestoni); minutes 2 (no non-source project has a transcript - other meetings on source projects, own exemplar withheld); G-series not run (agents cannot draw sheets) |
+| 3.2 | Run each twice: with the set, without it (same skill, same model) | Done: 10 drafts |
+| 3.3 | Grade blind: card checklist (Tyler for a sample, an LLM judge calibrated on it for the rest) + leak check | LLM judges done; Tyler calibration sample open |
+| 3.4 | Decide per type: keep, fix, or drop the set | Keep both; misses folded into Known issues |
 
 Go signal: with-set drafts pass more checklist lines and need fewer Tyler edits, zero leak
 hits. A type where the set does not help gets a skeleton and checklist only (section 1.6).
+
+**Result (Measured, 2026-10-04, n = 5 pairs, LLM judges):** with-set preferred 5 of 5.
+Edits before the draft could go to Tyler 26 vs 42 (-38%); checklist 92% vs 58%; accuracy
+7.6 vs 6.6, completeness 7.0 vs 6.6, usefulness 8.3 vs 6.2 (of 10). Gains were in structure,
+usefulness and avoiding the worst errors; facts were not better by default (Bucktown's
+no-set memo was slightly more accurate) and minutes coverage fell (the tighter drafts
+dropped scope items). No draft copied an exemplar fact; the first checker raised false hits
+on dates, timestamps, IDs and studio vendors, and two agents bent true facts to clear them -
+fixed in Atlas 0.9.1. Full table:
+`G:\Shared drives\LIBRARY - Reference\00 Office Standards and Administration\Library Administration\Evals\2026-10-04 Reference Sets Pilot\RESULTS.md`.
 
 ### Phase 4 - Expand and bring in juniors (1-2 weeks, spread out)
 
