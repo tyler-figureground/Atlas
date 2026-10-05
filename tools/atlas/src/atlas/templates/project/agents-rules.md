@@ -20,7 +20,7 @@
 
 Recording -> Dicta transcript in `11 Meetings/`. Then one run does all six, in order:
 
-1. Minutes: `YYMMDD - <Name> - Meeting Minutes.md` beside the transcript. Decisions made (each linked to the register), action items with owner, open questions; every item in the transcript, walked end to end. `Prepared by: Tyler`. Mark doubt inline with `(confirm)`. Never name file paths, the transcript, the recording or the transcription tool; no limits paragraph, no internal-draft label.
+1. Minutes: `YYMMDD - <Name> - Meeting Minutes.md` beside the transcript. Decisions made (each linked to the register), action items with owner, open questions; every item in the transcript, walked end to end. `Prepared by: Tyler`. A bare `[mm:ss]` timestamp on every decision and action, never explained. Mark doubt inline with `(confirm)`. Never name file paths, the transcript, the recording or the transcription tool; no limits paragraph, no internal-draft label.
 2. Decisions: one record per decision made or changed (`/decision`, or the project's own register if this file says it keeps one). Supersede; never overwrite a rationale.
 3. Facts: update `PROJECT.md` front matter and its mirror rows, each with source and date.
 4. To-do list: every action item becomes a task in `00 Tasks/TASKS.md` - `TYLER` for Tyler's own, `AGENT` or `MODEL` for work an agent can take, `WAIT` for someone outside - each linked to the minutes. Close tasks the meeting finished. No `TASKS.md` yet: create it from Atlas's template first.
