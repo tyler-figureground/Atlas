@@ -13,6 +13,11 @@
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-output-metadata.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/post-write-reference-check.sh",
+            "timeout": 30
           }
         ]
       }

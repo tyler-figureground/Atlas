@@ -158,8 +158,9 @@ The drive map says which templates a project carries and where (ADR 0012):
 `index` adds a row to the AGENTS.md index. `{{project_name}}`, `{{project_folder}}` and
 `{{created}}` are filled in. `controlPlane.agentsRules` names the one template that is not
 copied: `agents-rules.md`, whose words become the rules sections of every AGENTS.md Atlas
-block - read first and ask last, after every meeting, control-file limits, where agent work
-goes, research and asking. Edit it and conform refreshes the block in every project.
+block - read first and ask last, look before you make, after every meeting, control-file
+limits, where agent work goes, research and asking. Edit it and conform refreshes the block
+in every project.
 
 `BRIEF.md` sits at the project root: now, settled (do not ask), open, holds, latest meeting.
 Agents read it first and rebuild it after every meeting, so a decision made in a meeting
@@ -170,6 +171,24 @@ folder of templates.
 
 A child in the map may be `{"name": "Lists", "seed": true}`. Seeded children of a seeded
 section are created with a new project, kept by clean, and backfilled by conform.
+
+## Reference sets
+
+```
+atlas refs [--root DIR] [--json]
+atlas refs check <draft> [--type TYPE] [--exemplar ID ...] [--json]
+```
+
+A Reference Set is one folder per deliverable type: a card (`SET.md`) and up to three
+exemplars plus a near-miss, each with a `NOTES.md` whose front matter lists `leak_list:` -
+the facts its source project owns (ADR 0015). `atlas refs` lists sets with status, review
+dates, stale flags and problems (exit 1 if any). `atlas refs check` greps a draft for the
+leak lists of the exemplars its `<!-- architecture-studio:reference: <type> <E1,E2> -->`
+marker names, else every set; exit 1 on a leak. It skips exemplars from the draft's own
+project, strings listed by exemplars from two or more projects (a shared consultant is no
+one project's fact), and lone words under five characters. The folder comes from `--root`,
+then `$ATLAS_REFERENCE_SETS`, then the drive map's top-level `referenceSets`. Read-only.
+The card templates are in `src/atlas/templates/reference-set/`.
 
 ## Agent runs
 

@@ -10,6 +10,7 @@ nothing in `00 Tasks/` or `.agent/handoff/` names it.
 - Started:
 - Ended:
 - Result filed: <absolute path, or none>
+- Reference: <set and exemplars opened, e.g. code-analysis E1, E3 - or: no set for this type>
 - Tasks touched: <T-NNN done, T-NNN added>
 - Left open: <locks, unsynced model, held items>
 

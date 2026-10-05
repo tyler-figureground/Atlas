@@ -7,6 +7,15 @@
 - Tyler answers in chat: record it before the session ends - decision record, fact in `PROJECT.md`, line moved to Settled in `BRIEF.md`. An answer left only in chat is lost to the next agent.
 - Never re-ask settled scope to be safe. Asking costs Tyler more than reading costs you.
 
+## Look before you make
+
+- Before you draft any deliverable - memo, minutes, sheet, letter, deck - find its type in `G:\Shared drives\LIBRARY - Reference\00 Office Standards and Administration\Reference Sets\README.md` (`atlas refs` lists them). Read its `SET.md`, then the `NOTES.md` and file of the 1-2 exemplars nearest this project by jurisdiction, use case and size.
+- Start from the skeleton the card names, never from an exemplar. Facts come from this project only: `BRIEF.md`, `PROJECT.md`, `decisions/`, cited sources. Form comes from the exemplar. Process comes from the skill; a skill's hard rule beats an exemplar.
+- Put `<!-- architecture-studio:reference: <type> <E1,E2> -->` in the draft, naming the set and the exemplars you opened. Before you hand it back, run the card's Review checklist and `atlas refs check <draft>`. A leak is a defect: fix it, don't explain it. No `atlas` command on this PC: search the draft for each opened exemplar's `leak_list` yourself and say so in the receipt.
+- The run receipt names the set: `Reference: code-analysis E1, E3`. A set still marked `candidate` is used the same way; say so in the receipt.
+- No set for this type: say so in the receipt's asks, name the nearest set you used, and ask Tyler for one example. That question is always allowed.
+- Never copy from `REF-` packages or `Precedent Sets` into a deliverable. Never start from another project's file of the same type.
+
 ## After every meeting
 
 Recording -> Dicta transcript in `11 Meetings/`. Then one run does all six, in order:

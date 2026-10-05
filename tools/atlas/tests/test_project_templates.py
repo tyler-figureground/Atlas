@@ -363,8 +363,13 @@ def test_brief_and_ask_last_rules_reach_every_project(v3_drive):
     assert "# Brief - Brief House" in brief
     assert brief.index("## Settled - do not ask") < brief.index("## Open - ask only these")
     agents = (project / "AGENTS.md").read_text(encoding="utf-8")
-    for heading in ("## Read first, ask last", "## After every meeting", "## Control files stay small"):
+    for heading in ("## Read first, ask last", "## Look before you make",
+                    "## After every meeting", "## Control files stay small"):
         assert heading in agents, heading
+    assert "atlas refs check <draft>" in agents  # ADR 0015
+    assert agents.index("## Read first, ask last") < agents.index("## Look before you make")
+    run_template = (project / ".agent" / "runs" / "_RUN-TEMPLATE.md").read_text(encoding="utf-8")
+    assert "- Reference:" in run_template
     assert "4. To-do list:" in agents
     assert "| Read first - settled (do not ask), open questions, holds | `BRIEF.md` |" in agents
     assert agents_block_current(agents, m)

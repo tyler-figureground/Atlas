@@ -21,6 +21,10 @@ This is the *generator* sibling of `/ibc`. `/ibc` answers one question; `/code-a
 - **Never cite the advisory layers.** The DGS `dgs` block (state Title 24 guidance) and the AHPP `advisory` block inform the work; neither governs and neither belongs in the Code References list.
 - **Run `norma guard` on the finished draft before presenting.** If any citation comes back UNVERIFIED, the document is not done - locate the real section in the corpus and fix it, then re-run until it passes.
 
+## Reference set
+
+Before drafting, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `code-analysis` set, read its `SET.md` and the 1-2 exemplars nearest this project: a California dwelling, a code-issue job, a commercial fit-out. They show form - jurisdiction proved first, the adopting text quoted, the plan-changing item leading, unknowns kept unknown. Every fact still comes from this project and the corpus; these rules beat any exemplar. Put `<!-- architecture-studio:reference: code-analysis <E1,E3> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no set: skip this step.
+
 ## Inputs: the project profile
 
 ```bash
@@ -101,7 +105,7 @@ Read the three verdicts alongside them. `confidence` scores the code candidates 
 
 ## Output document
 
-Write Markdown into the project's code dir. Get the destination with **`norma project analysis-dir`** (it prints/creates `<workspace>/06 Research & Existing Conditions/Code/`), then write **`06 …/Code/<project>-code-analysis.md`**. Its first line is the `<!-- architecture-studio:report -->` marker, so the marketplace's metadata hook recognises it as a report. Use exactly these sections, every value-line ending in a `<edition> <section>` citation:
+Write Markdown into the project's code dir. Get the destination with **`norma project analysis-dir`** (it prints/creates `<workspace>/06 Research & Existing Conditions/Code/`), then write **`06 …/Code/<project>-code-analysis.md`**. Its first line is the `<!-- architecture-studio:report -->` marker, so the marketplace's metadata hook recognises it as a report. If a reference set was opened, the reference marker comes next (see Reference set). Use exactly these sections, every value-line ending in a `<edition> <section>` citation:
 
 1. **Project & Jurisdiction** - name, address, jurisdiction, governing edition (one line explicitly), corpus path.
 2. **Occupancy Classification** - group(s), mixed-use treatment (separated/non-separated), cite Chapter 3 sections.

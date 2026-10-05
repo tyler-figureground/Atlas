@@ -8,6 +8,7 @@ Hooks are event-driven automations that run automatically during Claude Code ses
 |------|-------|-------------|
 | [post-write-disclaimer-check](./post-write-disclaimer-check.sh) | After Write | Warns if a regulatory output (zoning, occupancy, code analysis) is missing the professional disclaimer |
 | [post-output-metadata](./post-output-metadata.sh) | After Write | Stamps YAML front matter (title, date) onto marked plugin reports that lack it; leaves all other Markdown alone |
+| [post-write-reference-check](./post-write-reference-check.sh) | After Write | Greps a draft marked with a reference set for facts copied from its exemplars; hands leaks back to the agent |
 | [pre-commit-spec-lint](./pre-commit-spec-lint.sh) | Before git commit | Scans staged markdown files for malformed CSI section numbers |
 
 ## Installation
@@ -24,11 +25,17 @@ Run `/hooks` in Claude Code to confirm they're loaded. Disable them by disabling
 
 ## Behavior
 
-All three hooks **warn but do not block**. They print messages to stderr when issues are found but allow the action to proceed. To make any hook enforce (block the action), change `exit 0` to `exit 2` at the warning point in the script.
+Three hooks **warn but do not block**; `post-write-reference-check` answers with exit 2 so the agent sees its report and fixes the draft (the Write itself is never undone). They print messages to stderr when issues are found but allow the action to proceed. To make any hook enforce (block the action), change `exit 0` to `exit 2` at the warning point in the script.
 
 ### post-write-disclaimer-check
 
 Checks written `.md` files for the `<!-- architecture-studio:requires-disclaimer -->` marker that regulatory skills emit. If the marker is present but the canonical disclaimer block is missing, prints a warning. Marker-driven — silent on files without the marker.
+
+### post-write-reference-check
+
+Marker-driven. A skill that modelled a draft on a reference set writes `<!-- architecture-studio:reference: <type> <E1,E2> -->` into it (see [`rules/reference-sets.md`](../../../rules/reference-sets.md)). On a Write of a marked `.md` file the hook runs `atlas refs check <file>`, which greps the draft for the leak list of each named exemplar - the address, parcel, client, permit numbers and other facts that belong to the exemplar's project. Leaks: report on stderr, exit 2. Clean, no `atlas` on PATH, or no reference sets configured: silent, exit 0. Skips README, SKILL, CLAUDE, AGENTS, NOTES and SET files and anything under rules/, hooks/, .claude-plugin/ or a Reference Sets folder.
+
+Verified by [`tests/check_post_write_reference.py`](./tests/check_post_write_reference.py) (stub `atlas`, temp files only), which `scripts/lint.sh` runs.
 
 ### post-output-metadata
 

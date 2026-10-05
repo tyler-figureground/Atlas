@@ -473,12 +473,12 @@ held.
 
 | # | Work | Done when |
 |---|---|---|
-| 2.1 | "Look before you make" section into `agents-rules.md` | Atlas tests green |
-| 2.2 | Atlas release; conform refreshes every AGENTS.md block | Block present in all active projects |
-| 2.3 | `## Reference` step in `code-analysis`, `decision`, `project-dossier`, `slide-deck-generator` skills; bundled fictional `examples/` for outside users | `./scripts/lint.sh` green |
+| 2.1 | "Look before you make" section into `agents-rules.md` | Done 2026-10-04 |
+| 2.2 | Atlas release; conform refreshes every AGENTS.md block | Done 2026-10-04: Atlas 0.9.0, block in all 14 projects (`_tools\logs\atlas-0.9.0-deploy-20261004-192532`) |
+| 2.3 | Reference step in deliverable skills; bundled fictional `examples/` for outside users | Partial: `code-analysis` has its step and marker; `rules/reference-sets.md` covers every skill. Other skills get a step when their type gets a set; fictional examples open |
 | 2.4 | Leak check: `atlas refs check <draft>` - scope from the draft's marker or `--type` / `--exemplar`, else every set; skips exemplars from the draft's own project; exit 1 on a hit | Done 2026-10-04, `tools/atlas/tests/test_refsets.py` |
-| 2.5 | Dispatcher post-write hook calling 2.4 on files with the reference marker | Hook tests in `plugins/08-dispatcher/hooks/tests/` |
-| 2.6 | Run template gains a `Reference:` line | `_RUN-TEMPLATE.md` updated |
+| 2.5 | Dispatcher post-write hook calling 2.4 on files with the reference marker | Done 2026-10-04: `post-write-reference-check`, 18 cases; exit 2 hands leaks to the agent |
+| 2.6 | Run template gains a `Reference:` line | Done for new projects; existing projects keep their copy (conform never overwrites a template) - the AGENTS.md rule asks for the line anyway |
 
 ### Phase 3 - Measure the pilot (1 day agent, 1 h Tyler)
 
