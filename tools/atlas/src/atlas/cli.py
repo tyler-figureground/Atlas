@@ -872,6 +872,7 @@ def cmd_refs(args: argparse.Namespace) -> int:
             "entity": refset.entity, "reviewed": refset.reviewed,
             "next_review": refset.next_review, "stale": refset.stale(today),
             "exemplars": [e.id for e in refset.exemplars],
+            "retired": list(refset.retired),
             "problems": refset.problems(), "folder": str(refset.folder),
         })
     flagged = sum(1 for r in rows if r["problems"] or r["stale"])
@@ -882,7 +883,8 @@ def cmd_refs(args: argparse.Namespace) -> int:
             state = r["status"] or "no status"
             if r["stale"]:
                 state += ", STALE"
-            print(f"{r['type'] or '?':20} {state:22} {' '.join(r['exemplars'])}")
+            retired = f"  (retired: {' '.join(r['retired'])})" if r["retired"] else ""
+            print(f"{r['type'] or '?':20} {state:22} {' '.join(r['exemplars'])}{retired}")
             for problem in r["problems"]:
                 print(f"  - {problem}")
         if not rows:
