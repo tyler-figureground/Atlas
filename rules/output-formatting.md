@@ -4,7 +4,9 @@ These conventions govern how skill outputs are structured and presented.
 
 ## Tables
 
-- Use tables for **all comparative data**: product comparisons, scenario analysis, code requirements, area breakdowns
+- Use tables for **numeric and comparative grids**: product comparisons, scenario analysis, area breakdowns, occupant loads, allowable vs actual
+- Narrative items - decisions, actions, findings, open questions - are short labelled lists, not table rows. No sentences of prose inside table cells; a wide text table is unreadable as raw Markdown
+- A file a person will read or send gets a PDF beside it (`atlas pdf <file.md>` in the studio); the Markdown stays the source
 - Include units in column headers, not in every cell: `Area (SF)` with values `1,250` — not `1,250 SF` in each row
 - Right-align numeric columns; left-align text columns
 - Always include a totals or summary row where applicable

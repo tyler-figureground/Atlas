@@ -46,6 +46,7 @@ from .core.intake import (
 from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
+from .core.pdfexport import PdfError, export_pdf
 from .core.refsets import RefSetError, check_draft, list_sets, studio_ignore
 from .core.runs import archive_run, list_runs
 from .core.templates import TemplateError
@@ -909,6 +910,17 @@ def cmd_refs_check(args: argparse.Namespace) -> int:
     return 1 if leaks else 0
 
 
+def cmd_pdf(args: argparse.Namespace) -> int:
+    """Print a Markdown deliverable to a PDF beside it, for reading and sending."""
+    result = export_pdf(Path(args.source), Path(args.out) if args.out else None, force=args.force)
+    if args.json:
+        print(json.dumps({"source": str(result.source), "pdf": str(result.pdf),
+                          "replaced": result.replaced}, indent=2))
+    else:
+        print(f"{'replaced' if result.replaced else 'wrote'} {result.pdf}")
+    return 0
+
+
 def cmd_tree(args: argparse.Namespace) -> int:
     """The tree's facts: Filing State and Load State below the project root.
 
@@ -1339,6 +1351,14 @@ def main(argv: list[str] | None = None) -> int:
     refs_check.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
     refs_check.set_defaults(fn=cmd_refs_check)
 
+    pdf = sub.add_parser("pdf", help="print a Markdown deliverable to a PDF beside it (Edge/Chrome)")
+    pdf.add_argument("source", help="the .md file")
+    pdf.add_argument("--out", help="PDF path (default: beside the source, same name)")
+    pdf.add_argument("--force", action="store_true",
+                     help="replace a PDF that is newer than its source")
+    pdf.add_argument("--json", action="store_true", help="machine-readable output")
+    pdf.set_defaults(fn=cmd_pdf)
+
     sub.choices["new"].add_argument("--name", required=True, help="project name")
     sub.choices["new"].add_argument("--street", required=True, help="project street address")
     sub.choices["new"].add_argument("--unit", default="", help="project address unit")
@@ -1388,7 +1408,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.fn(args)
     except (ContactError, IntakeError, OpsError, ProjectDataError, MapError,
-            TemplateError, UsageError, RefSetError, OSError) as error:
+            TemplateError, UsageError, RefSetError, PdfError, OSError) as error:
         # Every error exits 2, never 1: 1 means the drive has findings. An
         # OSError here is the backstop - a locked file, a vanished mount - and is
         # reported, not raised as a traceback over empty --json stdout.

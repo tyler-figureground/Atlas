@@ -20,7 +20,7 @@
 
 Recording -> Dicta transcript in `11 Meetings/`. Then one run does all six, in order:
 
-1. Minutes: `YYMMDD - <Name> - Meeting Minutes.md` beside the transcript. Decisions made, action items with owner, open questions.
+1. Minutes: `YYMMDD - <Name> - Meeting Minutes.md` beside the transcript. Decisions made (each linked to the register), action items with owner, open questions; every item in the transcript, walked end to end. `Prepared by: Tyler`. Mark doubt inline with `(confirm)`. Never name file paths, the transcript, the recording or the transcription tool; no limits paragraph, no internal-draft label.
 2. Decisions: one record per decision made or changed (`/decision`, or the project's own register if this file says it keeps one). Supersede; never overwrite a rationale.
 3. Facts: update `PROJECT.md` front matter and its mirror rows, each with source and date.
 4. To-do list: every action item becomes a task in `00 Tasks/TASKS.md` - `TYLER` for Tyler's own, `AGENT` or `MODEL` for work an agent can take, `WAIT` for someone outside - each linked to the minutes. Close tasks the meeting finished. No `TASKS.md` yet: create it from Atlas's template first.
@@ -42,6 +42,7 @@ Not done until all six. A meeting whose minutes exist but whose brief and tasks 
 
 - Scratch - scripts, receipts, JSON, captures, check exports, before/after images, saved web pages - goes in `.agent/runs/YYMMDD-<slug>/`, started from `.agent/runs/_RUN-TEMPLATE.md`. Nowhere else.
 - File a result in a numbered folder only when a person will read it: minutes, a code memo, a draft to send, an issued set. Name it `YYMMDD_Title.md`, in the section its subject belongs to. Most runs file nothing there.
+- Everything filed for a person gets a PDF beside it: `atlas pdf "<file.md>"` (re-run after every edit; the Markdown stays the source). Write decisions, actions, findings and open questions as short labelled lists; keep tables for numeric grids - occupant loads, areas, allowable vs actual - never sentences in table cells.
 - Tasks live in `00 Tasks/TASKS.md`, and only there. A longer list for one scope goes in `00 Tasks/Lists/`, copied from `00 Tasks/_Task List Template.md` and linked from `TASKS.md`.
 - `PROJECT.md` holds facts only. Never a session log, never a task list.
 - Before editing `PROJECT.md`, `AGENTS.md` or `TASKS.md`, copy it to `.agent/backups/`. Never leave a backup at the project root.

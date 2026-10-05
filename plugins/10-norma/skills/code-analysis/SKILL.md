@@ -127,19 +127,21 @@ When the work is a detached one- or two-family dwelling, a townhouse, or an acce
 | 2 | Occupancy Classification | `R-3` dwelling and `U` garage or accessory, stated for reference. Note that the residential code governs in place of the building code's Chapter 3. |
 | 3 | Construction Type | One line: the residential code does not assign a Chapter 6 type. Then state the construction method and the prescriptive path relied on, with its limits (`R301`). Say whether an engineer is required. |
 | 4 | Allowable vs. Actual | Replace the Chapter 5 table with the scope limits: stories above grade plane, height, and the prescriptive-path conditions (wind, seismic design category, snow, flood). Each row gets the limit, the actual and pass/fail. Do not run `allowable`. |
-| 5 | Occupant Load | One line: not computed, because the residential code has no occupant-load provisions. Do not run `occupant-load`. |
+| 5 | Occupant Load | Say the residential code sets no occupant-load requirement, then run `occupant-load` for the most likely proposed use of each space and show the table labelled **informational** (building-code factors, not a CRC requirement). It sizes doors, stairs and any future change of use, and it is the number a reviewer asks for first. |
 | 6 | Means of Egress | Emergency escape and rescue openings (`R310`), egress door, hallways, stairs and handrails (`R311`), guards and window-fall protection (`R312`). Flag any EERO an addition makes non-compliant; it is often the item that moves walls. |
 | 7 | Fire-Resistance Ratings | Fire separation distance and exterior walls (`R302.1`), dwelling-to-garage separation (`R302.6`), two-family or townhouse separation, sprinklers (`R313` plus any local trigger, with the arithmetic shown), smoke and CO alarms (`R314`, `R315`), and wildland-urban interface (`R337` / CWUIC) where mapped. |
 | 8 | Accessibility scope | Usually not applicable: say why and cite the scoping section. California 11A reaches covered multifamily, not a private single-family dwelling. Say what would change that: a public or commercial use brings in 11B, a covered multifamily building 11A. |
 | 9 | Code References | As above. |
 
-Energy, CALGreen and flood findings go under 7 or as a short item after 8, cited like any other line. If a dwelling sheet runs `allowable`, `occupant-load` or `egress-width`, the scope test was skipped. Studio users: the Code Analysis reference set shows this variant on real projects (E1, E2, and N1 section 12).
+Energy, CALGreen and flood findings go under 7 or as a short item after 8, cited like any other line. If a dwelling sheet runs `allowable` or `egress-width`, or presents occupant load as a requirement, the scope test was skipped. Studio users: the Code Analysis reference set shows this variant on real projects (E1, E2, and N1 section 12).
 
 Formatting conventions:
 - Header line: `Governing code: <edition> (<jurisdiction>). All citations are to this edition unless noted.`
 - Every table-derived line: trailing ` - verify against published code`.
 - Where a calculator returned `verify`, append `verify: <text>`.
 - No em dashes; use a spaced hyphen.
+- Tables only for numeric grids (allowable vs actual, occupant load, egress figures). Findings, triggers and open items are short labelled lists, never sentences in table cells.
+- After the guard passes, print it: `atlas pdf "<memo.md>"` writes the PDF beside it, which is the copy people read and send. No `atlas`: skip and say so.
 
 ## Citation guard (mandatory final gate)
 

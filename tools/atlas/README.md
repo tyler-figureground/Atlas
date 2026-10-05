@@ -195,6 +195,18 @@ one project's fact), and lone words under five characters. The folder comes from
 then `$ATLAS_REFERENCE_SETS`, then the drive map's top-level `referenceSets`. Read-only.
 The card templates are in `src/atlas/templates/reference-set/`.
 
+## PDF export
+
+```
+atlas pdf <file.md> [--out PATH] [--force] [--json]
+```
+
+Renders the Markdown (front matter stripped, tables kept) with a print stylesheet and has
+headless Edge or Chrome print it to a PDF beside the source - nothing to install on a
+Windows PC. `ATLAS_BROWSER` names another Chromium browser. A PDF older than its source is a
+stale export and is replaced; one newer than its source may hold later edits and is kept
+unless `--force`.
+
 ## Agent runs
 
 Agents keep scratch in `.agent/runs/YYMMDD-<slug>/` (ADR 0011). `atlas runs` lists every run
