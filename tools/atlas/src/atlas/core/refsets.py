@@ -210,6 +210,17 @@ def list_sets(root: Path) -> list[RefSet]:
     return [load_set(p) for p in sorted(root.iterdir()) if p.is_dir() and (p / CARD).is_file()]
 
 
+def studio_ignore(root: Path) -> set[str]:
+    """``leak_ignore:`` in the root README's front matter: names that belong to
+    the studio, not to any one project - its entities, people, survey and
+    software vendors."""
+    readme = root / "README.md"
+    if not readme.is_file():
+        return set()
+    value = front_matter(_text(readme)).get("leak_ignore", [])
+    return {s.strip() for s in (value if isinstance(value, list) else [value]) if s.strip()}
+
+
 @dataclass(frozen=True)
 class Leak:
     set: str
@@ -241,11 +252,32 @@ def _project_root(path: str) -> str:
     return ""
 
 
+# Strings every project has its own of: a date, a time, a sum, a dimension, a
+# short serial ID (DR-019, T-050, A-101). On a leak list they collide with the
+# new project's own facts, and the pilot showed agents bending true facts to
+# clear the hit (2026-10-04). A copy is caught by the identity facts beside them.
+_GENERIC = re.compile(
+    r"^(\d{6}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(/\d{2,4})?"          # dates
+    r"|\d{1,2}:\d{2}(:\d{2})?(-\d{1,2}:\d{2})?"                       # times
+    r"|\$[\d,.]+[kKmM]?"                                               # money
+    r"|[\d\s/.-]*\d['\"][\d\s'\"/.-]*"                                # dimensions: 15'-7", 48"
+    r"|[\d,.]+\s*(sf|SF|ft|in|psf|%)"                                  # quantities with a unit
+    r"|\d{1,5}"                                                        # plain short numbers
+    r"|[A-Z]{1,3}-?\d{1,4})$"                                          # short serial IDs
+)
+
+
+def is_generic(s: str) -> bool:
+    return bool(_GENERIC.match(s.strip()))
+
+
 def _checkable(s: str) -> bool:
     """A lone word needs MIN_WORD_CHARS: a bare first name ("Max", "Anna")
     fires on ordinary prose and is weak evidence anyway - the full name on
-    the same list catches the real copy."""
+    the same list catches the real copy. Generic strings are never checked."""
     s = s.strip()
+    if is_generic(s):
+        return False
     if any(ch.isspace() for ch in s):
         return len(s) >= MIN_LEAK_CHARS
     return len(s) >= (MIN_LEAK_CHARS if any(ch.isdigit() for ch in s) else MIN_WORD_CHARS)
@@ -274,12 +306,14 @@ def parse_marker(text: str) -> tuple[str, tuple[str, ...]] | None:
 
 
 def check_draft(draft: Path, sets: list[RefSet], *, set_type: str | None = None,
-                exemplar_ids: tuple[str, ...] = ()) -> tuple[list[Leak], list[str]]:
+                exemplar_ids: tuple[str, ...] = (), project: str | None = None,
+                ignore: set[str] = frozenset()) -> tuple[list[Leak], list[str]]:
     """Every leak-list string found in the draft, and the exemplars checked.
 
     Scope, narrowest first: the flags, then the draft's own reference marker,
-    then every exemplar of every set. Exemplars from the draft's own project
-    are skipped.
+    then every exemplar of every set. Exemplars from the draft's own project -
+    the folder it sits in, or ``project`` for a draft kept elsewhere - are
+    skipped. ``ignore`` holds studio-wide names (``studio_ignore``).
     """
     text = _text(draft)
     if set_type is None:
@@ -290,8 +324,9 @@ def check_draft(draft: Path, sets: list[RefSet], *, set_type: str | None = None,
     chosen = [s for s in sets if set_type is None or s.type == set_type]
     if set_type is not None and not chosen:
         raise RefSetError(f"no reference set of type {set_type!r}")
-    own = _project_root(str(draft.resolve()))
+    own = _project_root(project) if project else _project_root(str(draft.resolve()))
     shared = shared_strings(sets)
+    studio = [_pattern(term) for term in ignore]
     lines = text.splitlines()
     leaks, checked = [], []
     for refset in chosen:
@@ -304,6 +339,8 @@ def check_draft(draft: Path, sets: list[RefSet], *, set_type: str | None = None,
             for s in ex.leak_list:
                 if not _checkable(s) or s.strip().lower() in shared:
                     continue
+                if any(term.search(s) for term in studio):
+                    continue  # "iGUIDE survey" names the studio's vendor, not the project
                 pattern = _pattern(s.strip())
                 for number, line in enumerate(lines, 1):
                     if pattern.search(line):

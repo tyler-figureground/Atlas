@@ -18,7 +18,9 @@ Before a skill drafts a deliverable, it looks at a good one. ADR 0015.
 
 4. **Check before handing back.** Run the card's Review checklist. The Dispatcher hook
    `post-write-reference-check` runs `atlas refs check` on every marked file and reports
-   any exemplar fact found in the draft. A hit is a defect: fix it.
+   any exemplar fact found in the draft. A copied fact is a defect: replace it with the
+   project's own. A hit on a fact that is genuinely this project's too stays, named in the
+   receipt - never reword or drop a true fact to clear the check.
 5. **No set, say so.** Name the nearest set used and ask for one example.
 
 ## Outside the studio

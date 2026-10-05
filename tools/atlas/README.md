@@ -176,8 +176,13 @@ section are created with a new project, kept by clean, and backfilled by conform
 
 ```
 atlas refs [--root DIR] [--json]
-atlas refs check <draft> [--type TYPE] [--exemplar ID ...] [--json]
+atlas refs check <draft> [--type TYPE] [--exemplar ID ...] [--project DIR] [--json]
 ```
+
+Generic strings - dates, times, sums, dimensions, short IDs like `DR-019` - are never
+checked: every project has its own. Names that belong to the studio go in `leak_ignore:` in
+the sets folder's `README.md` front matter. `--project` names the draft's own project when
+the draft is kept outside it.
 
 A Reference Set is one folder per deliverable type: a card (`SET.md`) and up to three
 exemplars plus a near-miss, each with a `NOTES.md` whose front matter lists `leak_list:` -
