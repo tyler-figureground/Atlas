@@ -44,9 +44,9 @@ the first act and asking Tyler the last.**
   - **After every meeting** - one run does six steps in order: minutes, decisions, facts,
     to-do list in `00 Tasks/TASKS.md` (`TYLER` / `AGENT` / `MODEL` / `WAIT` lanes), brief,
     report. Not done until all six.
-  - **Control files stay small** - `PROJECT.md` facts only; past 30 KB, move narrative to
-    `.agent/PROJECT-HISTORY.md`, never cut a fact to hit a size. No line over 1,000
-    characters. A decision register kept in a spreadsheet gets a generated Markdown copy,
+  - **Control files stay small** - `PROJECT.md` facts only; past 100 KB (was 30 KB), move narrative to
+    `.agent/PROJECT-HISTORY.md`, never cut a fact to hit a size. No line over 2,000
+    characters (was 1,000). A decision register kept in a spreadsheet gets a generated Markdown copy,
     `decisions/REGISTER.md`. No `.lnk` pointers.
 - Conform backfills `.agent/runs` and `.agent/backups` (map `workspace_dirs`) into projects
   made before the workspace existed, so "back up first" has somewhere to write.
@@ -63,3 +63,7 @@ the first act and asking Tyler the last.**
   (`decisions/export-register.py`). It is not yet an Atlas command; if more projects adopt
   spreadsheet registers, that is the next step.
 - Staff Atlas must be 0.8.2 or later: older wheels lack the `BRIEF.md` template the map names.
+
+## Amendment - 2026-10-05
+
+Limits raised by Tyler (Atlas 0.10.1): `PROJECT.md` narrative prompt 30 KB -> 100 KB; long-line cap 1,000 -> 2,000 characters. 2,000 is the ceiling, not a target: Claude Code's file reader cuts lines past 2,000 characters, so a longer line is silently lost. 100 KB keeps a `PROJECT.md` readable in a few paged reads; real projects passed 30 KB on facts alone.
