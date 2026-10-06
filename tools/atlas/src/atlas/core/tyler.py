@@ -106,7 +106,8 @@ def _read(path: Path) -> str | None:
 
 def collect(inventory: DriveInventory) -> Digest:
     projects: list[ProjectDigest] = []
-    for inv in inventory.projects:
+    # Sorted by name: scan order is the filesystem's, which differs by OS.
+    for inv in sorted(inventory.projects, key=lambda p: p.name):
         tyler_text = _read(inv.path / TYLER_PATH)
         tasks_text = _read(inv.path / TASKS_PATH)
         projects.append(
