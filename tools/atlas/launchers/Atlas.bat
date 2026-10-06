@@ -3,7 +3,7 @@ rem Atlas - studio drive + project tooling. Double-click to open the console.
 rem Every other .bat in _tools calls this one, so this is the only version pin.
 rem Upgrading = drop the new wheel in _tools\atlas\ and update the WHEEL line.
 rem Source: skills-for-architects\tools\atlas\launchers\Atlas.bat
-set "WHEEL=%~dp0atlas\studio_atlas-0.9.4-py3-none-any.whl"
+set "WHEEL=%~dp0atlas\studio_atlas-0.10.0-py3-none-any.whl"
 
 where uv >nul 2>nul
 if errorlevel 1 (
@@ -19,4 +19,4 @@ if errorlevel 1 (
 )
 
 uv tool run --from "%WHEEL%" atlas %*
-if errorlevel 1 pause
+if errorlevel 1 if not defined ATLAS_NO_PAUSE pause

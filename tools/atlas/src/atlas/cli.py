@@ -70,6 +70,7 @@ from .core.scan import (
     scan_drive,
 )
 from .core.tree import MAPPED, TreeNode, open_project_tree
+from .core.tyler import collect as collect_tyler, digest_path, render as render_tyler
 from .tui.tokens import filing_style  # the Fault Words; pure data, no Textual
 
 
@@ -912,6 +913,39 @@ def cmd_refs_check(args: argparse.Namespace) -> int:
     return 1 if leaks else 0
 
 
+def cmd_tyler(args: argparse.Namespace) -> int:
+    """Roll up Tyler's open errands and DECISION blockers across projects (ADR 0016).
+
+    Read-only by default; ``--write`` regenerates ``_tools/TYLER-TODAY.md``.
+    """
+    root = _resolve_drive(args.drive)
+    digest = collect_tyler(_scan(root))
+    if args.json:
+        print(json.dumps({
+            "drive": digest.drive,
+            "errands": digest.errand_count,
+            "decisions": digest.decision_count,
+            "projects": [
+                {"name": p.name,
+                 "tyler_missing": p.tyler_missing,
+                 "tasks_missing": p.tasks_missing,
+                 "errands": [i.__dict__ for i in p.errands],
+                 "decisions": [i.__dict__ for i in p.decisions]}
+                for p in digest.projects
+            ],
+        }, indent=2))
+        return 0
+    text = render_tyler(digest)
+    if args.write:
+        out = digest_path(root)
+        out.write_text(text, encoding="utf-8")
+        print(f"wrote {out} ({digest.errand_count} errands / "
+              f"{digest.decision_count} decisions)")
+    else:
+        print(text, end="")
+    return 0
+
+
 def cmd_pdf(args: argparse.Namespace) -> int:
     """Print a Markdown deliverable to a PDF beside it, for reading and sending."""
     result = export_pdf(Path(args.source), Path(args.out) if args.out else None, force=args.force)
@@ -1228,11 +1262,17 @@ def main(argv: list[str] | None = None) -> int:
         ("tree", cmd_tree, "one project's folders and files: Filing State, Load State, "
                            "unmet Expectations (read-only)"),
         ("runs", cmd_runs, "list agent runs; zip closed ones into the archive (dry run by default)"),
+        ("tyler", cmd_tyler, "Tyler digest: open errands + DECISION blockers across projects "
+                             "(read-only; --write regenerates _tools/TYLER-TODAY.md)"),
     ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--drive", help="drive root (default: walk up from cwd, else auto-discover)")
         p.add_argument("--json", action="store_true", help="machine-readable output")
         p.set_defaults(fn=fn)
+
+    sub.choices["tyler"].add_argument(
+        "--write", action="store_true",
+        help="write the digest to _tools/TYLER-TODAY.md instead of printing it")
 
     sub.choices["tree"].add_argument("project", help="project folder name")
     sub.choices["tree"].add_argument(

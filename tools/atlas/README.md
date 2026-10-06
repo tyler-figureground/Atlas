@@ -30,6 +30,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 | `atlas conform --project NAME --node PATH [--apply]` | Preview or apply the repair for one node, by project-relative path |
 | `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
 | `atlas runs (--project NAME \| --all) [--days N] [--apply]` | List agent runs; zip the closed ones into `.agent/archive/` (ADR 0011). Preview by default |
+| `atlas tyler [--write]` | Tyler digest: open errands from every project's `TYLER.md` + `DECISION` blockers from `TASKS.md` (ADR 0016). Prints; `--write` regenerates `_tools\TYLER-TODAY.md` |
 
 TUI keys:
 
