@@ -323,7 +323,7 @@ triggers: [permit set, code cover sheet, DOB pre-filing, county pre-application]
 ```
 
 Rules for the card, drawn from section 1:
-- Under 150 lines, no line over 1,000 characters (ADR 0014 limits).
+- Under 150 lines, no line over 2,000 characters (ADR 0014 limits).
 - "What good looks like" names the **shared** quality across exemplars and points at where
   each one shows it. Says why, with conditions: "guard noted because parapet < 30 in;
   would differ if ...".
