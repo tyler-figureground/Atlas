@@ -394,9 +394,30 @@ Conform backfills it when its section exists. A child in the map is a name, or a
 marked seed.
 
 **Task List**
-00 Tasks/TASKS.md: the one live list of what is next on a project, in lanes TYLER,
-AGENT, MODEL and WAIT. Facts go in PROJECT.md and reasons in decisions/; neither holds
-tasks. ADR 0013.
+00 Tasks/TASKS.md: the production list of what is next on a project - model, sheets,
+documentation, research - in lanes AGENT, MODEL, DECISION and WAIT. Facts go in
+PROJECT.md and reasons in decisions/; neither holds tasks. Tyler's personal errands
+are the Tyler List, not this file. ADR 0013, lanes and claims ADR 0016.
+
+**Tyler List**
+00 Tasks/TYLER.md: Tyler's personal errands for a project - calls, emails, sends,
+sign-offs - written mostly by meeting closeout. Agents add items and pre-draft the
+artifact (`ready:` link); only Tyler checks an item off. Source of truth for the
+Tyler Digest. ADR 0016.
+
+**Decision Lane**
+The DECISION lane of the Task List: a call only Tyler can make that blocks production.
+Production state, not an errand - stays in TASKS.md, never copied to the Tyler List.
+ADR 0016.
+
+**Claim**
+Moving a Task List item to In progress with `claimed YYYY-MM-DD by <name>` before
+starting it. One task at a time; stale over 7 days with no run receipt, reclaimable
+after checking the handoff. Team members and agents use the same line. ADR 0016.
+
+**Tyler Digest**
+Generated drive-level roll-up of open Tyler List items across projects. Never edited -
+regenerated from the per-project files. Planned, not yet built. ADR 0016.
 
 **Scoped List**
 A longer list for one scope - an audit, a revision round - in 00 Tasks/Lists/, copied from

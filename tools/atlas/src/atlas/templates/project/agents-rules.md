@@ -1,6 +1,7 @@
 ## Read first, ask last
 
-- Start every session with `BRIEF.md`, then `00 Tasks/TASKS.md`, then `.agent/handoff/CURRENT.md`. `PROJECT.md`, `decisions/` and the latest minutes in `11 Meetings/` for detail.
+- Start every session with `BRIEF.md`, then `00 Tasks/TASKS.md`, then `.agent/handoff/CURRENT.md`. `PROJECT.md`, `decisions/` and the latest minutes in `11 Meetings/` for detail. Tyler's personal errands are in `00 Tasks/TYLER.md` - never work from it; it is add-only for agents.
+- Told to work on the project with no specific task: take the top unblocked `AGENT` or `MODEL` item from `00 Tasks/TASKS.md` (Now, then Next), claim it in the **In progress** section (`claimed YYYY-MM-DD by <name>`) before starting, work one task at a time, close it with evidence and a run receipt. Never start a `DECISION` or `WAIT` item - if everything actionable is blocked, say so and name the blockers. A claim stale more than 7 days with no run receipt may be reclaimed; check `.agent/handoff/CURRENT.md` first.
 - Before asking Tyler anything, search `BRIEF.md`, `decisions/`, `PROJECT.md`, `00 Tasks/TASKS.md` and the latest minutes. Answered in any of them = answered; act on it.
 - Every question to Tyler names what you checked and why it does not answer it: "Checked BRIEF Settled + DR-061: covers paint colour, not touch-up scope." No citation, no question.
 - Newest source wins: latest minutes > `BRIEF.md` > `PROJECT.md` narrative > older handoffs. An old open question is not open unless `BRIEF.md` lists it under Open.
@@ -23,7 +24,7 @@ Recording -> Dicta transcript in `11 Meetings/`. Then one run does all six, in o
 1. Minutes: `YYMMDD - <Name> - Meeting Minutes.md` beside the transcript. Decisions made (each linked to the register), action items with owner, open questions; every item in the transcript, walked end to end. `Prepared by: Tyler`. A bare `[mm:ss]` timestamp on every decision and action, never explained. Mark doubt inline with `(confirm)`. Never name file paths, the transcript, the recording or the transcription tool; no limits paragraph, no internal-draft label.
 2. Decisions: one record per decision made or changed (`/decision`, or the project's own register if this file says it keeps one). Supersede; never overwrite a rationale.
 3. Facts: update `PROJECT.md` front matter and its mirror rows, each with source and date.
-4. To-do list: every action item becomes a task in `00 Tasks/TASKS.md` - `TYLER` for Tyler's own, `AGENT` or `MODEL` for work an agent can take, `WAIT` for someone outside - each linked to the minutes. Close tasks the meeting finished. No `TASKS.md` yet: create it from Atlas's template first.
+4. To-do lists: every action item goes to exactly one list, linked to the minutes. Production work (model, sheets, research, drafting) -> `00 Tasks/TASKS.md` as `AGENT` or `MODEL`. A decision only Tyler can make that blocks production -> `TASKS.md` as `DECISION`. Tyler's personal errands (call, email, send, sign-off) -> `00 Tasks/TYLER.md` (Y-NNN series); if the artifact can be prepared now, draft it to `08 OUT/Drafts/` and link it with `ready:`. Someone outside -> `WAIT` in `TASKS.md`. Close tasks the meeting finished. No `TASKS.md`/`TYLER.md` yet: create from Atlas's templates first.
 5. Brief: rebuild `BRIEF.md` - answered questions move to Settled, new ones go to Open, update Now and Latest meeting, bump `updated:`.
 6. Report: minutes path, decisions added/changed, tasks added/closed, brief updated.
 
@@ -43,7 +44,7 @@ Not done until all six. A meeting whose minutes exist but whose brief and tasks 
 - Scratch - scripts, receipts, JSON, captures, check exports, before/after images, saved web pages - goes in `.agent/runs/YYMMDD-<slug>/`, started from `.agent/runs/_RUN-TEMPLATE.md`. Nowhere else.
 - File a result in a numbered folder only when a person will read it: minutes, a code memo, a draft to send, an issued set. Name it `YYMMDD_Title.md`, in the section its subject belongs to. Most runs file nothing there.
 - Everything filed for a person gets a PDF beside it: `atlas pdf "<file.md>"` (re-run after every edit; the Markdown stays the source). Write decisions, actions, findings and open questions as short labelled lists; keep tables for numeric grids - occupant loads, areas, allowable vs actual - never sentences in table cells.
-- Tasks live in `00 Tasks/TASKS.md`, and only there. A longer list for one scope goes in `00 Tasks/Lists/`, copied from `00 Tasks/_Task List Template.md` and linked from `TASKS.md`.
+- Production tasks live in `00 Tasks/TASKS.md`; Tyler's personal errands live in `00 Tasks/TYLER.md`. No other task lists anywhere. A longer list for one scope goes in `00 Tasks/Lists/`, copied from `00 Tasks/_Task List Template.md` and linked from `TASKS.md`. Agents add to `TYLER.md` but never check its items off and never send its artifacts.
 - `PROJECT.md` holds facts only. Never a session log, never a task list.
 - Before editing `PROJECT.md`, `AGENTS.md` or `TASKS.md`, copy it to `.agent/backups/`. Never leave a backup at the project root.
 - Handoffs: keep `.agent/handoff/CURRENT.md` current; write a dated `HANDOFF-*.md` only at a stopping point. No artefacts in `handoff/`.

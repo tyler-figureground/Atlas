@@ -5,12 +5,16 @@ updated: {{created}}
 
 # Tasks - {{project_name}}
 
-The one live task list for this project. Tyler and agents edit it in place.
-Facts -> `PROJECT.md`. Why -> `decisions/`. A longer list for one scope -> `00 Tasks/Lists/`,
-copied from `00 Tasks/_Task List Template.md` and linked below.
+The production task list for this project: model work, sheets, documentation,
+research, drafting - anything that moves the deliverable. Tyler and agents edit it
+in place. Tyler's personal errands (calls, emails, sends, sign-offs) live in
+`00 Tasks/TYLER.md`, never here. Facts -> `PROJECT.md`. Why -> `decisions/`.
+A longer list for one scope -> `00 Tasks/Lists/`, copied from
+`00 Tasks/_Task List Template.md` and linked below.
 
-**Lanes:** `TYLER` decision, call, sign-off, sync - `AGENT` can run unattended -
-`MODEL` needs a live Revit session - `WAIT` someone outside, named in the task
+**Lanes:** `AGENT` can run unattended - `MODEL` needs a live Revit session -
+`DECISION` only Tyler can call it; blocks production until he does - `WAIT`
+someone outside, named in the task
 
 **Rules**
 
@@ -18,11 +22,26 @@ copied from `00 Tasks/_Task List Template.md` and linked below.
 - One line per task, verb first. Detail goes indented below it.
 - Link the source (minutes, comment letter, decision). Do not paste it.
 - Done only with evidence: a file, an export, a receipt. Move it to **Done** with the date.
-- No other task lists anywhere in the project.
+- No other task lists anywhere in the project - only this file, `TYLER.md`, and
+  linked scoped lists in `00 Tasks/Lists/`.
+
+**Picking up work (agents)**
+
+When told to work on this project without a specific task: read `BRIEF.md`, then
+take the top unblocked `AGENT` or `MODEL` item from **Now**, then **Next**. Claim it
+before starting - move the line to **In progress** and append `claimed YYYY-MM-DD by
+<name>`. One task at a time. Never start a `DECISION` or `WAIT` item; if everything
+actionable is blocked, say so and name the blockers. Close with evidence and a run
+receipt in `.agent/runs/`. A claim stale more than 7 days with no run receipt may be
+reclaimed - check `.agent/handoff/CURRENT.md` first.
+
+## In progress
+
+<!-- Claimed items. Format: - [ ] T-NNN `LANE` <task> - claimed YYYY-MM-DD by <name> -->
 
 ## Now
 
-- [ ] T-001 `TYLER` Fill in `PROJECT.md` with `/project-dossier` - done when jurisdiction, occupancy and code edition are set.
+- [ ] T-001 `DECISION` Fill in `PROJECT.md` with `/project-dossier` - done when jurisdiction, occupancy and code edition are set.
 
 ## Next
 

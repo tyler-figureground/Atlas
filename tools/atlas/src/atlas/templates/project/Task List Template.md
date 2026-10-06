@@ -24,6 +24,6 @@ STOP AT: <holds - what needs Tyler>
 
 ## Items
 
-Lanes as in `TASKS.md`: `TYLER` `AGENT` `MODEL` `WAIT`.
+Lanes as in `TASKS.md`: `AGENT` `MODEL` `DECISION` `WAIT`. Tyler's personal errands do not belong in a scoped list - they go in `00 Tasks/TYLER.md`.
 
 - [ ] L-01 `AGENT` <verb-first item> - done when <check>
