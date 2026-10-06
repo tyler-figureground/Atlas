@@ -57,7 +57,7 @@
     {
       "name": "09-project-dossier",
       "source": "./plugins/09-project-dossier",
-      "description": "Project dossier and decision records — persistent per-project facts (PROJECT.md, with a YAML front-matter machine contract read by Norma and other skills) and ADR-style decision capture (decisions/)."
+      "description": "Project state as plain files - dossier (PROJECT.md facts), ADR-style decision records, the two task lists (production TASKS.md and Tyler's TYLER.md), and meeting closeout from transcript to minutes, decisions, tasks and brief."
     },
     {
       "name": "10-norma",

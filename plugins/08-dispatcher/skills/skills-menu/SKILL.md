@@ -18,7 +18,7 @@ Print the following menu. Do not read any files — the menu is static.
 ```
 # Architecture Studio
 
-**45 skills, 7 agents** — type /studio [your task] to get routed, or call any skill directly.
+**47 skills, 7 agents** — type /studio [your task] to get routed, or call any skill directly.
 
 ## Agents — describe your task, they figure out the rest
 
@@ -86,6 +86,8 @@ Print the following menu. Do not read any files — the menu is static.
 ### Project Dossier
 /project-dossier — create or update PROJECT.md, the project facts file
 /decision — record a project decision (ADR-style, numbered, statused)
+/tasks — work the two task lists: production TASKS.md (claim/work) and Tyler's TYLER.md
+/meeting-closeout — transcript to minutes, decisions, facts, both task lists, brief
 
 ### Building Code (Norma)
 /ibc — building-code Q&A, grounded in the local corpus and cited verbatim

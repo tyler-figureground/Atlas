@@ -32,3 +32,5 @@ Atlas project intake pre-populates project identity, full address, Project Use C
 |-------|-------------|
 | [`/project-dossier`](./skills/project-dossier) | Create or update `PROJECT.md` — init interview, in-place fact updates, source + date on every entry |
 | [`/decision`](./skills/decision) | Record a decision in `decisions/` — numbered, statused (proposed / decided / superseded), indexed in the dossier |
+| [`/tasks`](./skills/tasks) | Work the two task lists — production `TASKS.md` (claim, work, close with evidence) and Tyler's `TYLER.md` (add-only) |
+| [`/meeting-closeout`](./skills/meeting-closeout) | Transcript to full closeout — minutes, decision records, facts, tasks in both lists, rebuilt brief |

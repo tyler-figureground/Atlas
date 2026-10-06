@@ -20,7 +20,7 @@
 
 **Architecture Studio** teaches Claude architecture-specific workflows — site analysis, zoning, space programming, specifications, materials research, sustainability, and presentations.
 
-**7 agents**, **45 skills**, **7 rules**, and **3 hooks** across **11 plugins**. Built by [ALPA](https://alpa.llc).
+**7 agents**, **47 skills**, **7 rules**, and **3 hooks** across **11 plugins**. Built by [ALPA](https://alpa.llc).
 
 ## What's New in 1.2
 
@@ -46,7 +46,7 @@ Architecture Studio
 │   ├── 06-materials-research           12 skills · agents: researcher + ffe-designer
 │   ├── 07-presentations                 3 skills · agent: brand-manager
 │   ├── 08-dispatcher                    2 skills · hooks ship here
-│   ├── 09-project-dossier               2 skills · PROJECT.md + decisions/
+│   ├── 09-project-dossier               4 skills · PROJECT.md + decisions/ + task lists + meeting closeout
 │   └── 10-norma                         6 skills · building-code analysis (norma engine)
 │
 ├── rules/                               7 rules · 2 hook-enforced, 5 advisory
@@ -112,11 +112,11 @@ Organized by project lifecycle — from due diligence through delivery.
 | 6 | [Materials Research](./plugins/06-materials-research) | 12 | FF&E product research, spec extraction, cleanup, and image processing. Exports to SIF dealer formats and [Norma](https://norma.llc). |
 | 7 | [Presentations](./plugins/07-presentations) | 3 | Slide deck generation, color palette creation, and image resizing for web, social, slides, and print. |
 | 8 | [Dispatcher](./plugins/08-dispatcher) | 2 | Studio router (`/studio`), help menu (`/skills`), and the three hooks. |
-| 9 | [Project Dossier](./plugins/09-project-dossier) | 2 | Persistent project facts (`PROJECT.md`) and ADR-style decision records. |
+| 9 | [Project Dossier](./plugins/09-project-dossier) | 4 | Persistent project facts (`PROJECT.md`), ADR-style decision records, two task lists, meeting closeout. |
 | 10 | [Norma](./plugins/10-norma) | 6 | Building-code analysis — code Q&A, egress, allowable area, compare, drawing review. Cited verbatim via the `norma` engine. |
 
 <details>
-<summary><strong>All 45 skills</strong></summary>
+<summary><strong>All 47 skills</strong></summary>
 
 ### Due Diligence
 
@@ -206,6 +206,8 @@ Organized by project lifecycle — from due diligence through delivery.
 |-------|-------------|
 | [`/project-dossier`](./plugins/09-project-dossier/skills/project-dossier) | Create or update `PROJECT.md` — sourced, dated project facts |
 | [`/decision`](./plugins/09-project-dossier/skills/decision) | ADR-style decision records — context, options, the call, consequences |
+| [`/tasks`](./plugins/09-project-dossier/skills/tasks) | Two task lists — production `TASKS.md` (claim/work/close) and Tyler's `TYLER.md` (add-only) |
+| [`/meeting-closeout`](./plugins/09-project-dossier/skills/meeting-closeout) | Transcript to minutes, decisions, facts, both task lists, rebuilt brief |
 
 ### Norma (Building Code)
 
