@@ -8,12 +8,12 @@ BSA variance and special permit lookup for any NYC property as a [Claude Code](h
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 00-due-diligence@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 00-due-diligence@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/00-due-diligence/skills/nyc-bsa ~/.claude/skills/nyc-bsa
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/00-due-diligence/skills/nyc-bsa ~/.claude/skills/nyc-bsa
 ```
 
 ## Usage

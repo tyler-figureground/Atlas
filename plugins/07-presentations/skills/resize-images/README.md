@@ -8,12 +8,12 @@ Batch-resizes project photos and renders for web, social, slides, and print — 
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 07-presentations@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 07-presentations@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/07-presentations/skills/resize-images ~/.claude/skills/resize-images
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/07-presentations/skills/resize-images ~/.claude/skills/resize-images
 ```
 
 Requires [Pillow](https://pillow.readthedocs.io): `pip install Pillow`

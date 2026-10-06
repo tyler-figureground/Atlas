@@ -2,7 +2,7 @@
 
 This is the canonical reference for how we build Claude plugins and marketplaces at [Alpaca Design Lab](https://alpa.llc). It applies to:
 
-- [`AlpacaLabsLLC/skills-for-architects`](https://github.com/AlpacaLabsLLC/skills-for-architects) — multi-plugin marketplace for architects (this repo)
+- [`tyler-figureground/Atlas`](https://github.com/tyler-figureground/Atlas) — multi-plugin marketplace for architects (this repo; forked from AlpacaLabsLLC/skills-for-architects, archived)
 - [`AlpacaLabsLLC/canoa`](https://github.com/AlpacaLabsLLC/canoa) — single-plugin marketplace, AI specifications manager for FF&E
 - Any future plugin we ship
 
@@ -34,7 +34,7 @@ Skills hand off via explicit cross-references in their bodies — never via impl
 
 | Layer | Format | Example |
 |---|---|---|
-| Marketplace name | kebab-case product family | `canoa`, `skills-for-architects` |
+| Marketplace name | kebab-case product family | `canoa`, `atlas` |
 | Plugin name | kebab-case (matches marketplace name when single-plugin) | `canoa`, `00-due-diligence` |
 | Dispatcher skill name | matches plugin name | `canoa`, `studio` |
 | Sub-skill name (single-plugin marketplace) | `<plugin>-<verb>` | `canoa-find`, `canoa-audit`, `canoa-add-to-sheet` |
@@ -64,7 +64,7 @@ The dispatcher is named the same as the plugin (`canoa`, `studio`). Its `SKILL.m
 
 Reference implementations:
 - [`AlpacaLabsLLC/canoa/skills/canoa/SKILL.md`](https://github.com/AlpacaLabsLLC/canoa/blob/main/skills/canoa/SKILL.md)
-- [`AlpacaLabsLLC/skills-for-architects/plugins/08-dispatcher/skills/studio/SKILL.md`](https://github.com/AlpacaLabsLLC/skills-for-architects/blob/main/plugins/08-dispatcher/skills/studio/SKILL.md)
+- [`Atlas/plugins/08-dispatcher/skills/studio/SKILL.md`](https://github.com/tyler-figureground/Atlas/blob/main/plugins/08-dispatcher/skills/studio/SKILL.md)
 
 **Why:** users shouldn't have to memorize which sub-skill handles which intent. The dispatcher does the routing. New users can just type `/canoa` (or `/studio`) and describe what they need in plain English.
 
@@ -72,7 +72,7 @@ Reference implementations:
 
 Rules are cross-cutting conventions that apply to multiple skills. Examples: voice / tone, professional disclaimers, units & measurements, citation style, audit-on-touch.
 
-- For multi-plugin marketplaces, put rules in a top-level `rules/` directory — referenced by per-plugin READMEs, enforced by hooks at marketplace level. See [`skills-for-architects/rules/`](./rules/).
+- For multi-plugin marketplaces, put rules in a top-level `rules/` directory — referenced by per-plugin READMEs, enforced by hooks at marketplace level. See [`Atlas/rules/`](./rules/).
 - For single-plugin marketplaces, rules live in the dispatcher skill body and are repeated in each sub-skill that touches them.
 - **Marker-driven hooks** — for enforceable rules, use HTML comment markers (e.g., `<!-- architecture-studio:requires-disclaimer -->`) that skills emit when they want the rule applied. Hooks check for the marker, not for keywords like "FAR" or "audit." See [`post-write-disclaimer-check.sh`](./plugins/08-dispatcher/hooks/post-write-disclaimer-check.sh).
 - Hard rules in skills are stated explicitly in the body, with WHY they exist (often a past incident or strong invariant). E.g.: "Audit always re-parses. Reason: Eames bug where agent reported sheet value as verified when catalog had drifted to a newer price."

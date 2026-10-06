@@ -8,12 +8,12 @@ CSI outline specification writer for [Claude Code](https://docs.anthropic.com/en
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 04-specifications@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 04-specifications@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/04-specifications/skills/spec-writer ~/.claude/skills/spec-writer
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/04-specifications/skills/spec-writer ~/.claude/skills/spec-writer
 ```
 
 ## Usage

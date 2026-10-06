@@ -137,21 +137,21 @@ Quick reference:
 **Claude Desktop:**
 
 1. Open the **+** menu → **Add marketplace from GitHub**
-2. Enter `tyler-figureground/skills-for-architects`
+2. Enter `tyler-figureground/Atlas`
 3. Install the **Materials Research** plugin
 
 **Claude Code (terminal):**
 
 ```bash
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 06-materials-research@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 06-materials-research@atlas
 ```
 
 **Manual:**
 
 ```bash
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/06-materials-research/skills/product-research ~/.claude/skills/product-research
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/06-materials-research/skills/product-research ~/.claude/skills/product-research
 ```
 
 ## License

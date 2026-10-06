@@ -59,7 +59,7 @@ TMPFILE=$(mktemp 2>/dev/null) || exit 0
   printf -- '---\n'
   printf 'title: "%s"\n' "$TITLE"
   printf 'date: %s\n' "$DATE"
-  printf 'generated_by: skills-for-architects\n'
+  printf 'generated_by: atlas\n'
   printf -- '---\n\n'
   cat "$FILE_PATH"
 } > "$TMPFILE" 2>/dev/null || { rm -f "$TMPFILE"; exit 0; }

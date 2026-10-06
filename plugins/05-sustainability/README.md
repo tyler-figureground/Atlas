@@ -42,21 +42,21 @@ All skills share a **42-column EPD schema** covering product identity, EPD metad
 **Claude Desktop:**
 
 1. Open the **+** menu → **Add marketplace from GitHub**
-2. Enter `tyler-figureground/skills-for-architects`
+2. Enter `tyler-figureground/Atlas`
 3. Install the **Sustainability** plugin
 
 **Claude Code (terminal):**
 
 ```bash
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 05-sustainability@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 05-sustainability@atlas
 ```
 
 **Manual:**
 
 ```bash
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/05-sustainability/skills/epd-parser ~/.claude/skills/epd-parser
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/05-sustainability/skills/epd-parser ~/.claude/skills/epd-parser
 ```
 
 ## License

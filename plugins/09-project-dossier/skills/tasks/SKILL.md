@@ -1,6 +1,6 @@
 ---
 name: tasks
-description: Work the project's two task lists - 00 Tasks/TASKS.md (production: model, sheets, research, drafting) and 00 Tasks/TYLER.md (Tyler's personal errands). Use to add, claim, complete, hold or prune tasks; to pick the next task when the user says "work on this project" or "what's next"; or when meeting closeout needs action items filed. Tyler errands are add-only for agents - never check one off.
+description: Work the project's two task lists - 00 Tasks/TASKS.md (production - model, sheets, research, drafting) and 00 Tasks/TYLER.md (Tyler's personal errands). Use to add, claim, complete, hold or prune tasks; to pick the next task when the user says "work on this project" or "what's next"; or when meeting closeout needs action items filed. Tyler errands are add-only for agents - never check one off.
 allowed-tools:
   - Read
   - Write

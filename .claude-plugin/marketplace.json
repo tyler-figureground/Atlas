@@ -1,12 +1,12 @@
 {
-  "name": "skills-for-architects",
+  "name": "atlas",
   "owner": {
     "name": "ALPA",
     "email": "hello@alpa.llc"
   },
   "metadata": {
     "description": "Skills, commands, and plugins for architects, designers, and AEC professionals — site research, zoning, programming, specifications, materials research, presentations, and building-code analysis.",
-    "version": "1.8.0"
+    "version": "1.9.0"
   },
   "plugins": [
     {

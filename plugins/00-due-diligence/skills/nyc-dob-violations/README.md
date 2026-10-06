@@ -8,12 +8,12 @@ DOB and ECB violation lookup for any NYC building as a [Claude Code](https://doc
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 00-due-diligence@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 00-due-diligence@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/00-due-diligence/skills/nyc-dob-violations ~/.claude/skills/nyc-dob-violations
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/00-due-diligence/skills/nyc-dob-violations ~/.claude/skills/nyc-dob-violations
 ```
 
 ## Usage

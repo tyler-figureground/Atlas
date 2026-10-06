@@ -8,12 +8,12 @@ Auto-tag FF&E products with categories, colors, materials, and style tags using 
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 06-materials-research@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 06-materials-research@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/06-materials-research/skills/product-enrich ~/.claude/skills/product-enrich
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/06-materials-research/skills/product-enrich ~/.claude/skills/product-enrich
 ```
 
 ## Usage

@@ -1,13 +1,20 @@
 # Changelog
 
-All notable changes to **Architecture Studio** (`tyler-figureground/skills-for-architects`) are documented in this file.
+All notable changes to **Architecture Studio** (`tyler-figureground/Atlas`) are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Repo is now `tyler-figureground/Atlas`, marketplace renamed `atlas`.** The skills-for-architects fork is archived; history carries over whole. Install namespace moves with it: `claude plugin marketplace add tyler-figureground/Atlas`, `claude plugin install 01-site-planning@atlas`. The output hook stamps `generated_by: atlas`.
+
 ### Added
 
+- **Two task lists per project (ADR 0016).** `00 Tasks/TASKS.md` is the production list (lanes `AGENT`/`MODEL`/`DECISION`/`WAIT`, In-progress claims, agent pickup rules); `00 Tasks/TYLER.md` holds Tyler's personal errands, add-only for agents. Drive map v3.6 seeds it; `atlas tyler` (Atlas 0.10.0) rolls both up into `_tools/TYLER-TODAY.md`, refreshed hourly by the `Atlas Tyler Digest` scheduled task.
+- **Skills `/tasks` and `/meeting-closeout`** (09-project-dossier): work the two lists; close out a meeting transcript into minutes, decisions, facts, both task lists and a rebuilt brief.
+- **Atlas `0.10.1` - control-file limits raised.** `agents-rules.md`: `PROJECT.md` narrative prompt 30 KB -> 100 KB; no line over 2,000 characters (was 1,000), the file reader's own cut-off. ADR 0014 amended.
 - **Reference Sets** (ADR 0015, `docs/research/reference-sets.md`). One curated, Tyler-approved set per deliverable type in `LIBRARY - Reference\00 Office Standards and Administration\Reference Sets\`: a card (`SET.md`), up to three exemplars - California residential, code issue, commercial - and a near-miss, each exemplar with a `NOTES.md` leak list. Pilot sets: Code Analysis, Meeting Minutes, G-Series Sheets (Solid Void). The third-party drawing sets folder is renamed `Precedent Sets`.
 - **Atlas `0.9.0` - look before you make.** `atlas refs` lists reference sets with status, review dates and problems; `atlas refs check <draft>` greps a draft for the facts its exemplars' projects own. `agents-rules.md` gains "Look before you make": read the set, mark the draft, check it, name the set in the run receipt. The run template gains a `Reference:` line. Drive map v3.4 adds top-level `referenceSets`.
 - **Atlas `0.9.4` - retired exemplars stay retired.** An exemplar whose `NOTES.md` says `status: retired` is listed apart by `atlas refs` and never leak-checked. The meeting-minutes set is approved with a new E2 (64th Lane rebid walkthrough, written to the card); the old E2 is kept as X2.

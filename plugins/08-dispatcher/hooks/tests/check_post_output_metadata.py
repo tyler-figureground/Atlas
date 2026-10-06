@@ -88,7 +88,7 @@ def expect_unchanged(bash: str, hook: pathlib.Path, name: str, path: pathlib.Pat
 
 
 def count_blocks(text: str) -> int:
-    return len(re.findall(r"^generated_by: skills-for-architects$", text, re.MULTILINE))
+    return len(re.findall(r"^generated_by: atlas$", text, re.MULTILINE))
 
 
 def main() -> int:

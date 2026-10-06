@@ -16,7 +16,7 @@ Hooks are event-driven automations that run automatically during Claude Code ses
 None. The hooks ship with the **Dispatcher** plugin via [`hooks.json`](./hooks.json) and register automatically when the plugin is enabled:
 
 ```bash
-claude plugin install 08-dispatcher@skills-for-architects
+claude plugin install 08-dispatcher@atlas
 ```
 
 Run `/hooks` in Claude Code to confirm they're loaded. Disable them by disabling the plugin, or per-session via `/hooks`.

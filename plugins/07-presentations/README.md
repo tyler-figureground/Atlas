@@ -23,23 +23,23 @@ Three skills that handle visual production. The slide deck generator builds comp
 **Claude Desktop:**
 
 1. Open the **+** menu → **Add marketplace from GitHub**
-2. Enter `tyler-figureground/skills-for-architects`
+2. Enter `tyler-figureground/Atlas`
 3. Install the **Presentations** plugin
 
 **Claude Code (terminal):**
 
 ```bash
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 07-presentations@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 07-presentations@atlas
 ```
 
 **Manual:**
 
 ```bash
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/07-presentations/skills/slide-deck-generator ~/.claude/skills/slide-deck-generator
-ln -s $(pwd)/skills-for-architects/plugins/07-presentations/skills/color-palette-generator ~/.claude/skills/color-palette-generator
-ln -s $(pwd)/skills-for-architects/plugins/07-presentations/skills/resize-images ~/.claude/skills/resize-images
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/07-presentations/skills/slide-deck-generator ~/.claude/skills/slide-deck-generator
+ln -s $(pwd)/Atlas/plugins/07-presentations/skills/color-palette-generator ~/.claude/skills/color-palette-generator
+ln -s $(pwd)/Atlas/plugins/07-presentations/skills/resize-images ~/.claude/skills/resize-images
 ```
 
 ## License

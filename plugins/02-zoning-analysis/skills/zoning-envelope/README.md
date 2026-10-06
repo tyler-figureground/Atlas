@@ -8,12 +8,12 @@ Interactive 3D zoning envelope viewer as a [Claude Code](https://docs.anthropic.
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 02-zoning-analysis@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 02-zoning-analysis@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/02-zoning-analysis/skills/zoning-envelope ~/.claude/skills/zoning-envelope
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/02-zoning-analysis/skills/zoning-envelope ~/.claude/skills/zoning-envelope
 ```
 
 ## Usage

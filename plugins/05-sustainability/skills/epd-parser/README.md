@@ -8,12 +8,12 @@ Extract structured environmental impact data from EPD PDFs for [Claude Code](htt
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 05-sustainability@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 05-sustainability@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/05-sustainability/skills/epd-parser ~/.claude/skills/epd-parser
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/05-sustainability/skills/epd-parser ~/.claude/skills/epd-parser
 ```
 
 ## Usage

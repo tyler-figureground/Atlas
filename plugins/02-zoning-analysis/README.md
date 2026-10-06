@@ -85,21 +85,21 @@ A skill that queries the city's PLUTO dataset for lot-specific data, identifies 
 **Claude Desktop:**
 
 1. Open the **+** menu → **Add marketplace from GitHub**
-2. Enter `tyler-figureground/skills-for-architects`
+2. Enter `tyler-figureground/Atlas`
 3. Install the **Zoning Analysis** plugin
 
 **Claude Code (terminal):**
 
 ```bash
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 02-zoning-analysis@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 02-zoning-analysis@atlas
 ```
 
 **Manual:**
 
 ```bash
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/02-zoning-analysis/skills/zoning-analysis-nyc ~/.claude/skills/zoning-analysis-nyc
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/02-zoning-analysis/skills/zoning-analysis-nyc ~/.claude/skills/zoning-analysis-nyc
 ```
 
 ## License

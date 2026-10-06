@@ -8,12 +8,12 @@ Generate CSI-formatted specification sections requiring EPDs and setting maximum
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 05-sustainability@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 05-sustainability@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/05-sustainability/skills/epd-to-spec ~/.claude/skills/epd-to-spec
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/05-sustainability/skills/epd-to-spec ~/.claude/skills/epd-to-spec
 ```
 
 ## Usage

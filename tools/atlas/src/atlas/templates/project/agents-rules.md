@@ -32,8 +32,8 @@ Not done until all six. A meeting whose minutes exist but whose brief and tasks 
 
 ## Control files stay small
 
-- `BRIEF.md` under 150 lines. `PROJECT.md` facts only. Past 30 KB, look for narrative to move out; never cut a fact to hit a size.
-- No line over 1,000 characters in `BRIEF.md`, `PROJECT.md`, `TASKS.md` or minutes: agent file readers cut long lines off silently.
+- `BRIEF.md` under 150 lines. `PROJECT.md` facts only. Past 100 KB, look for narrative to move out; never cut a fact to hit a size.
+- No line over 2,000 characters in `BRIEF.md`, `PROJECT.md`, `TASKS.md` or minutes: agent file readers cut longer lines off silently.
 - Session narrative never goes in `PROJECT.md`. Found some: back up, then move it verbatim to `.agent/PROJECT-HISTORY.md`, newest first.
 - `00 Tasks/TASKS.md`: done items older than 30 days -> `00 Tasks/Archive/YYMM-done.md`.
 - Decisions kept in a spreadsheet: keep a generated Markdown copy at `decisions/REGISTER.md`, regenerated whenever the spreadsheet changes. Agents read the copy, write the spreadsheet.

@@ -8,12 +8,12 @@ Find visually or functionally similar products from an image, name, or descripti
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 06-materials-research@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 06-materials-research@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/06-materials-research/skills/product-match ~/.claude/skills/product-match
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/06-materials-research/skills/product-match ~/.claude/skills/product-match
 ```
 
 ## Usage

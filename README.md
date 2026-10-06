@@ -12,7 +12,7 @@
 **Architecture Studio**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/tyler-figureground/skills-for-architects)](https://github.com/tyler-figureground/skills-for-architects/releases)
+[![Release](https://img.shields.io/github/v/release/tyler-figureground/Atlas)](https://github.com/tyler-figureground/Atlas/releases)
 
 </div>
 
@@ -60,12 +60,12 @@ Architecture Studio
 
 ### Install
 
-**Claude Desktop:** Open **Customize** → **Browse plugins** → **+** → **Add marketplace from GitHub** → enter `tyler-figureground/skills-for-architects`
+**Claude Desktop:** Open **Customize** → **Browse plugins** → **+** → **Add marketplace from GitHub** → enter `tyler-figureground/Atlas`
 
 **Claude Code:**
 ```bash
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 01-site-planning@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 01-site-planning@atlas
 ```
 
 ### Use

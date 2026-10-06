@@ -1,6 +1,6 @@
 # Dispatcher
 
-The entry point for the skills-for-architects plugin system. Two skills:
+The entry point for the Atlas plugin system. Two skills:
 
 | Skill | What it does |
 |-------|-------------|
@@ -16,14 +16,14 @@ The repo has 34 skills and 7 agents. New users shouldn't need to memorize them. 
 **Claude Desktop:**
 
 1. Open the **+** menu → **Add marketplace from GitHub**
-2. Enter `tyler-figureground/skills-for-architects`
+2. Enter `tyler-figureground/Atlas`
 3. Install the **Dispatcher** plugin
 
 **Claude Code (terminal):**
 
 ```bash
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 08-dispatcher@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 08-dispatcher@atlas
 ```
 
 ## License

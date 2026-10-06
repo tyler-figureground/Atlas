@@ -8,12 +8,12 @@ Zoning envelope analyzer for lots in New York City as a [Claude Code](https://do
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 02-zoning-analysis@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 02-zoning-analysis@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/02-zoning-analysis/skills/zoning-analysis-nyc ~/.claude/skills/zoning-analysis-nyc
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/02-zoning-analysis/skills/zoning-analysis-nyc ~/.claude/skills/zoning-analysis-nyc
 ```
 
 ## Usage

@@ -8,12 +8,12 @@ Generates harmonious color palettes from descriptions, moods, images, or referen
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 07-presentations@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 07-presentations@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/07-presentations/skills/color-palette-generator ~/.claude/skills/color-palette-generator
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/07-presentations/skills/color-palette-generator ~/.claude/skills/color-palette-generator
 ```
 
 ## Usage

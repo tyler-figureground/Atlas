@@ -8,12 +8,12 @@ LPC landmark and historic district check for any NYC building as a [Claude Code]
 
 ```bash
 # Via plugin system
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 00-due-diligence@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 00-due-diligence@atlas
 
 # Or symlink just this skill
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/00-due-diligence/skills/nyc-landmarks ~/.claude/skills/nyc-landmarks
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/00-due-diligence/skills/nyc-landmarks ~/.claude/skills/nyc-landmarks
 ```
 
 ## Usage

@@ -102,21 +102,21 @@ For full space programming (occupancy compliance → workplace strategy → room
 **Claude Desktop:**
 
 1. Open the **+** menu → **Add marketplace from GitHub**
-2. Enter `tyler-figureground/skills-for-architects`
+2. Enter `tyler-figureground/Atlas`
 3. Install the **Programming** plugin
 
 **Claude Code (terminal):**
 
 ```bash
-claude plugin marketplace add tyler-figureground/skills-for-architects
-claude plugin install 03-programming@skills-for-architects
+claude plugin marketplace add tyler-figureground/Atlas
+claude plugin install 03-programming@atlas
 ```
 
 **Manual:**
 
 ```bash
-git clone https://github.com/tyler-figureground/skills-for-architects.git
-ln -s $(pwd)/skills-for-architects/plugins/03-programming/skills/occupancy-calculator ~/.claude/skills/occupancy-calculator
+git clone https://github.com/tyler-figureground/Atlas.git
+ln -s $(pwd)/Atlas/plugins/03-programming/skills/occupancy-calculator ~/.claude/skills/occupancy-calculator
 ```
 
 ## License
