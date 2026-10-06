@@ -50,6 +50,7 @@ Not done until all six. A meeting whose minutes exist but whose brief and tasks 
 - Permits and agency filings go in `13 AHJ/`, by stage, and every application has a row in `13 AHJ/AHJ-REGISTER.md`.
 - Research: one report per question in its `06 Research & Existing Conditions` topic folder, raw captures in a `_sources/` folder beside it, every source a row in `RESEARCH-INDEX.md`.
 - Unsent emails and letters go in `08 OUT/Drafts/`; move them to their dated folder once sent.
+- Every package that leaves the studio gets a row in `08 OUT/Transmittals/TRANSMITTAL-LOG.md` when it is sent, and the package as sent goes in a dated `YYMMDD_Transmittal-T-NNN/` folder beside the log. Agents never send; when Tyler says a package went out, log the row and file the folder.
 - New folders only through Atlas. Never `tmp`, `QA`, `New folder` or `Agent Sessions`. No tool caches (`__pycache__`, `.ruff_cache`) on the drive.
 
 ## Research and asking
