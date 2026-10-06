@@ -24,6 +24,10 @@ Good: "Tests fail. Missing dep."
 
 Never use em dashes in public-facing copy. Use a spaced hyphen ( - ) instead.
 
+## Finish the job
+
+Tyler is the last line of defence. Work every task to done; stop only when done or genuinely blocked (a decision only Tyler can make, a secret or login only he has, a destructive or outward-facing action). Before the run, ask him every issue you can foresee, in one message. Stuck mid-run: exhaust local context first (this repo, `docs/adr/`, `docs/research/`, `.agent/handoff/`, `.scratch/`, for studio projects the brief, decisions and latest minutes), then the internet, then ask. A filling context window is not a reason to stop: keep the handoff current, let auto-compaction run, keep working. Studio projects get the same rule from the Atlas block in their `AGENTS.md` (`tools/atlas/src/atlas/templates/project/agents-rules.md`).
+
 ## Paths
 
 Every file or handoff path you hand back is a full absolute path, drive letter first, so it copy-pastes: `C:\Users\YOLOTRON\Documents\GitHub\skills-for-architects\docs\adr\0010-....md`, not `docs/adr/0010-....md`. Applies to chat replies, task summaries, handoff notes, and anything pointing at a file on the studio drive.
