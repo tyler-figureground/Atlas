@@ -193,15 +193,18 @@ it targets is the one that reached the County, and the test fixture is already l
 
 | Work | Owner | Tracked at | This side's part |
 |---|---|---|---|
-| Print critic extended to CD sheets, plans first | Pyvoid | #2888 | Evidence and fixtures posted 2026-10-05; check progress, add fixtures as sets are built |
-| VS-006 sheet composition standard | Pyvoid | #769, #770 | Tyler's rulings posted 2026-10-05 |
-| Model-side compliance check | Pyvoid | #3095 | Filed 2026-10-05 |
+| Print critic extended to CD sheets, plans first | Pyvoid | #2888 | Evidence posted; print gaps and five before/after fixtures posted for every sheet type (2026-10-05) |
+| VS-006 sheet composition standard | Pyvoid | #769, #770 | Tyler's rulings, then every rule gap and every practice-vs-S+V conflict found building the sets, posted 2026-10-05 |
+| Model-side compliance check | Pyvoid | #3095 | Filed; per-sheet-type model checks and fixtures posted 2026-10-05 |
 | Internal standards corrections | Tyler | - | - |
-| Plan reference set: exemplars + redline pairs, citing rule ids | This side | Library drive | Next: from 64L A123 (re-export after the layout pass) and MV A101 / A102; redline 64L A220-series |
-| Then schedules, RCPs and details, elevations, G-series sets | This side | Library drive | In Tyler's order |
+| Drawing reference sets | This side | Library drive | **Built 2026-10-05, all candidate:** Floor Plans, Schedules, RCPs, Details, Elevations; G-Series retrofitted to rule ids. Each: E1-E3, a before/after R1 (64L Rev 4 vs the 09-23 export), checklist lines tagged print / model / tyler with S+V rule ids |
+| Conformance | This side | Library drive | Every drawing card states the S+V standards govern; card-vs-S+V disagreements fixed in the card (G-Series "addressed to a party"); ruling-vs-S+V conflicts filed to #769, not to Tyler |
 
-Follow-through: before each new set, re-read #2888, #770 and #3095; a set ships once the rule
-ids it cites exist in Pyvoid. Phases A, B and D in section 5 are Pyvoid's; C, E and F stay here.
+Follow-through: when Pyvoid rules on a #769 conflict or lands a rule id, update the cards that
+cite it; when #2888 or #3095 ships a check, run it on each set's R1 `before.pdf` - every tagged
+defect must fire. No R1 is a Tyler markup (none exists on the drive); a real redline print per
+sheet type is the one input only Tyler can supply. Phases A, B and D in section 5 are Pyvoid's;
+C, E and F stay here.
 
 ## 8. Sources
 
