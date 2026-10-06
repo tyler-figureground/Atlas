@@ -367,7 +367,7 @@ def test_brief_and_ask_last_rules_reach_every_project(v3_drive):
                     "## After every meeting", "## Control files stay small"):
         assert heading in agents, heading
     assert "atlas refs check <draft>" in agents  # ADR 0015
-    assert agents.index("## Read first, ask last") < agents.index("## Look before you make")
+    assert agents.index("## Finish the job") < agents.index("## Read first, ask last") < agents.index("## Look before you make")
     run_template = (project / ".agent" / "runs" / "_RUN-TEMPLATE.md").read_text(encoding="utf-8")
     assert "- Reference:" in run_template
     assert "4. To-do lists:" in agents  # ADR 0016: production vs Tyler's errands

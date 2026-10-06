@@ -1,8 +1,17 @@
+## Finish the job - Tyler is the last line of defence
+
+- Work every task to done. Stop only when it is done or genuinely blocked. Never end a run idle while unblocked work remains.
+- Before the run: list every issue you can foresee - missing inputs, access, files you cannot open, decisions only Tyler can make, conflicting sources - and ask Tyler all of them up front, in one message. Then start; never wait on an answer you can work around.
+- Stuck mid-run: exhaust your own resources before asking, in this order. (1) This project: `BRIEF.md`, `PROJECT.md`, `decisions/`, `00 Tasks/TASKS.md`, the latest minutes in `11 Meetings/`, `06 Research & Existing Conditions`, `RESEARCH-INDEX.md`, `.agent/handoff/`. (2) The studio library and your skills and tools. (3) The internet: code text, agency and jurisdiction sites, manufacturer data. Only then ask, and name what you checked.
+- Genuinely blocked means: a decision only Tyler or the client can make, a login or secret only Tyler has, or an action that sends something out of the studio or destroys data. Not a failed check, an unfamiliar file, or a fact the web holds - diagnose, fix, re-run.
+- Blocked on one item: record the ask, draw with the best basis (`PROJECT.md` `basis:`), move on to the next item. Asks go to Tyler batched at the end, not one at a time mid-run.
+- A filling context window is not a reason to stop. Keep `.agent/handoff/CURRENT.md` current as you go, let auto-compaction run, and keep working. Write a dated handoff and stop only at done or genuinely blocked.
+
 ## Read first, ask last
 
 - Start every session with `BRIEF.md`, then `00 Tasks/TASKS.md`, then `.agent/handoff/CURRENT.md`. `PROJECT.md`, `decisions/` and the latest minutes in `11 Meetings/` for detail. Tyler's personal errands are in `00 Tasks/TYLER.md` - never work from it; it is add-only for agents.
 - Told to work on the project with no specific task: take the top unblocked `AGENT` or `MODEL` item from `00 Tasks/TASKS.md` (Now, then Next), claim it in the **In progress** section (`claimed YYYY-MM-DD by <name>`) before starting, work one task at a time, close it with evidence and a run receipt. Never start a `DECISION` or `WAIT` item - if everything actionable is blocked, say so and name the blockers. A claim stale more than 7 days with no run receipt may be reclaimed; check `.agent/handoff/CURRENT.md` first.
-- Before asking Tyler anything, search `BRIEF.md`, `decisions/`, `PROJECT.md`, `00 Tasks/TASKS.md` and the latest minutes. Answered in any of them = answered; act on it.
+- Before asking Tyler anything, search `BRIEF.md`, `decisions/`, `PROJECT.md`, `00 Tasks/TASKS.md` and the latest minutes, then the internet. Answered in any of them = answered; act on it.
 - Every question to Tyler names what you checked and why it does not answer it: "Checked BRIEF Settled + DR-061: covers paint colour, not touch-up scope." No citation, no question.
 - Newest source wins: latest minutes > `BRIEF.md` > `PROJECT.md` narrative > older handoffs. An old open question is not open unless `BRIEF.md` lists it under Open.
 - Tyler answers in chat: record it before the session ends - decision record, fact in `PROJECT.md`, line moved to Settled in `BRIEF.md`. An answer left only in chat is lost to the next agent.
@@ -59,7 +68,7 @@ Not done until all six. A meeting whose minutes exist but whose brief and tasks 
 - Day 1: send the questions in `00 Tasks/INTAKE.md` to Tyler as one message. Research and drafting start at once; an answer overrides anything researched.
 - Research only what a sheet needs. Each question names the requirement row or sheet item it serves and its done-test: the fact at the precision that item draws or states. Done-test met = stop, even if more is knowable.
 - Time-box: 30 min agent time per question; all research capped at a quarter of the job's agent budget. No silent extensions.
-- At the box, draw with the best basis you have, then ask. Record it in `PROJECT.md` `basis:` (fact, value used, source, requirement row, printed yes/no, open/confirmed). Never on the sheet: no hedges, holds or internal codes.
+- At the box, draw with the best basis you have, keep working, then ask. Record it in `PROJECT.md` `basis:` (fact, value used, source, requirement row, printed yes/no, open/confirmed). Never on the sheet: no hedges, holds or internal codes.
 - Asks go at the top of the pass receipt: max 5, printed values first; one fact, the value drawn, its source, a confirm-or-correct line. Questions for the County or client are drafted to `08 OUT/Drafts/` and listed as asks; never sent by an agent.
 - Not issue-ready while an open basis row backs a printed value.
 - Outside sheet scope: one line under "Parked - outside sheet scope" in `00 Tasks/TASKS.md` (finding, source, why it may matter); source row in `RESEARCH-INDEX.md`; no further work. Tyler reviews it at issue-ready.
