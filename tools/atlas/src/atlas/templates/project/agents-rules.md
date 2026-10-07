@@ -53,14 +53,17 @@ Precedence: Tyler's current words > project rules below this block > this block 
 
 ## Working in the Revit model
 
-- One writer. Before the first write, confirm the open document is this project's local by title and path - never by GUID alone; models born from one template share it. Exactly one `Revit.exe`, no other agent on the model. Document already modified at session start: Tyler is mid-edit - work offline until he says.
+- One writer per model, not one Revit process per machine. Before inventories or writes, identify this project's intended local by title and full path, central-model lineage when workshared, and the target instance's process ID. Never infer identity from title, GUID or process count alone; models born from one template can share a GUID. A second live writer on the same model blocks writes, even through a different local path. Document already modified at session start: treat it as in-progress work and stay offline until its ownership is resolved.
+- Separate Revit instances on different projects are not automatically a conflict. For Fleet (project-pinned Revit sessions), verify the project key, instance and document fingerprint; zero matches, multiple matches or drift means stop, never fall back to an unpinned connection. For an unpinned tool, prove its target before use; do not choose whichever document happens to be active. Recheck after reconnects, restarts, document switches and posted native commands. Use a non-active document only through a tool's explicit supported targeting contract. Never close, kill or retarget another session to clear ambiguity.
+- Multi-instance support is not operational acceptance. Verify isolation for this session; a merged feature or closed ticket is not proof that concurrent production is safe. Do not launch additional seats or declare Fleet accepted as part of an unrelated project task.
 - A pass: save local and copy a checkpoint (outside the job folder) -> small bounded transactions, one per sheet or view -> read back every effect (element ids, counts, values) -> save local. Save local after every verified batch; an unsaved pass is a lost pass.
 - Recovery is forward. Never Ctrl+Z or a transaction-group rollback on a workshared local; correct forward or reopen the checkpoint.
 - Sync is Tyler's act and his acceptance signal. Sync only when he asks - in the conversation, or by a standing rule in this project's section - then at once. Exiting Revit: save local, choose "do not synchronize" explicitly - never let a dialog default decide. Never detach or overwrite a local on your own.
 - A timed-out call may still finish inside Revit. Reconcile - read the model, check the output folder - before any retry. Never replay a script that already committed; kept scripts are evidence, not instructions.
 - Record the warning count at pass open. A rise at close is yours to explain.
 - Read the parameter, never the name. A type called `30" x 60"` was 36" tall and hid an egress failure. Corroborate before a value drives a code answer, a quantity or a tag.
-- Create elements on a view whose phase is the target phase, with the target workset active; read both back. Existing types carry the `Ex. ` prefix, never merged with new. After any reopen, confirm every user workset is open before exporting; never cancel the Opening Worksets prompt.
+- Create elements on a view whose phase is the target phase, with the target workset active; read both back. Existing types carry the `Ex. ` prefix, never merged with new.
+- After every open/reopen, local creation, migration or restart, inspect and record user-workset `IsOpen` states before inventories, area calculations, edits or exports. Required model/background worksets must be loaded; a loaded link or visible category does not prove its containing workset is open. Never infer missing/deleted geometry from a partial-load document. Never silently close worksets or cancel Opening Worksets as generic dialog dismissal; preserve intentional visibility settings.
 - The office template is the baseline: title block, view templates, phase filters, annotation and text types. Do not audit or rebuild it. Need a change: duplicate to a project-local copy; never edit a shared template or a library master in place.
 - Graphics through view templates, filters and phase graphics. Never per-element overrides on a production view; never fake phase state with overrides, filters or detail lines.
 - The model is the source of truth. A wrong tag, schedule or dimension means a wrong model: fix the parameter or the geometry, never the annotation.
@@ -68,7 +71,7 @@ Precedence: Tyler's current words > project rules below this block > this block 
 - Delete only in scope, dependencies previewed first. No blanket purge. Tyler's own deletions are intent - never restore them.
 - Never mark a revision Issued, export for transmittal or send - Tyler's call. Never renumber or change an issued sheet, detail, mark or revision. Read the issue state; never assume the revision number.
 - Model work is billed through a JDP run: open one before the first write. A stray session auto-started on another project's model: close it at once.
-- Tool detail lives in the `maestro` and `jdp` skills; never copy their trap tables here. This model's own traps go in `PROJECT.md` under "Model traps" - add one when you find it.
+- Tool detail lives in the `maestro` and `jdp` skills; never copy their trap tables here. Check the connected runtime's actual capabilities before using a newly merged operation: repository code, a deployed add-in and a live verified tool are different evidence. Missing support is a capability gap, not permission to draw an imitation or bypass targeting/trust checks. This model's own traps go in `PROJECT.md` under "Model traps" - add one when you find it.
 
 ## Drawings - native over drawn
 
@@ -99,7 +102,7 @@ Drafting form:
 
 Done is checked on paper:
 
-- Export the sheets with native PDF export and look at every page. Model checks and printed checks are separate; a check that could not run is BLOCKED, never passed. Data reads (schedule cell text, dimension value strings) do not prove what prints.
+- Export the sheets with native PDF export and look at every page. Compare actual exported model viewports against the last accepted background content; text/font/PDF checks cannot pass missing geometry. Model checks and printed checks are separate; a check that could not run is BLOCKED, never passed. Data reads (schedule cell text, dimension value strings) do not prove what prints.
 - Before every export, sweep for another project's names, addresses, firm names and revision rows.
 
 ## Code work

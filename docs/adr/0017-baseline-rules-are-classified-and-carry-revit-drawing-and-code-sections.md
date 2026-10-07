@@ -76,4 +76,28 @@ entitled to direct.
   - Dimensions 1/4" display precision, face of stud. Centerline allowed in Concept and
     Schematic Design; Construction Documents are face of stud (S+V-DS-002 v1.5, Rule
     5.2.11). Shipped to JDP through the firm config `%PROGRAMDATA%\Pyvoid\jdp\jdp.yaml`.
-- Still open: the S+V vs Tyler-ruling conflicts filed on Pyvoid #769.
+- The original S+V conflict list on Pyvoid #769 is partly superseded by Tyler's later
+  2026-10-06 rulings, already carried in Atlas 0.11.1. Preserve those drafting rules;
+  standard-header naming and the isolated eighth-inch precision answer remain open.
+  See the research reconciliation for source/status distinctions.
+
+## Reconciliation with Pyvoid (2026-10-06)
+
+The baseline's original "Exactly one Revit.exe" wording was broader than the
+accepted Pyvoid safety contract. Replace the machine-wide process ban with **one
+writer per model**, including different locals of the same central. Separate
+project instances require positive target identity; failed Fleet pinning never
+falls back to an arbitrary active document. Never close another session to make a
+check pass. This preserves the hard line, not an exception to it.
+
+Pyvoid ADR-029 and `user-authority.md` already settle that boundary; no new user
+ruling was needed. Fleet's three-instance acceptance (#3100) was still open when
+checked. Rules must not certify acceptance or launch extra seats by implication.
+
+Carry the inherited workset-completeness rule at its actual boundary: every open,
+reopen, local creation, migration and restart, before inventories or writes as well
+as exports. Check actual printed backgrounds, not only text and fonts. Preserve
+project-specific standing sync rulings outside Atlas's generated block. Tool
+availability must be checked in the connected runtime, not inferred from a merge.
+Evidence and the distinction between policy and shipped capability are recorded in
+`docs/research/agent-baseline-rules-evidence.md`.

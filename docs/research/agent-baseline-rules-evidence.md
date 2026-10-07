@@ -123,8 +123,61 @@ what Tyler asked for, no direct correction.
   Design only.
 - Monte Vista's project-level "sync at natural checkpoints" stays.
 
-Still open: S+V vs Tyler-ruling conflicts on Pyvoid #769 (clouds, witness gap, view
-numbering, door marks, per-level schedules).
+At the original mining pass, S+V vs Tyler-ruling conflicts remained on Pyvoid #769.
+The later 2026-10-06 rulings settle most of them; see the reconciliation below.
+
+## Pyvoid reconciliation (2026-10-06)
+
+Follow-up requested after the decision-register update. Read the local checkout,
+then fetched remote refs without pulling, resetting or editing Pyvoid's dirty work.
+Local and remote history had diverged; local handoffs were not treated as proof of
+current remote release state. Policy snapshot: Pyvoid `3d14c191b5139e71de3d1b4a4c0f3a19a801ea1c`.
+
+- **High confidence: one writer is per model, not per machine.** Accepted ADR-029
+  defines separate project-key-pinned instances; `user-authority.md` hard line 2
+  forbids a second live writer on the same model. Thus the original Atlas rule
+  "Exactly one Revit.exe" over-constrained safe isolation. Different local paths
+  do not prove different central models. Title/GUID/process count alone is not identity.
+- **High confidence: ambiguous targeting refuses.** ADR-029 requires zero/multiple
+  matches and identity drift to refuse; a configured Fleet pin must never silently
+  degrade to unpinned discovery. Non-active documents need the operation's supported
+  explicit target contract (ADR-028), not a blanket assumption about every handler.
+- **Acceptance remains separate.** Live GitHub readback showed #3100 OPEN. Neither
+  this reconciliation nor merged multi-instance code establishes three-instance
+  operational acceptance. No Revit instance was launched, closed, repinned or edited.
+- **Workset evidence precedes model conclusions.** Inherited studio rule and Beitz
+  evidence require recorded IsOpen states before inventories, calculations, edits
+  and exports after any document-opening lifecycle event; loaded links and category
+  visibility are insufficient. Printed backgrounds must match accepted content.
+- **Capability vs policy.** Native symbol placement, scale-bar placement/checking
+  and line-style operations have merged. Their installed/live availability is not
+  proven by that merge. Shared rules retain native-over-drawn requirements and
+  route tool detail to the JDP/Maestro skills rather than duplicating command tables.
+- **Newer drafting rulings already landed in Atlas 0.11.1 (`a06652d`).** Live #769
+  comment readback confirms sheet-only clockwise clouds, clear fixed witness lines,
+  D01 door marks, parameter-driven ceiling-height labels, ALL CAPS, no drawing-set
+  pricing, one schedule-splitting strategy per set, casework as dimension subject
+  only, and provisional bottom-right/up/left view numbering except standard details.
+  Preserve these concurrent changes, not the older open-question list. Standard
+  header/firm naming and the isolated eighth-inch precision answer remain unresolved;
+  do not guess either. Standards/engine changes are tracked in #3195, not certified
+  by this Atlas patch. Issued-number exceptions remain project-specific.
+- **Deliberately unchanged:** A101 numbering, face-of-stud/quarter-inch defaults,
+  no autonomous sync, foreign-borrow protection, project-specific standing rulings.
+  Product launch/branding and unmerged visual work are not studio-project rules;
+  no Atlas rebrand or product-roadmap work is implied by this synchronization.
+
+The reusable Atlas template and generation tests carry these changes. Existing drive
+projects are not silently conformed by this repository edit. No Pyvoid worktree edits,
+issue closure, runtime deployment or live-model verification were performed.
+
+Source pointers (pinned where available):
+- [Instance/project pinning, ADR-029](https://github.com/tyler-figureground/Pyvoid/blob/3d14c191b5139e71de3d1b4a4c0f3a19a801ea1c/.agent/ADR/ADR-029-instance-registry-project-key-pinning.md)
+- [User authority and the per-model hard line](https://github.com/tyler-figureground/Pyvoid/blob/3d14c191b5139e71de3d1b4a4c0f3a19a801ea1c/.agent/policy/user-authority.md)
+- [Non-active document handles, ADR-028](https://github.com/tyler-figureground/Pyvoid/blob/3d14c191b5139e71de3d1b4a4c0f3a19a801ea1c/.agent/ADR/ADR-028-document-handle-registry.md)
+- [Three-instance acceptance, #3100](https://github.com/tyler-figureground/Pyvoid/issues/3100)
+- [Latest drafting rulings, #769](https://github.com/tyler-figureground/Pyvoid/issues/769)
+- [Standards/engine follow-through, #3195](https://github.com/tyler-figureground/Pyvoid/pull/3195)
 
 ## Sources
 
