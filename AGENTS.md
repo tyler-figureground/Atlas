@@ -73,6 +73,7 @@ Adding or renaming a plugin means updating `.claude-plugin/marketplace.json` and
 
 - `SKILL.md` files require YAML frontmatter. `scripts/lint.sh` enforces it.
 - `plugins/10-norma` shells out to the `norma` CLI. Never `python tools/...` directly, never grep a raw corpus path. Use `norma <verb>`. Lint enforces both.
+- Decision-register spreadsheets: follow `docs/decision-register.md`. Workbook stays canonical; six-column Team View, full history on a detail tab. `scripts/decision_register.py` builds/checks presentation; `scripts/export_decision_register.py` exports short summary plus unclipped evidence. Tests: `uv run --with openpyxl python -B -m unittest discover -s scripts/tests -v` (also in CI). Never truncate evidence or append meeting histories to front-sheet cells.
 
 ## Research index
 

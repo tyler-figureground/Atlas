@@ -35,7 +35,11 @@ are unprocessed, process oldest first, one run each. Read the current
 
 2. **Decisions.** One record per decision made or changed - `/decision`, or the
    project's own register if its AGENTS.md says it keeps one. Supersede; never
-   overwrite a rationale.
+   overwrite a rationale. For spreadsheets, follow `/decision`'s compact `Team View`
+   contract: update short current summaries as well as the detail/history tab, run
+   the project's saved-workbook readability checker, regenerate `REGISTER.md` and
+   lossless `DETAILS.md`. Do not append minutes or histories into front-sheet cells.
+   A formatting/check failure leaves this step incomplete.
 
 3. **Facts.** Update `PROJECT.md` front matter and its mirror rows, each with
    source and date. Facts only - no session narrative.

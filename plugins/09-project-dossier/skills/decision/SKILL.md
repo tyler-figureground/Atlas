@@ -6,12 +6,41 @@ allowed-tools:
   - Write
   - Edit
   - Glob
+  - Bash
   - AskUserQuestion
 ---
 
 # /decision — Project Decision Records
 
 You capture decisions the way software teams capture ADRs (Architecture Decision Records) — except these are for actual architecture. One file per decision, numbered, in `decisions/` at the project root. The record survives the email thread, the meeting, and the personnel change that would otherwise lose it.
+
+## Existing spreadsheet registers take precedence
+
+Read project instructions first. If a workbook is the project's register, update it;
+do not create a parallel numbered-file register. Back up first, preserve permanent
+IDs, rationale and history. Scan all IDs before allocating; row order is not ID order.
+
+The human entry point is `Team View`, six columns only: **ID, Topic, Current
+position, Status, Owner, Next / due**. Full evidence stays on a linked detail tab.
+Replace front summaries with the current position; never append meeting logs there.
+Topic <=55 characters, position <=150, next / due <=100, owner <=40. Never truncate,
+invent dates/owners, turn proposals into decisions, or drop safety qualifications.
+A decided choice may still need a next action. Link the existing task, not a second
+task list. History belongs in detail, not the front row.
+
+Freeze headings, wrap 11pt-or-larger body text, keep rows 36-48pt and zoom >=85%.
+Fit six columns across a laptop; allow vertical scrolling and status filtering.
+Do not shrink text, hide rows, or leave filters hiding records to fake readability.
+After each write, run the project-local readability checker on the saved workbook
+(Architecture Studio's `scripts/decision_register.py check <workbook> --render`
+supports the legacy A-V detail layout; openpyxl plus aspose-cells-python measure
+wrapped-text fit without saving the renderer's workbook). Fix failures, regenerate the short `decisions/REGISTER.md`
+and lossless `decisions/DETAILS.md`, read changed summaries back and check their
+meaning against detail. View the actual spreadsheet when a renderer is available;
+report an unavailable visual check, never claim a structural check proves appearance.
+
+For projects using individual decision files, use the flow below. Their index also
+stays short: ID, concise choice, status, link. Narrative belongs in the linked record.
 
 ## Usage
 
