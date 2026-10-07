@@ -10,3 +10,6 @@
 # Local
 .env
 .env.local
+
+# Conform run manifests - ephemeral run output, not continuity docs
+.agent/handoff/conform-*-manifest.json
