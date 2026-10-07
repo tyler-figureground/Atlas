@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Atlas `0.11.2` - firm name `Solid + Void`.** Tyler 2026-10-07: on every title block and document, supersedes 2026-10-05 "Solid Void". Dimensions stay 1/4" uniform - never a single 1/8" value.
 - **Atlas `0.11.1` - Tyler's drafting rulings (Pyvoid #769).** Baseline *Drawings* section: clouds always on the sheet, sketched clockwise; witness lines fixed to the dimension line, clear of the drawing; casework dimensioned as subject only; door marks `D01`; ceiling heights in the tag label; ALL CAPS everywhere on a sheet; no pricing on drawings; level-split schedules one way per set; view numbers from the lower-right corner except standard-detail sheets (grid module). S+V standards amended to match.
 - **Atlas `0.11.0` - the baseline knows Revit, drawings and code (ADR 0017).** `agents-rules.md` opens with four rule kinds (hard line, Tyler's call, house default, project input) and a precedence order, and gains *Do the task asked*, *Working in the Revit model*, *Drawings - native over drawn* and *Code work*. Native tags with native leaders, native schedules, viewport titles, live references and model views instead of drawn imitations; one writer, save local, Tyler syncs; code basis before any citation. Minutes leave out money and personal talk. Evidence: `docs/research/agent-baseline-rules-evidence.md`.
 - **10-norma `1.4.2` - a project never routes to `-j ibc`.** The 2009 IBC is reference-only for generic questions; an unresolved project jurisdiction is a stop.
