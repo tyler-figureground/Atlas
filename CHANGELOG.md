@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Atlas `0.11.0` - the baseline knows Revit, drawings and code (ADR 0017).** `agents-rules.md` opens with four rule kinds (hard line, Tyler's call, house default, project input) and a precedence order, and gains *Do the task asked*, *Working in the Revit model*, *Drawings - native over drawn* and *Code work*. Native tags with native leaders, native schedules, viewport titles, live references and model views instead of drawn imitations; one writer, save local, Tyler syncs; code basis before any citation. Minutes leave out money and personal talk. Evidence: `docs/research/agent-baseline-rules-evidence.md`.
+- **10-norma `1.4.2` - a project never routes to `-j ibc`.** The 2009 IBC is reference-only for generic questions; an unresolved project jurisdiction is a stop.
 - **Two task lists per project (ADR 0016).** `00 Tasks/TASKS.md` is the production list (lanes `AGENT`/`MODEL`/`DECISION`/`WAIT`, In-progress claims, agent pickup rules); `00 Tasks/TYLER.md` holds Tyler's personal errands, add-only for agents. Drive map v3.6 seeds it; `atlas tyler` (Atlas 0.10.0) rolls both up into `_tools/TYLER-TODAY.md`, refreshed hourly by the `Atlas Tyler Digest` scheduled task.
 - **Skills `/tasks` and `/meeting-closeout`** (09-project-dossier): work the two lists; close out a meeting transcript into minutes, decisions, facts, both task lists and a rebuilt brief.
 - **Atlas `0.10.1` - control-file limits raised.** `agents-rules.md`: `PROJECT.md` narrative prompt 30 KB -> 100 KB; no line over 2,000 characters (was 1,000), the file reader's own cut-off. ADR 0014 amended.

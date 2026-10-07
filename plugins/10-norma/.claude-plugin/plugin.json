@@ -1,6 +1,6 @@
 {
   "name": "10-norma",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Norma — building-code analysis for the architect of record. Code Q&A, occupant load & egress, allowable height/area, cross-jurisdiction compare, and life-safety drawing review — every answer grounded in a local code corpus and cited verbatim. Shells out to the editable-install `norma` engine and scopes from the project's PROJECT.md front-matter.",
   "author": {
     "name": "ALPA",

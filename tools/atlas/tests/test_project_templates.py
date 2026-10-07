@@ -368,6 +368,12 @@ def test_brief_and_ask_last_rules_reach_every_project(v3_drive):
         assert heading in agents, heading
     assert "atlas refs check <draft>" in agents  # ADR 0015
     assert agents.index("## Finish the job") < agents.index("## Read first, ask last") < agents.index("## Look before you make")
+    # ADR 0017: rule kinds lead; Revit, native-over-drawn and code basis ride in every block.
+    assert agents.index("## How these rules bind") < agents.index("## Finish the job")
+    for heading in ("## Do the task asked", "## Working in the Revit model",
+                    "## Drawings - native over drawn", "## Code work"):
+        assert heading in agents, heading
+    assert "**Hard line**" in agents and "**Project input**" in agents
     run_template = (project / ".agent" / "runs" / "_RUN-TEMPLATE.md").read_text(encoding="utf-8")
     assert "- Reference:" in run_template
     assert "4. To-do lists:" in agents  # ADR 0016: production vs Tyler's errands
