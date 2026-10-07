@@ -1,0 +1,114 @@
+{
+  "timestamp": "261006-222822",
+  "drive": "G:\\Shared drives\\ARCHITECTURE",
+  "wheel": "G:\\Shared drives\\ARCHITECTURE\\_tools\\atlas\\studio_atlas-0.11.0-py3-none-any.whl",
+  "wheel_sha256": "097b12cccaf593005718e9b936c3bda81620e74999893e87631e797c5697b621",
+  "applied": false,
+  "projects": [
+    {
+      "project": "103 Mosco",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\103 Mosco\\AGENTS.md",
+      "before_sha256": "5125d0878abec12565ff7c299d39d7854331cb98c76b164d0205856b25656b3a",
+      "project_facts_sha256": "1685b16335fdf05f04d61ede2a81e2f9bccc1c02ed7f6d498a22c9e041deea3c",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "230215_1221 Hayes-ADU",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\230215_1221 Hayes-ADU\\AGENTS.md",
+      "before_sha256": "62bdc89da3a853fbeda8284170f849021231ebae2463f243662f5960b334f1df",
+      "project_facts_sha256": "4bda0c28fedcb2f9563e620975fa456610d994d191e7b329be88dc1c6c13c956",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "242924 - 372 Dekalb Jared - Loveable Studio",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\242924 - 372 Dekalb Jared - Loveable Studio\\AGENTS.md",
+      "before_sha256": "5125d0878abec12565ff7c299d39d7854331cb98c76b164d0205856b25656b3a",
+      "project_facts_sha256": "3620ae48850b7288c7f9c477e8fed0352a16ad0f8d8a59e92ccfe79c3d54c963",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "250622 - 2051 Huckleberry Rd-Lake Tahoe Chalet",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\250622 - 2051 Huckleberry Rd-Lake Tahoe Chalet\\AGENTS.md",
+      "before_sha256": "5125d0878abec12565ff7c299d39d7854331cb98c76b164d0205856b25656b3a",
+      "project_facts_sha256": "ec59072ea96c5cf1b6ded31f8404a9f014a5f74242f1a302c77b51363f4a9329",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "250828_1757 Coleman A-Rental",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\250828_1757 Coleman A-Rental\\AGENTS.md",
+      "before_sha256": "122cc6e75af2f1be440f8956fbfb45780d4bf40d526d613e071176ab45827cb2",
+      "project_facts_sha256": "79ac21d1c73d668afe1bc29c7fa32b8ae3dfe52c201605b40f936f3a889273fd",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "260203_262 Monte Vista Dr-Master Bed",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\260203_262 Monte Vista Dr-Master Bed\\AGENTS.md",
+      "before_sha256": "bf5339acd99e492f2201230659740786d06930f46636638608d713bb32a7ff0a",
+      "project_facts_sha256": "9a410769811c82b1756bf5c2858b6de52c865a308e33262eeb3ed9ae72825f03",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "260301_80-23 64th Lane-Refactored Design",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\260301_80-23 64th Lane-Refactored Design\\AGENTS.md",
+      "before_sha256": "b05bc2839c0881067affaa4885a694d7a6c5b9a40f261ebcd1000d676c59280b",
+      "project_facts_sha256": "0c26c546200893ccc1e33da9bd283721c2f9bd9ef577c34499840aced8120fc5",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "260527_211 centre street ny-Montez Radio (MPR)",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\260527_211 centre street ny-Montez Radio (MPR)\\AGENTS.md",
+      "before_sha256": "93d306d36d878f8a9e660c5746fc295eb9addc0075675f3ea281fe80d732477d",
+      "project_facts_sha256": "b65f7f2f553aaf163431d4f2dd7ab0005519a56906e0ac1038230a859e0d41b9",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "260717_2267 Monticello - Mkean Residence-Addition",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\260717_2267 Monticello - Mkean Residence-Addition\\AGENTS.md",
+      "before_sha256": "c8dcf769d52de34b7e8b404385cd6c7a1eb58223288aab3ef61acec6f81bb670",
+      "project_facts_sha256": "90816838f05e9921ded9373c659771e65dda39b4bf966f98443784425ad69991",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "260729_2981 Silverado Trail-Renovation",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\260729_2981 Silverado Trail-Renovation\\AGENTS.md",
+      "before_sha256": "5125d0878abec12565ff7c299d39d7854331cb98c76b164d0205856b25656b3a",
+      "project_facts_sha256": "5df529506499bbfadd3be22f1797b5496ca125e08cb8f733ce111d8faa71f8fe",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "260913_1673 St. Helena Hwy-Pestoni Winery",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\260913_1673 St. Helena Hwy-Pestoni Winery\\AGENTS.md",
+      "before_sha256": "070d72071feb39b98e87fda53db1ffdf46f464774551b78225c99a73cb6bb5c5",
+      "project_facts_sha256": "0a8551ef54e37d6db87c1af0b4cd92fc0a98f6569d75b53868be89b523d0e274",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "260924_315 West Ln-Beitz Fire Cleanup",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\260924_315 West Ln-Beitz Fire Cleanup\\AGENTS.md",
+      "before_sha256": "47803e6c8457447d577290544b3f5cade6a468838b6f2ec4e6d0f6ee8fd61b7b",
+      "project_facts_sha256": "43098e157cc7ba50aacac793c2789dacc920cfc849f3c105c3dc945e937abaa2",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "261006_1655 San Vicente Ave-Code Compliance",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\261006_1655 San Vicente Ave-Code Compliance\\AGENTS.md",
+      "before_sha256": "0b66ca7b3aa35a63f72053a869cb9011bc6457dc6ea72cdedfa57758981319ab",
+      "project_facts_sha256": "586095a486c4f928c6abf2888cbf37a315da30590d84c39741b6e95ff7bb1064",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "389 Bushwick Ave",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\389 Bushwick Ave\\AGENTS.md",
+      "before_sha256": "5125d0878abec12565ff7c299d39d7854331cb98c76b164d0205856b25656b3a",
+      "project_facts_sha256": "9b9ccf3168580d250348684adbd032796ff22db47f6f123df9b0d0d31bc08965",
+      "change": "add California reference routing"
+    },
+    {
+      "project": "ADNY LL97",
+      "path": "G:\\Shared drives\\ARCHITECTURE\\ADNY LL97\\AGENTS.md",
+      "before_sha256": "5125d0878abec12565ff7c299d39d7854331cb98c76b164d0205856b25656b3a",
+      "project_facts_sha256": "794a7abe3f3f6392a962d0126860ddf232ec44086df09e9ab5cf361f55f87773",
+      "change": "add California reference routing"
+    }
+  ]
+}

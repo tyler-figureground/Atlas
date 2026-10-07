@@ -5,6 +5,9 @@ rem Upgrading = drop the new wheel in _tools\atlas\ and update the WHEEL line.
 rem Source: skills-for-architects\tools\atlas\launchers\Atlas.bat
 set "WHEEL=%~dp0atlas\studio_atlas-0.10.0-py3-none-any.whl"
 
+rem Use the deployed shared template overlay when present; keep the wheel version pin.
+if exist "%~dp0atlas\templates\agents-rules.md" set "ATLAS_TEMPLATES=%~dp0atlas\templates"
+
 where uv >nul 2>nul
 if errorlevel 1 (
   echo Atlas needs uv - installing it once via winget...
