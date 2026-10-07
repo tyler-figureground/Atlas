@@ -28,7 +28,7 @@ Precedence: Tyler's current words > project rules below this block > this block 
 - Approvals are exact. Never re-ask one given; never reuse one for changed text or targets. A proposal is not an approval; a recommendation is not an award.
 - Know Tyler's role on the job (`PROJECT.md`): architect of record, code or permit consultant, drawings only. Never hand him another party's task.
 - Work inside Tyler's system. Never invent a folder, package, numbering scheme, firm name, address, measurement, route or size. Unknown = blank and asked, or a labelled proposal.
-- Firm name, address, job number: copy verbatim from `PROJECT.md`; show spelling variants side by side when they differ. Dates in file and folder names are `YYMMDD`.
+- Firm name on every title block and document: `Solid + Void` (`SOLID + VOID` on sheets; Tyler 2026-10-07). Older spellings - Solid Void, Solid+Void, SOLID+VOID STUDIOS LLC - are history; never reuse one. Figure Ground is a separate business: leave it where it names that party. Address and job number: copy verbatim from `PROJECT.md`; show spelling variants side by side when they differ. Dates in file and folder names are `YYMMDD`.
 - A fact changes: update every record that carries it in one pass - `PROJECT.md`, `BRIEF.md`, title block, sheets, handoffs - and fix pointers it breaks.
 - Edit Tyler's working files in place. Never regenerate a file over his hand edits.
 
@@ -83,7 +83,7 @@ Everything on a sheet has a native Revit object. Use it. A drawn imitation looks
 - No pricing on drawings. Quantities, volumes, named allowances and notes only; prices and unit costs go in a separate supplement document.
 - Keynotes -> native keynote tags where the API allows; otherwise numbered markers plus a numbered list in a legend view, checked that every number matches.
 - Locations -> native dimensions to real references. Never a value override, never a lock or EQ constraint added by an agent. Strings sum to the overall at the printed rounding.
-- Dimension defaults: 1/4" display precision, face of stud. A Concept or Schematic Design project may set centerline in `PROJECT.md`; Construction Documents are face of stud - switch before the first CD sheet is dimensioned. Witness lines fixed to the dimension line, pulled clear of the drawing: place the string clear of the plan first, then dimension. Casework is dimensioned as the subject, never as a reference - set `dimensioning.casework_subject_dimensions: true` in `PROJECT.md`.
+- Dimension defaults: 1/4" display precision, uniform across the set - never a single 1/8" value; fix the model instead. Face of stud. A Concept or Schematic Design project may set centerline in `PROJECT.md`; Construction Documents are face of stud - switch before the first CD sheet is dimensioned. Witness lines fixed to the dimension line, pulled clear of the drawing: place the string clear of the plan first, then dimension. Casework is dimensioned as the subject, never as a reference - set `dimensioning.casework_subject_dimensions: true` in `PROJECT.md`.
 - View titles -> the viewport title. North arrows, scale bars, section, elevation and callout heads -> annotation symbols; scale bar matched to the view scale, re-checked after any scale change.
 - Cross-references -> live view and sheet references. Never hard-typed `3/A101` text.
 - Plans, site plans, sections, elevations -> model views of model geometry. Drafting views only for details and diagrams with no model behind them.
