@@ -1,9 +1,16 @@
 # The same file in four folders, as a doctor finding
 
 Type: task
-Status: open
+Status: parked (2026-10-07)
 Blocked by: -
 Parent: ../map.md
+
+Parked: valid but not daily-driver. The headline cost is unmeasured - hashing on
+a streaming mount downloads every hashed file, which the ticket itself says may
+sink the idea. Unpark trigger: a real studio complaint about duplicate issued
+PDFs, or a measured read-only fclones run on a fixture-scale drive showing the
+cost is tolerable. Until then the studio loses nothing: no operator has asked
+for this finding.
 
 ## Question
 

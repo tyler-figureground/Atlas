@@ -1,9 +1,15 @@
 # More content filters: DXF title blocks, and files whose extension lies
 
 Type: task
-Status: open
+Status: parked (2026-10-07)
 Blocked by: -
 Parent: ../map.md
+
+Parked: valid but conditional. The ticket's own bar is a real example from the
+drive, not a hypothetical - `pdfText` was justified by the permit set, and no
+equivalent case has surfaced for DXF title blocks or lying extensions. Unpark
+trigger: a misfiled DXF or a rule that silently failed on a mislabelled file,
+from the real drive. `core/content.py` stays the seam; nothing here bit-rots.
 
 ## Question
 

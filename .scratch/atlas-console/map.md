@@ -295,10 +295,18 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   grilling. Whether Atlas reads through the Drive API rather than the mount.
 - [Do File Rules reach below the project root](issues/26-file-rules-below-the-root.md)
   - grilling.
+
+## Parked
+
+Valid, kept open, not daily-driver. Each carries its unpark trigger on the ticket.
+
 - [The same file in four folders, as a doctor finding](issues/27-duplicate-files-as-a-doctor-finding.md)
-  - task.
-- [More content filters](issues/28-more-content-filters.md) - task. DXF title
-  blocks, and files whose extension lies.
+  - parked 2026-10-07. Hashing on a streaming mount downloads every file; the
+  cost is unmeasured and may sink the idea. Unparks on a real duplicate-PDF
+  complaint or a measured fixture-scale fclones run.
+- [More content filters](issues/28-more-content-filters.md) - parked 2026-10-07.
+  DXF title blocks and files whose extension lies, waiting on a real example
+  from the drive - the same bar `pdfText` cleared with the permit set.
 
 ## Not yet specified
 
