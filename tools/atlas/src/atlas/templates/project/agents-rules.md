@@ -74,24 +74,25 @@ Precedence: Tyler's current words > project rules below this block > this block 
 
 Everything on a sheet has a native Revit object. Use it. A drawn imitation looks right and breaks at the next change.
 
-- Identity (door, window, wall type, room, fixture) -> native tag on the element, text from its parameter. Never text styled as a tag, a hand-drawn tag symbol or overridden tag text. Empty parameter: fill the parameter, then tag.
+- Identity (door, window, wall type, room, fixture) -> native tag on the element, text from its parameter. Never text styled as a tag, a hand-drawn tag symbol or overridden tag text. Empty parameter: fill the parameter, then tag. Door marks `D01`, `D02`, `D03`. Ceiling heights in the ceiling tag label, read from the ceiling's height parameter.
 - Leaders -> the tag's or text note's native leader. Never detail lines as leaders.
-- Sizes, types, finishes, counts -> native schedule or key schedule, phase-filtered to the issued work. Never a grid of text notes, never a table drawn in lines.
+- Sizes, types, finishes, counts -> native schedule or key schedule, phase-filtered to the issued work. Never a grid of text notes, never a table drawn in lines. A schedule split by level goes one way per set: one master on a G-series sheet, or level by level on each level's sheet - never both.
+- No pricing on drawings. Quantities, volumes, named allowances and notes only; prices and unit costs go in a separate supplement document.
 - Keynotes -> native keynote tags where the API allows; otherwise numbered markers plus a numbered list in a legend view, checked that every number matches.
 - Locations -> native dimensions to real references. Never a value override, never a lock or EQ constraint added by an agent. Strings sum to the overall at the printed rounding.
-- Dimension defaults: 1/4" display precision, face of stud. A Concept or Schematic Design project may set centerline in `PROJECT.md`; Construction Documents are face of stud - switch before the first CD sheet is dimensioned.
+- Dimension defaults: 1/4" display precision, face of stud. A Concept or Schematic Design project may set centerline in `PROJECT.md`; Construction Documents are face of stud - switch before the first CD sheet is dimensioned. Witness lines fixed to the dimension line, pulled clear of the drawing: place the string clear of the plan first, then dimension. Casework is dimensioned as the subject, never as a reference - set `dimensioning.casework_subject_dimensions: true` in `PROJECT.md`.
 - View titles -> the viewport title. North arrows, scale bars, section, elevation and callout heads -> annotation symbols; scale bar matched to the view scale, re-checked after any scale change.
 - Cross-references -> live view and sheet references. Never hard-typed `3/A101` text.
 - Plans, site plans, sections, elevations -> model views of model geometry. Drafting views only for details and diagrams with no model behind them.
-- Revision clouds -> on the sheet, tight around the change, reason in the cloud's Comments.
+- Revision clouds -> always on the sheet, never in a view; tight around the change; sketched clockwise so the arcs bulge out; reason in the cloud's Comments.
 - Title-block fields -> parameters, filled from `PROJECT.md`. Never typed text.
 - No native route works - proven, not assumed: use the fallback Tyler agreed, with its consistency check, and say so in the receipt. Never invent a new imitation. A one-off Tyler directs ("filled region so it hatches") goes in `decisions/`.
 
 Drafting form:
 
 - Leaders: horizontal shoulder first, then one angle to the target. Leave from the side nearest the target; justify text toward the leader. Notes stacked in aligned columns, elbows about equal, no crossings.
-- Text: office text types only (body `00-Standard`; titles 1/4" and 1/8"). No underlining, no stray returns, no blank paragraph inside a numbered list. General notes as text on the sheet; a legend view only when they repeat across sheets.
-- Sheet numbers: `A101`, `AD101`, `G001` - no hyphen. A number already issued stays as issued.
+- Text: ALL CAPS everywhere on a sheet - no sentence case. Office text types only (body `00-Standard`; titles 1/4" and 1/8"). No underlining, no stray returns, no blank paragraph inside a numbered list. General notes as text on the sheet; a legend view only when they repeat across sheets.
+- Sheet numbers: `A101`, `AD101`, `G001` - no hyphen. View numbers: standard-detail sheets by grid module; every other sheet from the lower-right corner, up then left. An issued sheet or detail number is never reassigned.
 - Composition: standard scales only. View titles bottom-left of each cell on one grid, views evenly spaced. Tags in enlarged plans, not the overall plan, where both exist. Nothing overlaps on paper; nothing runs off the sheet.
 - Sheets carry contract-document language only. Never hold codes, agent notes, status words, "UNVERIFIED" or "(RECORD APPROX)". Uncertainty goes in `PROJECT.md` `basis:`.
 - Form beyond this file follows the S+V drawing standards in the `jdp` skill (annotation, dimensioning, tagging, notes, reference symbols). Where Tyler has ruled here, his ruling wins.
