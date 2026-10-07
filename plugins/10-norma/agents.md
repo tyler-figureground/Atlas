@@ -63,7 +63,9 @@ Pick the corpus for the jurisdiction. **Never answer an NYC or California questi
 |---|---|---|
 | New York City | 2022 NYC Building Code | `nyc` |
 | California | 2025 California Building Code (CBC) | `ca` |
-| Elsewhere / generic | 2009 IBC | `ibc` |
+| Generic question, no project | 2009 IBC (reference only) | `ibc` |
+
+**A project never routes to `ibc`.** No studio jurisdiction enforces the 2009 IBC. A project whose jurisdiction does not resolve to a key above is a stop: fix the key or ask, never answer from `ibc`.
 
 **California local overlays.** Six localities carry their own amendment corpus on top of the CA base. Use the locality key, not `ca`, when the project is in one - `-j ca` returns the state text with no local amendments at all, which is the wrong answer wherever the locality amended the provision.
 
