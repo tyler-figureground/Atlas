@@ -378,6 +378,14 @@ def test_brief_and_ask_last_rules_reach_every_project(v3_drive):
                     "## Drawings - native over drawn", "## Code work"):
         assert heading in agents, heading
     assert "**Hard line**" in agents and "**Project input**" in agents
+    # California permit routing: one conditional section after the code basis,
+    # Napa scoped, never a statewide claim, filed under ADR 0021 paths.
+    assert agents.count("## California permit requirements") == 1
+    assert agents.index("## Code work") < agents.index("## California permit requirements") < agents.index("## After every meeting")
+    for required in ("_agent\\START_HERE.md", "not statewide coverage", "For non-California projects",
+                     "norma <verb>", "07 Correspondence/AHJ/01 Requirements & Pre-Application/"):
+        assert required in agents, required
+    assert "13 AHJ" not in agents.split("## California permit requirements")[1].split("## After every meeting")[0]
     run_template = (project / ".agent" / "runs" / "_RUN-TEMPLATE.md").read_text(encoding="utf-8")
     assert "- Reference:" in run_template
     assert "4. To-do lists:" in agents  # ADR 0016: production vs Tyler's errands
