@@ -184,7 +184,7 @@ Ordered by value per unit of risk. Status is the column to maintain.
 | # | Item | Uses | Status | Where |
 |---|------|------|--------|-------|
 | 1 | File Rules in the drive map: extensions, names, nameRegex, pdfText; root files only; emits SWEEP | pypdf, organize's design | **Done** 2026-09-10 | ADR 0009, ticket 25, `core/filerules.py`, `core/content.py` |
-| 2 | File Rules below the project root - a file inside a section that belongs in another | - | Open, grilling | ticket 26 |
+| 2 | File Rules below the project root - a file inside a section that belongs in another | - | **Decided** 2026-10-07: opt-in `receiptRules` class, name filters only, deep pass, Sweep-only; build pending | ticket 26 (decision), ticket 31 (build) |
 | 3 | Duplicate files as a `doctor` finding, read-only | fclones JSON | Open | ticket 27 |
 | 4 | More content filters: DXF title-block attributes, true content type | ezdxf, puremagic | Open | ticket 28 |
 | 5 | Intake autocomplete for contact and city | textual-autocomplete | Open, small | - |
