@@ -106,7 +106,7 @@ Text types first - highest frequency, strongest candidates already inventoried
 | 3.1 | Before each drawing set graduates past candidate, re-read Pyvoid #2888 (print critic), #770 (VS-006), #3095 (model compliance). **Amended 2026-10-07 (Tyler): approval is Tyler's review alone - no Pyvoid gate.** Cited rule ids that don't exist yet are named in the card's Known issues until Pyvoid ships them | Each approved card reviewed by Tyler; dangling rule ids listed under Known issues |
 | 3.2 | Keep feeding redline pairs from live reviews (next: MPR A100 revision series, any 64L v10+ QA round) into R-folders; each redline mark tagged with the rule it violates, doubling as Pyvoid's regression fixture | >= 1 new pair per active CD project per month |
 | 3.3 | Measurement loop (G10): rounds-to-acceptance and defects-reaching-Tyler per sheet, logged per drawing run in the run receipt; monthly one-page trend vs the recorded baseline (MPR r4-r38; BZ 47 drafts) | First monthly report filed; trend visible by month 2 |
-| 3.4 | Open S+V conflicts on #769 (standard-header naming, isolated eighth-inch precision) chased to a Tyler ruling; baseline block updated via Atlas release + conform | Conflicts closed or explicitly deferred by Tyler |
+| 3.4 | Open S+V conflicts on #769 (standard-header naming, isolated eighth-inch precision) chased to a Tyler ruling; baseline block updated via Atlas release + conform. **Progress 2026-10-07: the three Floor Plans conflicts settled by Tyler in the review-pack pass (clouds in view; witness lines pulled back off elements; numbering bottom-up then left - all toward the existing standards), recorded on the card as SETTLED and posted to #769.** Standard-header naming and eighth-inch precision remain open | Conflicts closed or explicitly deferred by Tyler |
 
 ### Phase 4 - Atlas capability frontier (as phases 1-3 free capacity)
 
@@ -239,6 +239,18 @@ instead of a periodic surprise (1.6, Phase 5).
   lint check 10 enforces it; 15 fictional examples bundled; the leak gate caught a
   real collision ("Bakery") and the fictional project was renamed. 0 leak hits.
 - Junior quick start filed at `Reference Sets - Junior Quick Start.md` (2.7 note).
+
+**2026-10-07 (review processed)**
+- Tyler reviewed all 8 sets in the Review Pack. APPROVED: G-Series (reversing his
+  2026-10-05 "stays candidate" ruling), Schedules, RCPs, Details, Elevations;
+  Code Analysis + Meeting Minutes reconfirmed. Front matter flipped, README table
+  and v1.3 row updated, `atlas refs doctor` clean (7 approved, 1 candidate).
+- Floor Plans: NEEDS WORK - stays candidate, but Tyler's notes settled all three
+  Tyler-vs-S+V conflicts (clouds in view; witness lines pulled back so they never
+  cross building elements; view numbering bottom-up then left). Card updated,
+  rulings posted to Pyvoid #769 (comment 6087898819). Remaining blocker for its
+  approval: no issued, clean plan exemplar exists yet (card's own Known issue).
+- Calibration sample NOT graded - still open for Tyler (~30 min).
 - Weekly ritual first run: `atlas runs` zipped 64th Lane's `legacy-qa` and
   `legacy-tmp` runs - both archived, run folders gone, zero closed runs remain.
   **Cost datum:** 1,386 files took 48 min to zip over Drive File Stream - big-run
