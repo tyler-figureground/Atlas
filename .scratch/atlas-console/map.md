@@ -289,8 +289,32 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   flags (`.mcp.json`, `.pi`, ... - they only work at the root); they surface as
   `ignored` in text and `--json`, never as unfiled, and conform and File Rules
   never touch them. Hard-coded OS noise stays hard-coded and silent. ADR 0018,
-  drive map v3.8, Atlas 0.12.0, wheel not yet deployed. Raised from the
+  drive map v3.8, Atlas 0.12.0 built and deployed the same day. Raised from the
   2026-10-09 conform sweep.
+- [Do File Rules reach below the project root](issues/26-file-rules-below-the-root.md)
+  - **yes, as a distinct opt-in class, and never as a Filing State.** A
+  `receiptRules` map key (name filters only, no content filters at depth,
+  targets restricted to the agent workspace) fires below the root and emits a
+  doctor finding with a Sweep Offer - containment (ADR 0007) still decides
+  every deep node's Filing State, so first-match order is untouched. Evaluated
+  only in an explicit deep pass (`doctor --deep PROJECT`, `conform --deep`);
+  the default root-only report and its cost bound are unchanged. Emits a Sweep
+  or nothing; no new action kind; ADR 0009 gets an amendment line (drafted on
+  the ticket). Build: ticket 31.
+- [Archive a project, as an Atlas action](issues/30-archive-a-project.md) -
+  **a new drive-scoped action kind (ARCHIVE/UNARCHIVE), not a relocation:**
+  archiving is an operator ruling, not map-derived drift, and the conform
+  Plan's project-relative containment is a security property, not a limitation.
+  The folder moves to the map's `controlPlane.archiveRoot` (default
+  `_Archived Projects`, still outside the project list); the `_Project
+  Index.md` row is stamped `archived`, not removed, with its prior text in the
+  manifest so the inverse restores it; vault note and contacts untouched; open
+  task items and Revit/CAD files warn in the modal, never refuse. Archived
+  projects are invisible to doctor and the console for free (`is_project_dir`
+  already excludes `_` roots); un-archive is the inverse plan, invoked by name.
+  The staleness Guard still runs, drive-scoped; a true cross-project Revit-link
+  scan is not knowable from the mount and is a recorded limit. Modal confirm
+  always. Build: ticket 32.
 
 ## Open tickets
 
@@ -301,11 +325,12 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   inside Atlas; a Companion Mode slot exists.
 - [An authenticated Drive API read path](issues/11-drive-api-read-path.md) -
   grilling. Whether Atlas reads through the Drive API rather than the mount.
-- [Do File Rules reach below the project root](issues/26-file-rules-below-the-root.md)
-  - grilling.
-- [Archive a project, as an Atlas action](issues/30-archive-a-project.md) -
-  grilling. Tyler ruled 2026-10-07: dormant projects move under `_Archived
-  Projects`, Coleman excepted. Atlas has no whole-project move verb yet.
+- [Receipt Rules below the root, built](issues/31-receipt-rules-below-the-root.md)
+  - task. The ticket 26 design: `receiptRules` map key, opt-in deep pass,
+  Sweep-only emission.
+- [Archive and un-archive a project, as Atlas verbs](issues/32-archive-a-project-verb.md)
+  - task. The ticket 30 design: drive-scoped ARCHIVE/UNARCHIVE, index-row
+  stamping, precondition check. Unblocks plan Phase 5.
 
 ## Parked
 
@@ -326,9 +351,11 @@ Fog toward the destination. Graduates into tickets as the frontier clears it.
 - **File-level actions beyond the repair set.** *Decided* by ticket 04: the tree
   offers the four repairs plus the non-writes (reveal, open, copy path), all built;
   delete, rename-to-arbitrary and create-arbitrary are **not offered**. Ticket 25
-  lets the map make a root file Loose by name or content. What remains fog is only
-  whether that decision should ever be reopened - moving a file the operator picks
-  anywhere the map has not named. Ticket 26 asks the narrowest version.
+  lets the map make a root file Loose by name or content. Ticket 26 settled the
+  narrowest version: machine receipts below the root earn a Sweep through the
+  opt-in deep pass (ticket 31). What remains fog is only whether the general
+  decision should ever be reopened - moving a file the operator picks anywhere
+  the map has not named.
 - **Selection and focus rendering everywhere else.** Ticket 02 settled the cursor
   for the project list and the tree. Modals, the filter input, the command palette,
   and the search overlay all still show default Textual focus, which no longer

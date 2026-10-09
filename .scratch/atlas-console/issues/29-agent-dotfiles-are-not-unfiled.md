@@ -1,7 +1,7 @@
 # Agent dotfiles at the project root are not unfiled
 
 Type: task
-Status: built (2026-10-09), wheel not yet deployed to the drive
+Status: built and deployed (2026-10-09, Atlas 0.12.0 on the drive)
 Blocked by: -
 Parent: ../map.md
 
@@ -54,7 +54,9 @@ free since it draws Filing State from the same report. Hard-coded OS noise
 (`desktop.ini`, the ledger family) stays hard-coded and silent - a map-listed
 `ignored` line on every project would be noise. ADR 0018; drive map at v3.8
 with the first list (`.mcp.json`, `.pi`, `.claude`, `.codex`, `.agents`);
-Atlas 0.12.0. 8 new tests, 926 pass.
+Atlas 0.12.0. 8 new tests, 926 pass. Deployed same day: wheel on
+`_tools\atlas\`, `Atlas.bat` repinned, verified through the launcher - doctor
+15 conform / 0 drift / 0 unfiled on map v3.8. Deploy commit `a505faf`.
 
 One hazard surfaced mid-build: a concurrent session wrote its own v3.8/
 tolerated draft to the drive map (as "Atlas >= 0.11.3") while this one was
