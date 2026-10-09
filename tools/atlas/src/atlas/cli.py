@@ -47,7 +47,15 @@ from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
 from .core.pdfexport import PdfError, export_pdf
-from .core.refsets import RefSetError, check_draft, list_sets, studio_ignore
+from .core.refsets import (
+    RefSetError,
+    check_draft,
+    contents_lines,
+    doctor_sets,
+    list_sets,
+    splice_contents,
+    studio_ignore,
+)
 from .core.runs import archive_run, list_runs
 from .core.templates import TemplateError
 from .core.project_data import (
@@ -166,6 +174,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 print(f"    sweep pending: {name} -> {dst}{because}")
             for name in p.unfiled:
                 print(f"    unfiled: {name}")
+            # Map-tolerated entries are not findings, but they are never a
+            # silent absence either (ticket 29).
+            if p.ignored:
+                print(f"    ignored (map-tolerated): {', '.join(p.ignored)}")
             for line in p.unreadable:
                 print(f"    cannot read: {line}")
     # An unreadable folder is pending too: a person has to look (ADR 0004).
@@ -913,6 +925,86 @@ def cmd_refs_check(args: argparse.Namespace) -> int:
     return 1 if leaks else 0
 
 
+def cmd_refs_doctor(args: argparse.Namespace) -> int:
+    """Validate every set (robustness plan 1.1). 0 = clean, 2 = problems or error:
+    a doctor run is a gate, so problems share the error code and stale stays a
+    warning."""
+    from datetime import date
+    root = _reference_root(args)
+    reports = doctor_sets(root, date.today())
+    total = sum(len(r.problems) for r in reports)
+    if args.json:
+        print(json.dumps({
+            "root": str(root),
+            "problems": total,
+            "sets": [{
+                "type": r.type, "title": r.title, "status": r.status,
+                "stale": r.stale, "folder": str(r.folder),
+                "problems": [{"file": p.file, "message": p.message} for p in r.problems],
+            } for r in reports],
+        }, indent=2))
+    else:
+        for r in reports:
+            state = r.status or "no status"
+            if r.stale:
+                state += ", STALE"
+            print(f"{r.type or r.folder.name:20} {state:22} {len(r.problems)} problem(s)")
+            for p in r.problems:
+                print(f"  - {p.file}: {p.message}")
+        if not reports:
+            print(f"no reference sets under {root}")
+        else:
+            print(f"{total} problem(s) across {len(reports)} set(s)")
+    return 2 if total else 0
+
+
+def cmd_refs_index(args: argparse.Namespace) -> int:
+    """Rebuild the README atlas:contents block from card front matter (plan 1.2).
+
+    Dry run prints the diff, like `runs`/`clean`; --apply writes. Line endings
+    and the trailing newline are kept as found, so an unchanged regenerate is
+    byte-identical.
+    """
+    import difflib
+    from datetime import date
+    root = _reference_root(args)
+    readme = root / "README.md"
+    if not readme.is_file():
+        raise UsageError(f"no README.md under {root}")
+    raw = readme.read_bytes()
+    text = raw.decode("utf-8", errors="replace")
+    newline = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines()
+    block = contents_lines(list_sets(root), date.today())
+    new_lines = splice_contents(lines, block)
+    changed = new_lines != lines
+    applied = False
+    if changed and args.apply:
+        out = newline.join(new_lines)
+        if text.endswith(("\n", "\r")):
+            out += newline
+        readme.write_bytes(out.encode("utf-8"))
+        applied = True
+    if args.json:
+        print(json.dumps({
+            "readme": str(readme),
+            "changed": changed,
+            "applied": applied,
+            "sets": [s.type for s in list_sets(root)],
+        }, indent=2))
+    elif not changed:
+        print("index up to date")
+    else:
+        diff = difflib.unified_diff(lines, new_lines, lineterm="",
+                                    fromfile=str(readme), tofile=f"{readme} (generated)")
+        print("\n".join(diff))
+        if applied:
+            print(f"wrote {readme}")
+        else:
+            print("\n(dry run - pass --apply to write)")
+    return 1 if changed and not applied else 0
+
+
 def cmd_tyler(args: argparse.Namespace) -> int:
     """Roll up Tyler's open errands and DECISION blockers across projects (ADR 0016).
 
@@ -1392,6 +1484,21 @@ def main(argv: list[str] | None = None) -> int:
     refs_check.add_argument("--drive", default=argparse.SUPPRESS)
     refs_check.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
     refs_check.set_defaults(fn=cmd_refs_check)
+    refs_doctor = refs_commands.add_parser(
+        "doctor", help="validate every set: card front matter, exemplar folders, "
+                       "leak lists, .lnk files, stale review dates")
+    refs_doctor.add_argument("--root", default=argparse.SUPPRESS)
+    refs_doctor.add_argument("--drive", default=argparse.SUPPRESS)
+    refs_doctor.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    refs_doctor.set_defaults(fn=cmd_refs_doctor)
+    refs_index = refs_commands.add_parser(
+        "index", help="rebuild the README atlas:contents block from card front "
+                      "matter (dry run by default; --apply writes)")
+    refs_index.add_argument("--apply", action="store_true", help="write the README")
+    refs_index.add_argument("--root", default=argparse.SUPPRESS)
+    refs_index.add_argument("--drive", default=argparse.SUPPRESS)
+    refs_index.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    refs_index.set_defaults(fn=cmd_refs_index)
 
     pdf = sub.add_parser("pdf", help="print a Markdown deliverable to a PDF beside it (Edge/Chrome)")
     pdf.add_argument("source", help="the .md file")

@@ -5,7 +5,10 @@ and up to three Exemplars plus a Near-miss, each a folder with a ``NOTES.md``.
 Every NOTES.md front matter carries a ``leak_list`` - the facts its source
 project owns. A draft that contains one of them copied it.
 
-Read-only. Nothing here writes to a drive.
+The only write here is the README contents block (``refs index``), rebuilt
+from card front matter between ``atlas:contents`` markers, like the
+``atlas:agents`` block in every project's AGENTS.md. Everything else is
+read-only.
 """
 
 from __future__ import annotations
@@ -351,3 +354,192 @@ def check_draft(draft: Path, sets: list[RefSet], *, set_type: str | None = None,
                     if pattern.search(line):
                         leaks.append(Leak(refset.type, ex.id, s, number, line.strip()[:200]))
     return leaks, checked
+
+
+# ---- refs doctor: is every set well-formed (robustness plan 1.1) ----------
+
+# The card's governance keys (README "How a card is approved"): present at all
+# times, and non-empty once a card is approved - Tyler alone promotes, and an
+# approved card with no approver or review date is a breach, not a gap.
+CARD_REQUIRED = ("type", "title", "status", "owner", "approved_by", "approved",
+                 "reviewed", "next_review")
+CARD_STATUSES = ("candidate", "approved", "retired")
+CARD_MAX_LINES = 150    # a card is read whole, every time; it stays short
+MAX_LINE_CHARS = 2000   # the file reader's own cut-off (agents-rules.md)
+SET_FOLDER = re.compile(r"^([ENRX]\d+)(?=\s|$)")  # exemplar, near-miss, redline pair, retired
+# An id is "named in the card" where it introduces the exemplar: a table row's
+# first cell (| E1 |) or a line-start declaration (**N1 - ...**, "R1 - ...",
+# "N1, ..."). Prose mentions ("E1 section 3", "No N1 folder") and code section
+# numbers (CRC R309.2) are deliberately not matches.
+CARD_TABLE_ID = re.compile(r"^\s*\|\s*([ENRX]\d{1,2})\s*\|")
+CARD_DECL_ID = re.compile(r"^(?:\*\*)?([ENRX]\d{1,2})\s*[-\u2013\u2014,]")
+
+
+@dataclass(frozen=True)
+class SetProblem:
+    """One thing wrong with one set: the file (set-relative) and what is wrong."""
+    file: str
+    message: str
+
+
+@dataclass(frozen=True)
+class SetReport:
+    type: str
+    title: str
+    status: str
+    folder: Path
+    stale: bool   # next_review passed; a warning, never a problem
+    problems: tuple[SetProblem, ...] = ()
+
+
+def _lnk_files(folder: Path) -> list[Path]:
+    """Every ``.lnk`` under a set. Agents cannot follow shortcuts, so a frozen
+    copy is a file, never a pointer. Iterdir recursion, not rglob: the drive
+    walk rules ban rglob over Drive File Stream."""
+    found, stack = [], [folder]
+    while stack:
+        for child in stack.pop().iterdir():
+            if child.is_dir():
+                stack.append(child)
+            elif child.suffix.lower() == ".lnk":
+                found.append(child)
+    return sorted(found)
+
+
+def _is_date(value: object) -> bool:
+    try:
+        date.fromisoformat(str(value))
+        return True
+    except ValueError:
+        return False
+
+
+def doctor_set(folder: Path, today: date) -> SetReport:
+    """Validate one set folder. A missing card ends the check for that set."""
+    problems: list[SetProblem] = []
+    card_path = folder / CARD
+    if not card_path.is_file():
+        return SetReport("", folder.name, "", folder, False,
+                         (SetProblem(CARD, "no SET.md"),))
+    text = _text(card_path)
+    lines = text.splitlines()
+    if len(lines) > CARD_MAX_LINES:
+        problems.append(SetProblem(CARD, f"{len(lines)} lines (cap {CARD_MAX_LINES})"))
+    for number, line in enumerate(lines, 1):
+        if len(line) > MAX_LINE_CHARS:
+            problems.append(SetProblem(CARD, f"line {number}: {len(line)} characters "
+                                             f"(cap {MAX_LINE_CHARS})"))
+    card = front_matter(text)
+    if not card:
+        problems.append(SetProblem(CARD, "no front matter"))
+    else:
+        for key in CARD_REQUIRED:
+            if key not in card:
+                problems.append(SetProblem(CARD, f"front matter missing {key}"))
+        for key in ("type", "title", "status"):
+            if key in card and not str(card[key]).strip():
+                problems.append(SetProblem(CARD, f"front matter {key} is empty"))
+        status = str(card.get("status", "")).strip()
+        if status and status not in CARD_STATUSES:
+            problems.append(SetProblem(CARD, f"status {status!r} is not "
+                                             "candidate|approved|retired"))
+        if status == "approved":
+            for key in ("approved_by", "approved", "reviewed", "next_review"):
+                if not str(card.get(key) or "").strip():
+                    problems.append(SetProblem(CARD, f"approved card has no {key}"))
+        for key in ("approved", "reviewed", "next_review"):
+            value = str(card.get(key) or "").strip()
+            if value and not _is_date(value):
+                problems.append(SetProblem(CARD, f"{key} {value!r} is not an ISO date"))
+    # Exemplar, near-miss, redline-pair and retired folders on disk: each needs
+    # a NOTES.md with a non-empty leak_list, retired included - lineage is the
+    # point of keeping it.
+    folder_ids: set[str] = set()
+    for child in sorted(p for p in folder.iterdir() if p.is_dir()):
+        match = SET_FOLDER.match(child.name)
+        if not match:
+            continue
+        folder_ids.add(match.group(1))
+        notes = child / NOTES
+        if not notes.is_file():
+            problems.append(SetProblem(child.name, "no NOTES.md"))
+            continue
+        rel = f"{child.name}/{NOTES}"
+        fm = front_matter(_text(notes))
+        folder_ids.add(str(fm.get("id") or ""))
+        leaks = fm.get("leak_list", [])
+        leaks = leaks if isinstance(leaks, list) else [leaks]
+        if not [s for s in leaks if str(s).strip()]:
+            problems.append(SetProblem(rel, "empty leak_list"))
+    folder_ids.discard("")
+    named = {m.group(1) for line in text.splitlines()
+             for m in (CARD_TABLE_ID.match(line) or CARD_DECL_ID.match(line),) if m}
+    for ex_id in sorted(named - folder_ids):
+        problems.append(SetProblem(CARD, f"card names {ex_id} but no such folder"))
+    for link in _lnk_files(folder):
+        problems.append(SetProblem(str(link.relative_to(folder)),
+                                   "shortcut - agents cannot follow .lnk"))
+    next_review = str(card.get("next_review", "") or "").strip()
+    stale = _is_date(next_review) and date.fromisoformat(next_review) < today
+    return SetReport(
+        type=str(card.get("type", "")),
+        title=str(card.get("title", folder.name)),
+        status=str(card.get("status", "")),
+        folder=folder,
+        stale=stale,
+        problems=tuple(problems),
+    )
+
+
+def doctor_sets(root: Path, today: date) -> list[SetReport]:
+    """Every set under the root, plus any folder there that is not a set."""
+    if not root.is_dir():
+        raise RefSetError(f"reference sets folder not found: {root}")
+    return [doctor_set(p, today) for p in sorted(root.iterdir()) if p.is_dir()]
+
+
+# ---- refs index: the README contents block (robustness plan 1.2) ----------
+
+# The library's atlas:contents pattern, mirroring atlas:agents in AGENTS.md:
+# Atlas owns the lines between the markers and nothing outside them.
+CONTENTS_BEGIN = "<!-- atlas:contents-begin -->"
+CONTENTS_END = "<!-- atlas:contents-end -->"
+
+
+def contents_lines(sets: list[RefSet], today: date) -> list[str]:
+    """The regenerable contents block: one row per set, from card front matter.
+
+    Deterministic - same cards, same day, same bytes - so a regenerate with no
+    changes is byte-identical and the dry run says so. The stale flag is a
+    word in the Status column: text, never colour or glyph alone (ADR 0008).
+    """
+    lines = [
+        CONTENTS_BEGIN,
+        "",
+        "| Type | Set | Status | Reviewed | Card |",
+        "|---|---|---|---|---|",
+    ]
+    for refset in sets:
+        status = refset.status or "?"
+        if refset.stale(today):
+            status += " (STALE)"
+        lines.append(f"| `{refset.type}` | {refset.title} | {status} | "
+                     f"{refset.reviewed or '-'} | `{refset.folder.name}\\{CARD}` |")
+    lines += ["", CONTENTS_END]
+    return lines
+
+
+def splice_contents(lines: list[str], block: list[str]) -> list[str]:
+    """``lines`` with the atlas:contents block replaced by ``block``.
+
+    No markers means the README is hand-maintained: an error, never an insert.
+    Broken markers are fixed by hand, as in AGENTS.md (AgentsBlockError).
+    """
+    begins = [i for i, line in enumerate(lines) if line.strip() == CONTENTS_BEGIN]
+    ends = [i for i, line in enumerate(lines) if line.strip() == CONTENTS_END]
+    if not begins and not ends:
+        raise RefSetError("README.md has no atlas:contents markers - wrap the contents "
+                          f"block in {CONTENTS_BEGIN} / {CONTENTS_END}")
+    if len(begins) != 1 or len(ends) != 1 or ends[0] < begins[0]:
+        raise RefSetError("atlas:contents markers in README.md are broken; fix them by hand")
+    return lines[:begins[0]] + block + lines[ends[0] + 1:]

@@ -178,6 +178,8 @@ section are created with a new project, kept by clean, and backfilled by conform
 ```
 atlas refs [--root DIR] [--json]
 atlas refs check <draft> [--type TYPE] [--exemplar ID ...] [--project DIR] [--json]
+atlas refs doctor [--root DIR] [--json]
+atlas refs index [--root DIR] [--apply] [--json]
 ```
 
 Generic strings - dates, times, sums, dimensions, short IDs like `DR-019` - are never
@@ -193,7 +195,20 @@ leak lists of the exemplars its `<!-- architecture-studio:reference: <type> <E1,
 marker names, else every set; exit 1 on a leak. It skips exemplars from the draft's own
 project, strings listed by exemplars from two or more projects (a shared consultant is no
 one project's fact), and lone words under five characters. The folder comes from `--root`,
-then `$ATLAS_REFERENCE_SETS`, then the drive map's top-level `referenceSets`. Read-only.
+then `$ATLAS_REFERENCE_SETS`, then the drive map's top-level `referenceSets`.
+
+`atlas refs doctor` validates every set: card front matter (all governance keys, `status`
+in candidate|approved|retired, ISO dates, approval fields on approved cards), a `NOTES.md`
+with a non-empty `leak_list` in every exemplar/near-miss/redline folder, every exemplar id
+the card names existing on disk, card under 150 lines with no line over 2,000 characters,
+and no `.lnk` shortcuts. A `next_review` in the past flags the set STALE - a warning, not
+a problem. Exit 0 clean, 2 on problems or error.
+
+`atlas refs index` rebuilds the sets README's contents block (between
+`<!-- atlas:contents-begin -->` / `<!-- atlas:contents-end -->` markers) from card front
+matter: type, title, status, reviewed date, stale flag, card path. Dry run prints the diff;
+`--apply` writes. An unchanged regenerate is byte-identical. This is the refs module's one
+write; everything else is read-only.
 The card templates are in `src/atlas/templates/reference-set/`.
 
 ## PDF export
