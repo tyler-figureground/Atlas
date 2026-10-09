@@ -115,6 +115,10 @@ After discovery, apply these adjustments to your baseline recommendation:
 - When percentages change, always recalculate SF values as: zone SF = round(pct / 100 * RSF).
 - Total SF across all zones must equal RSF.
 
+## Reference set
+
+Before saving the export, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). No set covers a space program yet; where `atlas refs` lists one, read its `SET.md` and the 1-2 exemplars nearest this project. Form comes from the exemplar; every area, seat count and ratio comes only from the program built above. Put `<!-- architecture-studio:reference: space-program <E1,E2> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no set: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## Conversation Flow
 
 ### Phase 1: DISCOVER

@@ -13,6 +13,10 @@ Reviews an actual **drawing** - a floor plan, life-safety plan, or egress diagra
 
 > Vision measures. The tools compute. The corpus is cited. Keep those three jobs separate in every answer.
 
+## Reference set
+
+Before drafting the review, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). A drawing review is a cited code document; the nearest set is `code-analysis`. Where `atlas refs` lists it, read its `SET.md` and the 1-2 exemplars nearest this project. Form comes from the exemplar; every measurement and citation comes only from the drawing, the calculators and the corpus. Put `<!-- architecture-studio:reference: code-analysis <E1,E2> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no set: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## What to extract from the drawing
 
 Build a structured inventory, tagging each item's source/confidence:

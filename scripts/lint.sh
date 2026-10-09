@@ -268,6 +268,47 @@ else
   fail_check "post-write-reference-check hook check failed"
 fi
 
+# 10. Reference steps on deliverable skills (plan 2026-10 phase 2.4,
+#     rules/reference-sets.md). A skill belongs on this list when it writes a
+#     finished document for a human reader - a marked report, memo, record,
+#     deck, dossier or minutes file. Data converters, inline calculators,
+#     single-lookup skills and routers do NOT belong here.
+#     To extend: add the SKILL.md path when a skill starts writing a
+#     deliverable; remove it if the skill stops. Keep the list sorted.
+echo "→ deliverable skills carry a ## Reference step"
+DELIVERABLE_SKILLS="
+plugins/00-due-diligence/skills/nyc-property-report/SKILL.md
+plugins/01-site-planning/skills/demographics-analysis/SKILL.md
+plugins/01-site-planning/skills/environmental-analysis/SKILL.md
+plugins/01-site-planning/skills/history/SKILL.md
+plugins/01-site-planning/skills/mobility-analysis/SKILL.md
+plugins/02-zoning-analysis/skills/zoning-analysis-nyc/SKILL.md
+plugins/03-programming/skills/occupancy-calculator/SKILL.md
+plugins/03-programming/skills/workplace-programmer/SKILL.md
+plugins/04-specifications/skills/spec-writer/SKILL.md
+plugins/05-sustainability/skills/epd-compare/SKILL.md
+plugins/05-sustainability/skills/epd-to-spec/SKILL.md
+plugins/07-presentations/skills/slide-deck-generator/SKILL.md
+plugins/09-project-dossier/skills/decision/SKILL.md
+plugins/09-project-dossier/skills/meeting-closeout/SKILL.md
+plugins/09-project-dossier/skills/project-dossier/SKILL.md
+plugins/10-norma/skills/code-analysis/SKILL.md
+plugins/10-norma/skills/drawing-analysis/SKILL.md
+"
+REF_FAIL=0
+REF_COUNT=0
+for f in $DELIVERABLE_SKILLS; do
+  REF_COUNT=$((REF_COUNT + 1))
+  if [ ! -f "$f" ]; then
+    fail_check "listed deliverable skill missing: $f"
+    REF_FAIL=1
+  elif ! grep -q '^## Reference' "$f"; then
+    fail_check "$f: deliverable skill with no ## Reference step (rules/reference-sets.md)"
+    REF_FAIL=1
+  fi
+done
+[ "$REF_FAIL" -eq 0 ] && pass_check "$REF_COUNT deliverable skills"
+
 echo
 if [ "$FAIL" -ne 0 ]; then
   echo "lint failed"

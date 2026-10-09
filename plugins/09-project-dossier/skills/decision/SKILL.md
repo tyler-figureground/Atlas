@@ -59,6 +59,10 @@ stays short: ID, concise choice, status, link. Narrative belongs in the linked r
 4. **Keep the dossier index in sync.** Every create/supersede updates the Decisions table in `PROJECT.md` (create the dossier via `/project-dossier init` first if it doesn't exist).
 5. **Brevity.** Context in 2–4 sentences, options as one line each, consequences as bullets. A record nobody reads records nothing.
 
+## Reference set
+
+Before writing the record, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `decision-record` set, read its `SET.md` and the 1-2 exemplars nearest this decision. Form comes from the exemplar; the context, options and call come only from the conversation and cited analysis. Put `<!-- architecture-studio:reference: decision-record <E1,E2> -->` as the first line of the record, naming the exemplars opened. No `atlas`, or no `decision-record` set yet: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## Recording flow
 
 1. Find the next number: `Glob decisions/*.md`, take max + 1, zero-padded to 4 digits.

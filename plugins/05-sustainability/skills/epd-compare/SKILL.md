@@ -31,6 +31,10 @@ The user provides EPD data in one of these ways:
 
 If the user doesn't specify a source, ask: **"Where is the EPD data? Sheet rows, pasted values, or from earlier in this conversation?"**
 
+## Reference set
+
+Before drafting, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `research-report` set, read its `SET.md` and the 1-2 exemplars nearest this comparison. Form comes from the exemplar; every GWP value and product name comes only from the EPD data collected above. Put `<!-- architecture-studio:reference: research-report <E1,E2> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no set yet: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## Workflow
 
 ### Step 1: Collect data

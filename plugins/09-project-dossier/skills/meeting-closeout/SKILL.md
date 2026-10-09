@@ -22,6 +22,10 @@ The transcript lands in `11 Meetings/` (Dicta or similar). If several transcript
 are unprocessed, process oldest first, one run each. Read the current
 `decisions/REGISTER.md` (or `decisions/` index) before judging what is new.
 
+## Reference set
+
+Before writing the minutes, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `meeting-minutes` set, read its `SET.md` and the 1-2 exemplars nearest this project. Form comes from the exemplar; every decision, action item and name comes only from the transcript. Put `<!-- architecture-studio:reference: meeting-minutes <E1,E2> -->` on the first line of the minutes, naming the exemplars opened. No `atlas`, or no set: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## The six steps, in order
 
 1. **Minutes.** Write `YYMMDD - <Name> - Meeting Minutes.md` beside the transcript.

@@ -64,6 +64,10 @@ Map materials to the correct division. EPD requirements are most relevant for st
 | 09 68 00 | Carpeting | Carpet tile, broadloom |
 | 32 12 00 | Asphalt Paving | HMA, WMA |
 
+## Reference set
+
+Before drafting, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `spec` set, read its `SET.md` and the 1-2 exemplars nearest this project (or its skeleton, if the set is skeleton-only). Form comes from the exemplar; thresholds and product names come only from the user's EPD data. Put `<!-- architecture-studio:reference: spec <E1,E2> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no `spec` set yet: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## Spec Generation Workflow
 
 ### Step 1: Parse and classify materials

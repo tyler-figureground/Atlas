@@ -35,6 +35,10 @@ If the user did not provide a location, ask for a **site address or location** �
 
 Once you have it, confirm the location and begin research. Do not ask further questions — go research.
 
+## Reference set
+
+Before drafting, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `research-report` set, read its `SET.md` and the 1-2 exemplars nearest this project. Form comes from the exemplar; facts come only from the cited public sources. Put `<!-- architecture-studio:reference: research-report <E1,E2> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no `research-report` set yet: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## Research Workflow
 
 Run 2–4 targeted web searches, fetch the most relevant results, and extract the key data points. If a data point cannot be found, say so explicitly — never fabricate data.

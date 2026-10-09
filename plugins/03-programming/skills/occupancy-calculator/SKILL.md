@@ -122,6 +122,10 @@ Several NYC Building Code factors differ from the IBC — generally resulting in
 4. **Assembly**: This is where it gets dense and where mistakes are expensive. 7 SF net for concentrated (chairs only) is aggressive — make sure the space truly has no tables.
 5. **Mixed-use with assembly**: The assembly component almost always dominates the occupant load even if it's a small percentage of the floor area. Flag this.
 
+## Reference set
+
+Before saving the export, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). No set covers a standalone occupancy report yet; the nearest is `code-analysis` (its occupant-load section). Where `atlas refs` lists it, read its `SET.md` and the nearest exemplar. Form comes from the exemplar; numbers come only from the calculation above. Put `<!-- architecture-studio:reference: code-analysis <E1> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no set: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## Conversation Flow
 
 ### Phase 1: DISCOVER

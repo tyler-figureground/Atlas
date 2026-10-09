@@ -20,6 +20,10 @@ Analyze building envelope rules for any lot in New York City using the PLUTO dat
 
 If `PROJECT.md` exists in the working directory, read it before fetching — the BBL, district, and prior envelope results may already be on file. After completing, append the zoning district, FAR set, envelope results, overlays/special districts, and landmark status to its **Zoning** section. Update values in place (the dossier holds current state, not history), every entry with a source and date. If the analysis surfaces a choice between development paths (as-of-right vs. a City of Yes / UAP bonus scheme), propose recording it with `/decision`. No `PROJECT.md`? Skip silently — or mention `/project-dossier init` if the user is clearly starting a project.
 
+## Reference set
+
+Before drafting, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `zoning-memo` set, read its `SET.md` and the 1-2 exemplars nearest this project. Form comes from the exemplar; facts come only from PLUTO and the Zoning Resolution. Put `<!-- architecture-studio:reference: zoning-memo <E1,E2> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no `zoning-memo` set yet: use the bundled fictional [`examples/`](examples/) the same way - structure, never content.
+
 ## Workflow
 
 ### Step 1: Parse Input

@@ -23,7 +23,7 @@ This is the *generator* sibling of `/ibc`. `/ibc` answers one question; `/code-a
 
 ## Reference set
 
-Before drafting, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `code-analysis` set, read its `SET.md` and the 1-2 exemplars nearest this project: a California dwelling, a code-issue job, a commercial fit-out. They show form - jurisdiction proved first, the adopting text quoted, the plan-changing item leading, unknowns kept unknown. Every fact still comes from this project and the corpus; these rules beat any exemplar. Put `<!-- architecture-studio:reference: code-analysis <E1,E3> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no set: skip this step.
+Before drafting, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `code-analysis` set, read its `SET.md` and the 1-2 exemplars nearest this project: a California dwelling, a code-issue job, a commercial fit-out. They show form - jurisdiction proved first, the adopting text quoted, the plan-changing item leading, unknowns kept unknown. Every fact still comes from this project and the corpus; these rules beat any exemplar. Put `<!-- architecture-studio:reference: code-analysis <E1,E3> -->` on the line after the report marker, naming the exemplars opened. No `atlas`, or no set: use the bundled fictional [`examples/code-analysis-example.md`](examples/code-analysis-example.md) the same way - structure, never content.
 
 ## Inputs: the project profile
 

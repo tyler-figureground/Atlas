@@ -21,6 +21,10 @@ This skill keeps its bulk material in reference files in this directory. Load th
 - **[html-template.md](html-template.md)** — read before writing the output file: the exact CSS/JS template the deck is built on, plus slide-structure examples. Only the slide `<div>`s inside `<body>` change.
 - **[image-handling.md](image-handling.md)** — read when the user provides local images (or ran `/resize-images`): base64 embedding workflow, placeholder convention, file-size warnings.
 
+## Reference set
+
+Before composing, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `presentation-deck` set, read its `SET.md` and the 1-2 exemplars nearest this deck's audience. Form comes from the exemplar; the argument and every fact come only from the user's input. Put `<!-- architecture-studio:reference: presentation-deck <E1,E2> -->` as the first line of the HTML file, naming the exemplars opened. No `atlas`, or no `presentation-deck` set yet: use the bundled [`sample.html`](sample.html) the same way - structure, never content.
+
 ## On Start
 
 When invoked, list the available page types for the user before proceeding:

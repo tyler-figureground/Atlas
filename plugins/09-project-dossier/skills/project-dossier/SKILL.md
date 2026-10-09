@@ -36,6 +36,10 @@ The dossier is the **facts layer**. The **reasoning layer** — why a choice was
 7. **Project Use Case is not occupancy.** Renovation, Addition, Feasibility, and related intake labels describe the engagement. Never copy them into `occupancy_group` or infer an IBC use group from them.
 8. **No tasks, no session logs.** Open items, action lists and next steps go in `00 Tasks/TASKS.md` - the project's production task list, which Atlas creates from the studio template (Tyler's personal errands go in `00 Tasks/TYLER.md`). What an agent session did goes in its run folder's `RUN.md` under `.agent/runs/`. Neither belongs in the dossier: both grow without bound and bury the facts other skills read. Before editing `PROJECT.md`, copy it to `.agent/backups/`, never beside it at the project root.
 
+## Reference set
+
+Before writing `PROJECT.md`, look at a good one ([`rules/reference-sets.md`](../../../../rules/reference-sets.md)). Where `atlas refs` lists a `project-md` set, read its `SET.md` - the set is skeleton-first: a card and a template, no exemplars. Facts come only from the user and cited project files. Put `<!-- architecture-studio:reference: project-md skeleton -->` on the line after the front-matter block when a set was opened. No `atlas`, or no set: the [`## Template`](#template) below is the skeleton.
+
 ## The machine contract (front-matter)
 
 The YAML block at the top of `PROJECT.md` is the contract every architect skill reads. Use exactly these keys — tools look them up by name:
