@@ -239,8 +239,11 @@ instead of a periodic surprise (1.6, Phase 5).
   lint check 10 enforces it; 15 fictional examples bundled; the leak gate caught a
   real collision ("Bakery") and the fictional project was renamed. 0 leak hits.
 - Junior quick start filed at `Reference Sets - Junior Quick Start.md` (2.7 note).
-- Weekly ritual first run: `atlas runs` zipped 64th Lane's `legacy-qa` run;
-  `legacy-tmp` (1,386 files) in progress.
+- Weekly ritual first run: `atlas runs` zipped 64th Lane's `legacy-qa` and
+  `legacy-tmp` runs - both archived, run folders gone, zero closed runs remain.
+  **Cost datum:** 1,386 files took 48 min to zip over Drive File Stream - big-run
+  sweeps are a background job, not an interactive one; feed into Q5's automation
+  timing.
 - `refs index` follow-up: the generator's table (type/title/status/reviewed/card)
   is thinner than the README's hand-maintained one (adds Entity, Exemplars, Skill).
   Do NOT wrap `atlas:contents` markers or apply until the generator emits those
