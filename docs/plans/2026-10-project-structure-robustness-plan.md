@@ -221,6 +221,29 @@ instead of a periodic surprise (1.6, Phase 5).
 - Drive map v3.8: `tolerated: [".mcp.json", ".pi"]` added (ticket 29's map half);
   version field caught up with its own v3.6/v3.7 notes. `atlas doctor`: 15/15
   conform, 0 unfiled, 0 drift.
-- Pending from the parallel session's ticket 29: an Atlas release (>= 0.11.3) so the
+- Pending from the parallel session's ticket 29: ~~an Atlas release (>= 0.11.3) so the
   deployed wheel parses `tolerated`; until then staff 0.11.2 ignores the key (safe)
-  but still flags the dotfiles.
+  but still flags the dotfiles.~~ Done same day: parallel session landed ADR 0018,
+  released and deployed Atlas 0.12.0 (refs doctor/index + tolerated), launcher
+  repinned on the drive and in the repo. Staff-redeploy fog item closed.
+
+**2026-10-07 (later still)**
+- Ticket 26 grilled closed (sa-4): below-root rules become an opt-in `receiptRules`
+  class - findings not Filing States, no content filters at depth, deep pass only
+  (`doctor --deep PROJECT`), sweeps target only the agent workspace. Build ticket 31.
+- Ticket 30 grilled closed (sa-4): archiving is a new drive-scoped ARCHIVE/UNARCHIVE
+  action kind, modal-always confirm, index row stamped `archived` not removed,
+  archived projects invisible to doctor/console. Build ticket 32 - unblocks Phase 5.
+  ADR amendments drafted in the tickets (0009, 0006, new 0019), not yet accepted.
+- Phase 2.4/2.5 done (sa-3): all 17 deliverable skills carry a `## Reference` step;
+  lint check 10 enforces it; 15 fictional examples bundled; the leak gate caught a
+  real collision ("Bakery") and the fictional project was renamed. 0 leak hits.
+- Junior quick start filed at `Reference Sets - Junior Quick Start.md` (2.7 note).
+- Weekly ritual first run: `atlas runs` zipped 64th Lane's `legacy-qa` run;
+  `legacy-tmp` (1,386 files) in progress.
+- `refs index` follow-up: the generator's table (type/title/status/reviewed/card)
+  is thinner than the README's hand-maintained one (adds Entity, Exemplars, Skill).
+  Do NOT wrap `atlas:contents` markers or apply until the generator emits those
+  columns from card front matter (`skill`, entity, exemplar folders) - applying
+  today would degrade the README. Extending the generator is a small Atlas change;
+  queued behind the parallel session's tree.
