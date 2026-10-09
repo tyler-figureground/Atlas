@@ -38,3 +38,35 @@ def test_control_plane_defaults_match_ps1(tmp_path):
     assert m.project_file == "PROJECT.md"
     assert m.decisions_dir == "decisions"
     assert m.claude_file == "CLAUDE.md"
+
+
+# ---------------------------------------------------------------- tolerated
+
+
+def test_tolerated_parses_as_globs(tmp_path):
+    drive = tmp_path / "D"
+    write_map(drive, FIXTURE_MAP | {"tolerated": [".mcp.json", ".pi", ".claude*"]})
+    m = load_map(find_map(drive))
+    assert m.tolerated == (".mcp.json", ".pi", ".claude*")
+
+
+def test_tolerated_defaults_to_empty(fixture_drive):
+    m = load_map(find_map(fixture_drive))
+    assert m.tolerated == ()
+
+
+@pytest.mark.parametrize("bad", [".pi/x", "a\\b", "", "  ", 3, None])
+def test_tolerated_rejects_paths_and_non_names(tmp_path, bad):
+    """A pattern with a separator would tolerate nothing (root names have no
+    separators) while looking like it works - refuse the whole map instead."""
+    drive = tmp_path / "D"
+    write_map(drive, FIXTURE_MAP | {"tolerated": [bad]})
+    with pytest.raises(MapError):
+        load_map(find_map(drive))
+
+
+def test_tolerated_must_be_a_list(tmp_path):
+    drive = tmp_path / "D"
+    write_map(drive, FIXTURE_MAP | {"tolerated": ".pi"})
+    with pytest.raises(MapError):
+        load_map(find_map(drive))

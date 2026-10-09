@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Atlas `0.12.0` - the map tolerates root names that only work at the root (ADR 0018, ticket 29).** New optional top-level map key `tolerated`: bare root names or fnmatch globs doctor never flags unfiled, because they only work at the project root - agent tool config (`.mcp.json`, `.pi`, `.claude`, `.codex`, `.agents`). Matches surface as `ignored` in doctor text and `--json` (never a silent skip), File Rules never match them, conform never plans on them. A separator or non-string entry refuses the whole map. Drive map v3.8 carries the first list; older Atlas ignores the key.
+
 ### Changed
 
 - **Repo is now `tyler-figureground/Atlas`, marketplace renamed `atlas`.** The skills-for-architects fork is archived; history carries over whole. Install namespace moves with it: `claude plugin marketplace add tyler-figureground/Atlas`, `claude plugin install 01-site-planning@atlas`. The output hook stamps `generated_by: atlas`.

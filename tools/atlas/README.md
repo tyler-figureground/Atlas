@@ -119,6 +119,22 @@ never above 64 MB. Reads are cached per file until it changes. A PDF that cannot
 read - damaged, or locked with a password - never matches; a set that is merely locked
 against editing reads normally.
 
+## Root names Atlas never flags
+
+Some files only work at a project root: `.mcp.json` is read from the root by MCP-capable
+agents, `.pi` holds Pi session state. Filing them would break the tools, so flagging them
+Unfiled is a finding nobody can act on. The map's `tolerated` list names them (ADR 0018):
+
+```json
+"tolerated": [".mcp.json", ".pi", ".claude", ".codex", ".agents"]
+```
+
+Doctor never reports a tolerated name as unfiled, no File Rule matches one, and conform
+never plans on one. The skip is stated, not silent: doctor prints tolerated entries as
+`ignored` and `--json` carries an `ignored` array per project. Entries are bare root
+names or globs - a path separator refuses the map. An older Atlas reading a newer map
+ignores the key and simply keeps flagging the names.
+
 ## New project intake
 
 Press `n` in the TUI. Three steps collect:

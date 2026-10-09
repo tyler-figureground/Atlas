@@ -3,7 +3,7 @@ from __future__ import annotations
 from atlas.core.doctor import report_drive, report_to_dict
 from atlas.core.scan import scan_drive
 
-from conftest import agent_files, make_project
+from conftest import FIXTURE_MAP, agent_files, make_project, write_map
 
 
 def project_report(drive, name):
@@ -120,7 +120,7 @@ def test_report_json_shape(fixture_drive):
     (proj,) = [p for p in d["projects"] if p["name"] == "260108_Any"]
     assert set(proj) == {
         "name", "status", "sections_present", "missing_control_plane",
-        "drift", "relocations", "sweeps", "unfiled", "unreadable",
+        "drift", "relocations", "sweeps", "unfiled", "ignored", "unreadable",
     }
     # An agent reading this must be able to tell "nothing wrong here" from
     # "Atlas could not look". ADR 0004.
@@ -134,3 +134,45 @@ def test_underscore_and_00_dirs_excluded(fixture_drive):
     names = {p.name for p in report.projects}
     assert "_Archived Projects" not in names
     assert "00 Templates" not in names
+
+
+def test_map_tolerated_entries_are_ignored_never_unfiled(fixture_drive):
+    """Ticket 29: agent tool config must sit at the project root to work, so
+    flagging it unfiled is a finding nobody can act on."""
+    write_map(fixture_drive, FIXTURE_MAP | {"tolerated": [".mcp.json", ".pi"]})
+    make_project(
+        fixture_drive, "260110_Dots",
+        sections=["01 Model", "06 Research", "08 OUT", "11 Meetings"],
+        files=full_control_plane(fixture_drive, {".mcp.json": "{}", ".pi/run/log.txt": "x"}),
+    )
+    p = project_report(fixture_drive, "260110_Dots")
+    assert p.unfiled == ()
+    assert p.ignored == (".mcp.json", ".pi")
+    assert p.status == "conform"
+
+
+def test_hard_coded_os_noise_stays_silent(fixture_drive):
+    """Only map-tolerated entries surface as ignored - desktop.ini is universal
+    background and would add an ignored line to every project on the drive."""
+    write_map(fixture_drive, FIXTURE_MAP | {"tolerated": [".pi"]})
+    make_project(
+        fixture_drive, "260111_Noise",
+        sections=["01 Model", "06 Research", "08 OUT", "11 Meetings"],
+        files=full_control_plane(fixture_drive, {"desktop.ini": "", "jdp-time-ledger.ndjson": "{}"}),
+    )
+    p = project_report(fixture_drive, "260111_Noise")
+    assert p.unfiled == ()
+    assert p.ignored == ()
+
+
+def test_report_json_names_ignored(fixture_drive):
+    write_map(fixture_drive, FIXTURE_MAP | {"tolerated": [".pi"]})
+    make_project(
+        fixture_drive, "260112_Json",
+        sections=["01 Model", "06 Research", "08 OUT", "11 Meetings"],
+        files=full_control_plane(fixture_drive, {".pi/run/log.txt": "x"}),
+    )
+    report = report_to_dict(report_drive(scan_drive(fixture_drive)))
+    row = next(p for p in report["projects"] if p["name"] == "260112_Json")
+    assert row["ignored"] == [".pi"]
+    assert row["unfiled"] == []

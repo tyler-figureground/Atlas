@@ -19,6 +19,8 @@ from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
 # Files tolerated at a project root without being flagged: OS noise plus the
 # PRD-209 time-ledger family, which is blessed control plane per the map note.
+# Universal background only - anything the studio blesses per-drive belongs in
+# the map's `tolerated` list, where it surfaces as 'ignored' (ticket 29).
 TOLERATED_ROOT_FILES = ("desktop.ini", "jdp-time-ledger.ndjson", "jdp-time-ledger.ndjson.*")
 
 STATUS_CONFORM = "conform"
@@ -48,6 +50,9 @@ class ProjectReport:
     # relocation has no entry: the relocation is its own explanation. ADR 0009.
     sweep_rules: tuple[tuple[str, str], ...] = ()     # (root file, rule name)
     unfiled: tuple[str, ...] = ()
+    # Root entries the map's `tolerated` list claims. Not a finding - but never
+    # a silent absence either: the --json report names them (ticket 29).
+    ignored: tuple[str, ...] = ()
     # Folders Atlas could not enumerate. Not actionable - Atlas cannot repair what
     # it cannot read - but never silently treated as empty. See ADR 0004.
     unreadable: tuple[str, ...] = ()
@@ -88,8 +93,13 @@ def _control_plane_paths(m: DriveMap) -> dict[str, str]:
     return paths
 
 
-def _tolerated(name: str) -> bool:
-    return any(fnmatch.fnmatch(name.lower(), pat.lower()) for pat in TOLERATED_ROOT_FILES)
+def _tolerated(name: str, m: DriveMap) -> bool:
+    return _map_tolerated(name, m) or any(
+        fnmatch.fnmatch(name.lower(), pat.lower()) for pat in TOLERATED_ROOT_FILES)
+
+
+def _map_tolerated(name: str, m: DriveMap) -> bool:
+    return any(fnmatch.fnmatch(name.lower(), pat.lower()) for pat in m.tolerated)
 
 
 class _CannotRead(Exception):
@@ -284,7 +294,7 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
     sweep_rules: list[tuple[str, str]] = []
     if m.file_rules:
         for e in inv.root_entries:
-            if e.is_dir or e.name in swept or e.name in explained or _tolerated(e.name):
+            if e.is_dir or e.name in swept or e.name in explained or _tolerated(e.name, m):
                 continue
             rule = first_match(m.file_rules, e.name, inv.path / e.name)
             if rule is not None:
@@ -294,7 +304,12 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
     unfiled = sorted(
         e.name
         for e in inv.root_entries
-        if e.name not in explained and e.name not in swept and not _tolerated(e.name)
+        if e.name not in explained and e.name not in swept and not _tolerated(e.name, m)
+    )
+    ignored = sorted(
+        e.name
+        for e in inv.root_entries
+        if e.name not in explained and e.name not in swept and _map_tolerated(e.name, m)
     )
 
     if unreadable:
@@ -320,6 +335,7 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         sweeps=tuple(sweeps),
         sweep_rules=tuple(sweep_rules),
         unfiled=tuple(unfiled),
+        ignored=tuple(ignored),
         unreadable=tuple(unreadable),
     )
 
@@ -355,6 +371,7 @@ def report_to_dict(report: DriveReport) -> dict:
                     for a, b in p.sweeps
                 ],
                 "unfiled": list(p.unfiled),
+                "ignored": list(p.ignored),
                 "unreadable": list(p.unreadable),
             }
             for p in report.projects

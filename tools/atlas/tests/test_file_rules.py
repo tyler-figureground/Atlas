@@ -509,7 +509,7 @@ def test_report_json_keeps_its_shape_with_rules(fixture_drive):
 
     assert set(proj) == {
         "name", "status", "sections_present", "missing_control_plane",
-        "drift", "relocations", "sweeps", "unfiled", "unreadable",
+        "drift", "relocations", "sweeps", "unfiled", "ignored", "unreadable",
     }
 
 
@@ -539,3 +539,16 @@ def test_a_permission_locked_set_is_still_read(fixture_drive):
     report, _inv, _m = report_for(fixture_drive, "260924_Locked")
 
     assert ("A-109.pdf", "08 OUT/Transmittals") in report.sweeps
+
+
+def test_a_map_tolerated_file_is_never_ruled(fixture_drive):
+    """Ticket 29: a rule for `*.json` must not file `.mcp.json` away - the
+    file only works at the root, which is why the map tolerates it."""
+    with_rules(fixture_drive, {"name": "JSON", "target": "06 Research", "match": {"extensions": ["json"]}},
+               extra={"tolerated": [".mcp.json"]})
+    project_with(fixture_drive, "260909_Tolerated", {".mcp.json": "{}", "data.json": "{}"})
+
+    report, _inv, _m = report_for(fixture_drive, "260909_Tolerated")
+
+    assert report.sweeps == (("data.json", "06 Research"),)
+    assert report.ignored == (".mcp.json",)

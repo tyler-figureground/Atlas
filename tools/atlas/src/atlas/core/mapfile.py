@@ -71,6 +71,11 @@ class DriveMap:
     control_plane: dict[str, str] = field(default_factory=dict)
     file_rules: tuple[FileRule, ...] = ()
     templates: tuple[TemplateFile, ...] = ()
+    # Root names doctor never flags: agent tool config that must sit at the
+    # project root to work (.mcp.json, .pi, ...). fnmatch globs. Map-owned so
+    # the studio decides what is blessed; matches surface as 'ignored', never
+    # as unfiled, and conform never plans on them. Ticket 29.
+    tolerated: tuple[str, ...] = ()
 
     @property
     def section_ids(self) -> tuple[str, ...]:
@@ -210,6 +215,7 @@ def load_map(path: Path) -> DriveMap:
         control_plane=_string_map(raw, "controlPlane", path, strings=False),
         file_rules=_parse_file_rules(raw.get("fileRules", []), path),
         templates=_parse_templates(raw.get("templates", []), path),
+        tolerated=_parse_tolerated(raw.get("tolerated", []), path),
     )
 
 
@@ -324,6 +330,20 @@ def _parse_file_rules(raw: object, path: Path) -> tuple[FileRule, ...]:
             fields["name_regex"] = _regex(match["nameRegex"], f"{where} nameRegex", path)
         rules.append(FileRule(name=name, target=target, **fields))
     return tuple(rules)
+
+
+def _parse_tolerated(raw: object, path: Path) -> tuple[str, ...]:
+    """Strictly, like File Rules: bare root names or globs, never paths. A
+    pattern with a separator would tolerate nothing (root names have no
+    separators) while looking like it works."""
+    if not isinstance(raw, list):
+        raise MapError(f"tolerated must be a list of names or globs: {path}")
+    out: list[str] = []
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, str) or not entry.strip() or "/" in entry or "\\" in entry:
+            raise MapError(f"tolerated[{index}] must be a bare root name or glob: {path}")
+        out.append(entry)
+    return tuple(out)
 
 
 def _safe_target(value: object, where: str, path: Path) -> str:
