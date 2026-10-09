@@ -295,6 +295,12 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   grilling. Whether Atlas reads through the Drive API rather than the mount.
 - [Do File Rules reach below the project root](issues/26-file-rules-below-the-root.md)
   - grilling.
+- [Agent dotfiles at the project root are not unfiled](issues/29-agent-dotfiles-are-not-unfiled.md)
+  - task. `.mcp.json` and `.pi` must live at the root to work, so the unfiled
+  finding on them is unactionable. Raised from the 2026-10-07 conform sweep.
+- [Archive a project, as an Atlas action](issues/30-archive-a-project.md) -
+  grilling. Tyler ruled 2026-10-07: dormant projects move under `_Archived
+  Projects`, Coleman excepted. Atlas has no whole-project move verb yet.
 
 ## Parked
 

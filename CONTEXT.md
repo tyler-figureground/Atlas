@@ -483,3 +483,9 @@ entity, code edition. Present in a new draft means copied.
 Another organisation's material held for comparison, in a REF- package. Never a Reference
 Set and never copied into a deliverable. Other firms' drawing sets live in
 04 Design Process by Phase/04 Construction Documents/Precedent Sets/.
+
+**atlas:contents**
+The marker pair (`atlas:contents-begin` / `atlas:contents-end`) delimiting the
+Atlas-owned contents block in the Reference Sets README. `atlas refs index` rebuilds
+what sits between them from card front matter; everything outside is hand-written.
+Same pattern as the atlas:agents block in AGENTS.md.

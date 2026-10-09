@@ -13,6 +13,18 @@ from atlas.core.contacts import ContactDraft, add_contact, find_contact, load_co
 from atlas.core.intake import ProjectAddress, ProjectIntake, ProjectUseCase
 from atlas.core.mapfile import find_map, load_map
 from atlas.core.projectmd import agents_md_lines, claude_md_lines
+from atlas.core.templates import ENV_VAR as TEMPLATES_ENV_VAR
+
+
+@pytest.fixture(autouse=True)
+def _bundled_templates(monkeypatch):
+    """Tests always read the repo's bundled templates.
+
+    ATLAS_TEMPLATES exists to try a template against a real drive; a machine
+    that has it set (this one does, pointing at a drive copy) must not change
+    what the suite asserts.
+    """
+    monkeypatch.delenv(TEMPLATES_ENV_VAR, raising=False)
 
 FIXTURE_MAP = {
     "drive": "TESTDRIVE",
