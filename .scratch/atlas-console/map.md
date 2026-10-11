@@ -386,18 +386,29 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   `atlas index build` / `atlas index status` with `--json` (ADR 0008). ADR
   0020; PDF text scope (metadata + page one) recorded there as a named limit.
   1073 tests. Ticket 35 layers content matches onto the overlay.
+- [Content search over the index](issues/35-content-search-over-the-index.md) -
+  **built.** Content matches join the Search Overlay below name matches, each
+  carrying the matched line as a snippet from the stored text (a query never
+  re-reads a file); the Indexed-At Stamp is always visible with the stale
+  count beside it, and absent/building/failed indexes are one honest line
+  each. A drive with no index gets a background first build (ADR 0020 #5) the
+  overlay reports but never blocks on; a rescan reloads the stored index,
+  never rebuilds one. `atlas search QUERY --content [--json]` in the same
+  session (ADR 0008). 1093 tests.
+- [The dossier Companion Mode](issues/36-dossier-companion-mode.md) -
+  **built.** The DOSSIER mode draws the Dossier Facts Table through
+  `load_project_record` - identity, contact snapshots, and the decisions
+  summary (`DecisionsSummary`, new in `core/project_data.py`: count plus the
+  latest three titles) - never raw Markdown, read-only, its last line
+  advertising `e` and `o`. Missing, malformed and legacy PROJECT.md render
+  the reason, never blanks; the stub string is gone from
+  `_render_companion`. `atlas dossier PROJECT [--json]` in the same session
+  (ADR 0008), exit 2 with the reason on an unreadable dossier. The ticket 09
+  ADR 0005 amendment applied verbatim. 1107 tests.
 
 ## Open tickets
 
-- [The local content index](issues/34-local-content-index.md) - task. The
-  ticket 08/11 foundation: per-machine mtime-keyed PDF/Markdown index over
-  the mount, background first build, ADR 0020 drafted and added.
-- [Content search over the index](issues/35-content-search-over-the-index.md) -
-  task. Blocked by 33 and 34. Content matches join the overlay; `atlas search
-  --content`; query-time freshness.
-- [The dossier Companion Mode](issues/36-dossier-companion-mode.md) - task. The
-  ticket 09 design: read-only facts table over `load_project_record`, errors
-  spoken, `atlas dossier`. Carries the drafted ADR 0005 amendment.
+None.
 
 ## Parked
 

@@ -92,6 +92,7 @@ from ..core.scan import (
     scan_drive,
 )
 from ..core.search import NameHit, NameIndex, build_name_index
+from ..core.contentindex import ContentIndex, build_index, load_index
 from ..core.tree import (
     CONTRACT,
     UNFILED,
@@ -100,6 +101,8 @@ from ..core.tree import (
     TreeNode,
     open_project_tree,
 )
+from ..core.project_data import ProjectDataError, load_project_record
+from ..core.scan import UNREADABLE
 from . import tokens
 from .wordmark import BAR, composition_for, mark_width, render_mark
 from .layout import (
@@ -125,6 +128,7 @@ from .layout import (
     unwind,
 )
 from .model import ProjectRow, project_detail, project_rows, visible_rows
+from .dossier import dossier_error_lines, dossier_lines, dossier_missing_lines
 from .repair import (
     UndoEntry,
     UndoStack,
@@ -133,7 +137,7 @@ from .repair import (
     repair_offer,
     results_line,
 )
-from .search import OPEN, REVEAL, SearchOverlay
+from .search import OPEN, REVEAL, Hit, SearchOverlay
 from .treeview import ProjectTreeView, middle_ellipsis
 
 @dataclass(frozen=True)
@@ -987,6 +991,16 @@ class AtlasApp(App):
         # rebuilt with every scan. None until the first build lands - the
         # overlay says so rather than pretend nothing matches.
         self._name_index: NameIndex | None = None
+        # The per-machine Content Index (tickets 34/35, ADR 0020): loaded from
+        # the local cache, and first-built in the background when absent -
+        # the overlay says which state it is in rather than serve a silent
+        # zero (ADR 0004). A rescan reloads the stored index (a CLI top-up
+        # may have landed); it never rebuilds one that exists - freshness is
+        # revalidation plus `atlas index build`, not a download at `r`.
+        self._content_index: ContentIndex | None = None
+        self._content_building = False
+        self._content_progress: tuple[int, int] | None = None
+        self._content_error: str | None = None
         # A Search Overlay reveal waiting on the Workspace to populate: the
         # tree for the hit's project is drawn off the UI thread, and the
         # reveal rides the moment it lands.
@@ -1333,6 +1347,10 @@ class AtlasApp(App):
         self._trees.clear()
         self._workspace_project = ""
         self._name_index = None
+        self._content_index = None
+        self._content_building = False
+        self._content_progress = None
+        self._content_error = None
         self._reveal_key = None
         self.query_one(ProjectTreeView).set_source(None)
 
@@ -1353,6 +1371,7 @@ class AtlasApp(App):
             self._announced_scan_generation = generation
             self._set_operation(f"Scanning {root.name}...")
         self._name_index = None     # rebuilt behind the scan it belongs to
+        self._content_index = None  # reloaded when the scan lands
         self.refresh_bindings()
         self._scan_drive_worker(root, generation)
 
@@ -1431,6 +1450,73 @@ class AtlasApp(App):
         # Warm an overlay that opened before the build landed.
         if isinstance(self.screen, SearchOverlay):
             self.screen.set_index(index)
+        if self._inventory is None:
+            return
+        # The Content Index rides the same moment: reload what the cache holds
+        # (a CLI top-up may have landed), and first-build in the background
+        # when there is nothing - the overlay reports either state honestly.
+        root = self._inventory.root
+        stored = load_index(root)
+        if stored is not None:
+            self._content_index = stored
+            self._content_building = False
+            self._content_error = None
+            if isinstance(self.screen, SearchOverlay):
+                self.screen.set_content_index(stored)
+        elif not self._content_building:
+            self._content_building = True
+            self._content_progress = None
+            if isinstance(self.screen, SearchOverlay):
+                self.screen.set_content_building()
+            self._content_build_worker(root, generation)
+
+    @work(thread=True, exclusive=True, group="content-index", exit_on_error=False)
+    def _content_build_worker(self, root: Path, generation: int) -> None:
+        """The first content build, off the UI thread (ADR 0020 #5).
+
+        Writes only to the local cache, never to the drive. Progress is
+        relayed throttled - one message per file would flood the UI queue on
+        a real drive for no visible gain.
+        """
+        def progress(done: int, total: int) -> None:
+            if done == total or done % 25 == 0:
+                self.call_from_thread(self._content_progressed, generation, done, total)
+        try:
+            index = build_index(root, progress=progress, save_every=50)
+        except Exception as error:  # a vanishing mount mid-build, not a query failure
+            self.call_from_thread(self._content_failed, generation, error)
+            return
+        self.call_from_thread(self._content_ready, generation, index)
+
+    def _content_progressed(self, generation: int, done: int, total: int) -> None:
+        if generation != self._scan_generation:
+            return
+        self._content_progress = (done, total)
+        if isinstance(self.screen, SearchOverlay):
+            self.screen.set_content_building((done, total))
+
+    def _content_ready(self, generation: int, index: ContentIndex) -> None:
+        if generation != self._scan_generation:
+            return
+        self._content_index = index
+        self._content_building = False
+        self._content_progress = None
+        if isinstance(self.screen, SearchOverlay):
+            self.screen.set_content_index(index)
+        # No operation-line note: the build finishing is visible where it
+        # matters (the overlay's stamp line), and the line may be carrying a
+        # scan or repair message that is none of this worker's business.
+
+    def _content_failed(self, generation: int, error: Exception) -> None:
+        if generation != self._scan_generation:
+            return
+        self._content_building = False
+        self._content_error = str(error)
+        if isinstance(self.screen, SearchOverlay):
+            self.screen.set_content_error(str(error))
+        self._set_operation(
+            f"Content search is unavailable: {error}. `atlas index build` retries.",
+            "warning")
 
     def _index_failed(self, generation: int, error: Exception) -> None:
         if generation != self._scan_generation:
@@ -1689,7 +1775,7 @@ class AtlasApp(App):
                 for e in unmet
             ) or "  Nothing missing - the project has what the map expects."
         else:
-            body = "  The dossier lands here."
+            body = self._render_dossier(row, tree)
             count = 0
         self._companion_count = count
         self._unmet = unmet
@@ -1704,6 +1790,36 @@ class AtlasApp(App):
         choices.display = bool(unmet)
         body_widget.display = not unmet
         self._refresh_summary()
+
+    def _render_dossier(self, row: ProjectRow, tree: ProjectTree | None) -> str:
+        """The DOSSIER Companion Mode: the validated facts contract, read-only
+        (ticket 36; ticket 09, the ADR 0005 amendment).
+
+        Always through ``load_project_record`` - never raw Markdown. Missing,
+        malformed and legacy dossiers render the reason, never blanks (ADR
+        0001: blank means unknown).
+        """
+        if self._inventory is None:
+            return ""
+        inv = next((p for p in self._inventory.projects if p.name == row.key), None)
+        if inv is None:
+            return "  The project is no longer on the drive - press r to rescan."
+        if tree is not None and tree.load_state("") == UNREADABLE:
+            return ("  Cannot read this project - its dossier facts are unknown, "
+                    "not absent.\n  (A folder Atlas cannot open is never blank, "
+                    "ADR 0004.)")
+        project_file = self._inventory.map.project_file
+        dossier = inv.path / project_file
+        try:
+            record = load_project_record(inv.path, project_file=project_file)
+        except ProjectDataError as error:
+            if not dossier.exists():
+                body = dossier_missing_lines(project_file)
+            else:
+                body = dossier_error_lines(error, dossier, project_file)
+        else:
+            body = dossier_lines(record)
+        return "\n".join(f"  {line}" if line else "" for line in body)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         name = str(event.row_key.value)
@@ -1942,14 +2058,15 @@ class AtlasApp(App):
         self._focus_current_region()
 
     def action_search(self) -> None:
-        """Open the Search Overlay over the session Name Index (ticket 33).
+        """Open the Search Overlay over the session Name Index (ticket 33) and
+        the Content Index (ticket 35).
 
         The overlay is episodic - asked, answered, dismissed with Escape - and
         never a fourth Region (ADR 0005 amendment)."""
         if self._showing != "projects":
             return
 
-        def done(choice: tuple[str, NameHit] | None) -> None:
+        def done(choice: tuple[str, Hit] | None) -> None:
             if choice is None:
                 return      # Escape: nothing to do, nothing disturbed
             action, hit = choice
@@ -1958,9 +2075,14 @@ class AtlasApp(App):
             else:
                 self._reveal_hit(hit)
 
-        self.push_screen(SearchOverlay(self._name_index), done)
+        self.push_screen(SearchOverlay(
+            self._name_index,
+            content_index=self._content_index,
+            content_building=self._content_building,
+            content_progress=self._content_progress,
+            content_error=self._content_error), done)
 
-    def _open_hit(self, hit: NameHit) -> None:
+    def _open_hit(self, hit: Hit) -> None:
         """`o` on a result: open the file or folder with the OS. Never writes."""
         if self._inventory is None:
             return
@@ -1972,7 +2094,7 @@ class AtlasApp(App):
             return
         self._set_operation(f"Opened {hit.path}")
 
-    def _reveal_hit(self, hit: NameHit) -> None:
+    def _reveal_hit(self, hit: Hit) -> None:
         """Enter on a result: select the project, and for a node inside it,
         open the tree to the node and put the cursor on it.
 

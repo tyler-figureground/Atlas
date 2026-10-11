@@ -309,13 +309,36 @@ def build_index(root: Path | str, *,
 # ------------------------------------------------------------- the query
 
 
+# How much of the matched line a ContentHit carries around the needle, each
+# side. The overlay and the CLI fit it to width from there.
+SNIPPET_CONTEXT = 60
+
+
 @dataclass(frozen=True)
 class ContentHit:
-    """One file whose indexed text matched and whose key still holds on disk."""
+    """One file whose indexed text matched and whose key still holds on disk.
+
+    ``snippet`` is the matched text with SNIPPET_CONTEXT characters of its
+    line around it, from the stored (normalised) text - a query never reads
+    the file to show one.
+    """
 
     project: str
     path: str
     kind: str
+    snippet: str = ""
+
+    @property
+    def name(self) -> str:
+        """The entry's own name - the NameHit parity the overlay and its
+        REVEAL/OPEN actions are written against."""
+        return self.path.rsplit("/", 1)[-1]
+
+    @property
+    def node_key(self) -> str:
+        """The hit as a Node Key inside its project."""
+        prefix = f"{self.project}/"
+        return self.path[len(prefix):] if self.path.startswith(prefix) else ""
 
 
 @dataclass(frozen=True)
@@ -352,7 +375,8 @@ def query_index(index: ContentIndex, query: str, *,
     hits: list[ContentHit] = []
     stale = 0
     for entry in index.files:
-        if needle not in entry.text:
+        where = entry.text.find(needle)
+        if where < 0:
             continue
         try:
             stat = os.stat(long_path(index.root / entry.path))
@@ -363,7 +387,15 @@ def query_index(index: ContentIndex, query: str, *,
             stale += 1
             continue
         hits.append(ContentHit(project=entry.path.split("/", 1)[0],
-                               path=entry.path, kind=entry.kind))
+                               path=entry.path, kind=entry.kind,
+                               snippet=_snippet(entry.text, where, len(needle))))
     total = len(hits)
     return ContentResult(query=query, hits=tuple(hits[:cap]), total=total,
                          stale=stale, index=index)
+
+
+def _snippet(text: str, where: int, length: int) -> str:
+    """The matched line around the needle, ellipsised at both cuts."""
+    start = max(0, where - SNIPPET_CONTEXT)
+    end = min(len(text), where + length + SNIPPET_CONTEXT)
+    return ("..." if start else "") + text[start:end].strip() + ("..." if end < len(text) else "")

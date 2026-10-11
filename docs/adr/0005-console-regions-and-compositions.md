@@ -148,5 +148,28 @@ is unchanged: navigation over loaded facts, not search.
 As built (ticket 33): the Search Overlay opens on `g`, matches live against the
 in-memory Name Index, and Enter reveals the hit - the project in the list, or the
 node in the tree with the folders leading to it opened - while `o` opens the file
-or folder. The content-index half of the second sentence lands with tickets 34
-and 35.
+or folder. The content-index half of the second sentence landed with tickets 34
+and 35: content matches from the per-machine Content Index rank below name
+matches with the matched line as a snippet, the Indexed-At Stamp is always
+visible, and a drive with no index gets a background first build the overlay
+reports but never blocks on.
+
+## Amendment, 2026-10-09: the DOSSIER Companion Mode is rendered facts, read-only
+
+Drafted in ticket 09 (2026-10-08), added verbatim by ticket 36, which built it:
+
+**Amendment (ticket 09, 2026-10-08): the DOSSIER Companion Mode is
+rendered facts, read-only.** It draws the intake record's identity and
+contact snapshots plus the decisions summary, never raw Markdown and
+never an editor - dossier writes stay in `project edit` and conform,
+which carry the rename preview and Plan the panel cannot. A missing or
+malformed PROJECT.md renders the reason in the mode; it never renders
+blanks.
+
+As built (ticket 36): the mode draws the Dossier Facts Table through
+`core/project_data.py::load_project_record`; its last line advertises
+`e` (`project edit`) and `o`. A missing PROJECT.md points at the unmet
+control-plane Expectation one `d` away; a malformed or legacy dossier
+renders the `ProjectDataError` reason. `atlas dossier PROJECT [--json]`
+is the CLI form (ADR 0008), exiting 2 with the reason on a dossier that
+cannot be read safely.

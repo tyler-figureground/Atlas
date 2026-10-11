@@ -149,6 +149,17 @@ One of the three things the Companion Region can show - unmet Expectations,
 project health, or the dossier. Unmet Expectations is the default, because it is
 the only one that has to be readable at the same time as the tree.
 
+**Dossier Facts Table**
+What the DOSSIER Companion Mode draws (ticket 36, ADR 0005 amendment): the
+validated intake record from `load_project_record` - identity (name, address,
+use case, description, created), the billing and client Contact Snapshots, and
+the decisions summary (count and latest titles) - never raw Markdown, never an
+editor. Read-only: dossier writes stay in `project edit` (`e`) and conform, and
+the table's last line advertises them. A missing, malformed or legacy PROJECT.md
+renders the reason, never blanks (ADR 0001). CLI form: `atlas dossier PROJECT
+[--json]`.
+_Avoid_: dossier preview, PROJECT.md viewer.
+
 **Selected Project**
 The Project the Project List cursor rests on, and therefore the Project the
 Workspace draws. Distinct from a marked Project, which is a batch selection and
@@ -181,12 +192,14 @@ The console's drive-wide name search, opened with `g`. An overlay, not a fourth
 Region (ADR 0005 amendment): search is episodic - asked, answered, dismissed
 with Escape - so it takes the screen while open and hands it back with Region
 focus, collapse state and cursors untouched. Live-as-you-type against the warm
-Name Index; it never enumerates or reads content at keystroke time. Enter
+Name Index plus the Content Index (ticket 35): content matches rank below name
+matches and carry the matched line as a snippet, and the Indexed-At Stamp is
+always visible; it never enumerates or reads content at keystroke time. Enter
 reveals the hit - the project in the Project List, or the node in the tree with
 the folders leading to it opened - and `o` opens the file or folder. Results cap
-at 500 with the overflow counted. CLI form: `atlas search QUERY [--json]`
-(ADR 0008). Distinct from the `/` Region filter, which narrows facts already
-loaded and never reads more.
+at 500 with the overflow counted. CLI form: `atlas search QUERY [--content]
+[--json]` (ADR 0008). Distinct from the `/` Region filter, which narrows facts
+already loaded and never reads more.
 _Avoid_: global filter, spotlight, command palette.
 
 **Content Index**

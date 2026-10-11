@@ -36,6 +36,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   drive; no console wiring yet - ticket 35 layers content matches onto the
   Search Overlay.
 
+- **Atlas - content search over the index (ticket 35).** The Search Overlay
+  now answers with file contents too: content matches from the Content Index
+  rank below name matches and carry the matched line as a snippet from the
+  stored text - a query never re-reads a file. The Indexed-At Stamp is always
+  visible under the results, with the stale count beside it (files changed or
+  vanished since the build are excluded and counted, never silently served);
+  an absent, building or failed index is one honest line each, never a silent
+  zero. A drive with no index gets a background first build (ADR 0020), with
+  progress on the same line; the overlay never blocks on it and name matches
+  are served throughout. A rescan reloads the stored index but never rebuilds
+  one - freshness is revalidation plus `atlas index build`, not a download at
+  `r`. CLI parity in the same session (ADR 0008): `atlas search QUERY
+  --content [--json]`, same seam, same freshness rule; `--json` adds a
+  `content` block (`indexed_at`, `total`, `shown`, `cap`, `stale`, `results`
+  with `snippet`), null when no index exists.
+
+- **Atlas - the DOSSIER Companion Mode and `atlas dossier` (ticket 36, ADR
+  0005 amendment).** The Companion's dossier slot renders the Dossier Facts
+  Table: the validated intake record from `load_project_record` - identity
+  (name, address, use case, description, created), the billing/client Contact
+  Snapshots, and the decisions summary (count and latest titles, parsed from
+  the dossier's `## Decisions` table) - never raw Markdown, never an editor.
+  Read-only by architecture: `project edit` (`e`) and conform are the two
+  write paths and carry the rename preview and Plan a panel cannot, so the
+  table's last line advertises `e` and `o` instead. Missing, malformed and
+  legacy `PROJECT.md` render the reason (the unmet-Expectation pointer, or
+  the `ProjectDataError` message) - never blanks (ADR 0001). The stub string
+  in `_render_companion` is gone. CLI parity in the same session (ADR 0008):
+  `atlas dossier PROJECT [--json]`, exit 0 with the record, 2 with the reason
+  on a dossier that cannot be read safely.
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

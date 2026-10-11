@@ -28,14 +28,17 @@ def _bundled_templates(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _local_cache(monkeypatch):
+def _local_cache(monkeypatch, tmp_path):
     """Tests never touch the machine's real Content Index cache.
 
     ATLAS_CACHE_DIR exists so tests and unusual machines can point the cache
     elsewhere; a machine that has it set must not change what the suite
-    asserts, and the suite must never write there.
+    asserts, and the suite must never write there. Pointing it at a tmp path
+    (not just deleting it) matters since ticket 35: the console loads and
+    first-builds the index at drive-open, so every TUI test would otherwise
+    write to this machine's real cache.
     """
-    monkeypatch.delenv("ATLAS_CACHE_DIR", raising=False)
+    monkeypatch.setenv("ATLAS_CACHE_DIR", str(tmp_path / "atlas-cache"))
 
 FIXTURE_MAP = {
     "drive": "TESTDRIVE",

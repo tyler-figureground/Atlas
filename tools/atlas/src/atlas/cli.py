@@ -35,7 +35,7 @@ from .core.conform import (
     node_key,
     plan_from_dict,
 )
-from .core.contentindex import build_index, index_path, load_index
+from .core.contentindex import build_index, index_path, load_index, query_index
 from .core.contacts import (
     Contact,
     ContactDraft,
@@ -92,6 +92,7 @@ from .core.search import RESULT_CAP, build_name_index, search_names
 from .core.tree import MAPPED, TreeNode, open_project_tree
 from .core.tyler import collect as collect_tyler, digest_path, render as render_tyler
 from .tui.tokens import filing_style  # the Fault Words; pure data, no Textual
+from .tui.dossier import dossier_lines  # the Dossier Facts Table; pure strings
 
 
 class UsageError(Exception):
@@ -1284,12 +1285,14 @@ def cmd_tree(args: argparse.Namespace) -> int:
 
 
 def cmd_search(args: argparse.Namespace) -> int:
-    """Drive-wide name search over the session Name Index (ticket 33).
+    """Drive-wide search: names over the session Name Index (ticket 33),
+    contents over the per-machine Content Index (ticket 35, `--content`).
 
     The console's Search Overlay as a fact surface (ADR 0008): one bounded
-    walk, zero content reads, names and paths only - content waits for the
-    per-machine index (tickets 34, 35). Exit 0 with matches, 1 with none,
-    2 on error, like every fact producer.
+    walk, and with `--content` a read of the local index - never a content
+    read off the drive. Exit 0 with matches, 1 with none, 2 on error, like
+    every fact producer. An absent index is said aloud and name matches are
+    still served; a silent zero is never the answer (ADR 0004).
     """
     root = _resolve_drive(args.drive)
     if not args.query.strip():
@@ -1302,8 +1305,15 @@ def cmd_search(args: argparse.Namespace) -> int:
         return 2
     index = build_name_index(root)
     result = search_names(index, args.query)
+    content_index = None
+    content_result = None
+    if args.content:
+        content_index = load_index(root)
+        if content_index is not None:
+            content_result = query_index(content_index, args.query)
+    content_hits = content_result.hits if content_result is not None else ()
     if args.json:
-        print(json.dumps({
+        payload: dict[str, object] = {
             "drive": drive_map.drive,
             "query": args.query,
             "total": result.total,
@@ -1314,21 +1324,54 @@ def cmd_search(args: argparse.Namespace) -> int:
                         for hit in result.hits],
             "unreadable": [{"path": path, "error": why}
                            for path, why in index.unreadable],
-        }, indent=2))
+        }
+        if args.content:
+            # null is the honest absent state: no stamp to show, and the build
+            # is the pending work - never a silently empty result list.
+            payload["content"] = None if content_result is None else {
+                "indexed_at": content_index.indexed_at,
+                "total": content_result.total,
+                "shown": len(content_result.hits),
+                "cap": RESULT_CAP,
+                "stale": content_result.stale,
+                "results": [{"project": hit.project, "path": hit.path,
+                             "kind": hit.kind, "snippet": hit.snippet}
+                            for hit in content_result.hits],
+            }
+        print(json.dumps(payload, indent=2))
     else:
         for hit in result.hits:
             print(f"{hit.kind}  {hit.path}")
-        if not result.hits:
+        if not result.hits and not content_hits:
             print(f"no matches for '{args.query}'")
+        elif not result.hits:
+            print("no name matches - the content matches below")
         elif result.overflow:
             print(f"{result.total} matches - showing the first {len(result.hits)}; "
                   f"{result.overflow} more - refine the query")
         else:
             print(f"{result.total} match" + ("es" if result.total != 1 else ""))
+        if args.content:
+            if content_result is None:
+                print("no content index for this drive - run `atlas index build` "
+                      "to search file contents; the matches above are names only")
+            else:
+                stamp = content_index.indexed_at
+                print(f"content matches (indexed at {stamp}):")
+                for hit in content_hits:
+                    snippet = f'  "{hit.snippet}"' if hit.snippet else ""
+                    print(f"  {hit.kind}  {hit.path}{snippet}")
+                if not content_hits:
+                    print("  (none)")
+                if content_result.stale:
+                    noun = "match" if content_result.stale == 1 else "matches"
+                    print(f"  {content_result.stale} stale {noun} excluded - "
+                          "files changed since the index; "
+                          "`atlas index build` refreshes")
         if index.unreadable:
             print(f"note: {len(index.unreadable)} folder(s) could not be read - "
                   "results may be incomplete", file=sys.stderr)
-    return 0 if result.hits else 1
+    return 0 if (result.hits or content_hits) else 1
 
 
 def cmd_index_build(args: argparse.Namespace) -> int:
@@ -1402,6 +1445,51 @@ def cmd_index_status(args: argparse.Namespace) -> int:
     print(f"indexed at {index.indexed_at}; {len(index.files)} {noun}, "
           f"{len(index.skipped)} skipped, "
           f"{len(index.unreadable)} unreadable folder(s)")
+    return 0
+
+
+def cmd_dossier(args: argparse.Namespace) -> int:
+    """One project's validated dossier facts (ticket 36; ticket 09, ADR 0008).
+
+    The DOSSIER Companion Mode as a fact surface: the intake record, the
+    contact snapshots and the decisions summary, always through
+    ``load_project_record`` - the validated contract, never raw Markdown
+    (`cat` is bytes; it can neither surface the validation failure nor give
+    an agent the record as data). Read-only. Exit 0 with the record; a
+    missing, malformed or legacy PROJECT.md exits 2 with the reason - never
+    blanks (ADR 0001: blank means unknown).
+    """
+    root = _resolve_drive(args.drive)
+    drive_map = load_map(find_map(root))
+    project = _resolve_project(root, args.project)
+    record = load_project_record(project, project_file=drive_map.project_file)
+    intake = record.intake
+    if args.json:
+        def snapshot_dict(snapshot) -> dict[str, object]:
+            return {"id": snapshot.id, "name": snapshot.full_name,
+                    "email": snapshot.email, "phone": snapshot.phone,
+                    "company": snapshot.company, "address": snapshot.address}
+        print(json.dumps({
+            "drive": drive_map.drive,
+            "project": project.name,
+            "path": str(project),
+            "name": intake.project_name,
+            "address": intake.project_address.formatted,
+            "use_case": intake.project_use_case.display,
+            "use_case_category": intake.project_use_case.category,
+            "description": intake.description,
+            "created": intake.created.isoformat(),
+            "billing_contact": snapshot_dict(record.billing_contact),
+            "client_contact": snapshot_dict(record.client_contact),
+            "decisions": {"count": record.decisions.count,
+                          "latest": list(record.decisions.latest)},
+            "source_digest": record.source_digest,
+        }, indent=2))
+        return 0
+    print(f"{project.name} - the validated dossier facts "
+          f"({drive_map.project_file})")
+    for line in dossier_lines(record):
+        print(line)
     return 0
 
 
@@ -1650,8 +1738,10 @@ def main(argv: list[str] | None = None) -> int:
         ("unarchive", cmd_unarchive, "bring an archived project back, by name or --revert manifest"),
         ("tyler", cmd_tyler, "Tyler digest: open errands + DECISION blockers across projects "
                              "(read-only; --write regenerates _tools/TYLER-TODAY.md)"),
-        ("search", cmd_search, "drive-wide name search: projects, folders and files by "
-                               "name (read-only; one walk, never a content read)"),
+        ("search", cmd_search, "drive-wide search: projects, folders and files by name, "
+                               "plus PDF text and Markdown with --content (read-only)"),
+        ("dossier", cmd_dossier, "one project's validated dossier facts: intake, contact "
+                                 "snapshots, decisions summary (read-only)"),
     ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--drive", help="drive root (default: walk up from cwd, else auto-discover)")
@@ -1667,8 +1757,13 @@ def main(argv: list[str] | None = None) -> int:
         "--depth", type=int, default=1,
         help="levels to read below the project root (default 1). Each level is one "
              "enumeration per folder; the deepest level shown stays Unread")
+    sub.choices["dossier"].add_argument("project", help="project folder name")
     sub.choices["search"].add_argument("query", help="case-folded substring matched against "
                                                      "every folder and file name and path")
+    sub.choices["search"].add_argument(
+        "--content", action="store_true",
+        help="also search file contents via the local Content Index "
+             "(`atlas index build` builds it; the Indexed-At Stamp is shown)")
 
     contacts = sub.add_parser("contacts", help="list, add, and edit shared contacts")
     contact_commands = contacts.add_subparsers(dest="contacts_command", required=True)

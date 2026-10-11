@@ -26,11 +26,13 @@ from .project_index import (
 
 
 __all__ = [
+    "DecisionsSummary",
     "ProjectDataError",
     "ProjectRecord",
     "ProjectUpdatePlan",
     "ProjectUpdateResult",
     "apply_project_update",
+    "decisions_summary",
     "load_project_record",
     "preview_project_update",
 ]
@@ -41,6 +43,53 @@ class ProjectDataError(Exception):
 
 
 @dataclass(frozen=True)
+class DecisionsSummary:
+    """The `## Decisions` table of a PROJECT.md, as a count and its latest
+    titles.
+
+    `/decision` appends chronologically, so the latest titles are the table's
+    last rows, newest first. Count and titles only: the panel and the CLI show
+    what exists, and `o` opens the file for the reading (ticket 09).
+    """
+
+    count: int
+    latest: tuple[str, ...]
+
+
+# How many of the latest decision titles the summary carries.
+LATEST_DECISIONS = 3
+
+
+def decisions_summary(lines: list[str]) -> DecisionsSummary:
+    """Parse the `## Decisions` section's table out of a dossier's lines.
+
+    Rows are `| # | Decision | Status | Date |`, maintained by `/decision` -
+    the header and its separator are not decisions. No section is zero
+    decisions, not an error: the contract (ADR 0001) is the front matter,
+    and a dossier that predates the table is still a valid record.
+    """
+    try:
+        start = lines.index("## Decisions")
+    except ValueError:
+        return DecisionsSummary(0, ())
+    titles: list[str] = []
+    for line in lines[start + 1:]:
+        if line.startswith("## "):
+            break
+        if not line.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        first = cells[0]
+        if first == "#" or not first.strip("-: "):
+            continue    # the header row or its separator
+        if cells[1]:
+            titles.append(cells[1])
+    return DecisionsSummary(len(titles), tuple(titles[-LATEST_DECISIONS:][::-1]))
+
+
+@dataclass(frozen=True)
 class ProjectRecord:
     path: Path
     intake: ProjectIntake
@@ -48,6 +97,12 @@ class ProjectRecord:
     client_contact: ContactSnapshot
     source_digest: str
     _source: bytes = field(repr=False, compare=False)
+
+    @property
+    def decisions(self) -> "DecisionsSummary":
+        """The dossier's `## Decisions` table, counted - titles only, never a
+        read past them (ticket 09: decisions do not link through)."""
+        return decisions_summary(_lines(self._source))
 
 
 @dataclass(frozen=True)
