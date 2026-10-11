@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-09
+
 ### Added
 
 - `atlas archive` / `atlas unarchive`: drive-scoped verbs that move a whole project
@@ -16,57 +18,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   preview, never refuse; confirmation is always explicit, one named project at a
   time. Archived projects are invisible to doctor, the tree and the console.
   ADR 0019, ticket 32.
+
 - Drive map: `controlPlane.archiveRoot` key (strictly parsed; first segment must
   start with `_`).
 
-### Added
-
 - **Atlas - Receipt Rules below the project root (ticket 31, ADR 0009 amendment).** New optional top-level map key `receiptRules`: `{name, target, match}` entries that fire below the project root, where File Rules never reach. Name filters only (`extensions`, `names`, `nameRegex` - a `pdfText` refuses the map: a content test at depth is a download per candidate), and the target must resolve inside the agent workspace (`runsDir`/`backupsDir`), so the class sweeps machine receipts out of the numbered tree and can never reorder hand filing. Matches surface only in the opt-in deep pass - `atlas doctor --deep PROJECT` reports them as `sweep pending (deep)` naming the rule, `atlas conform PROJECT --deep` (or `--all --deep`, which pays the full drive walk by flag) plans and applies the Sweeps through the existing Plan/preview/Move Manifest/`conform --revert` undo path with no new action kind. A match is a finding, never a Filing State: containment (ADR 0007) still decides every deep node. The default `doctor`/`conform` pass stays root-only and unchanged; `receipts` joins the doctor `--json` project row with `"deep": true`. A malformed rule refuses the whole map (ADR 0009 discipline); `atlas lint` warns on duplicate receipt rule names. Fixture-map coverage only - the studio map's first real block is a separate production write.
-- **Atlas `0.12.0` - the map tolerates root names that only work at the root (ADR 0018, ticket 29).** New optional top-level map key `tolerated`: bare root names or fnmatch globs doctor never flags unfiled, because they only work at the project root - agent tool config (`.mcp.json`, `.pi`, `.claude`, `.codex`, `.agents`). Matches surface as `ignored` in doctor text and `--json` (never a silent skip), File Rules never match them, conform never plans on them. A separator or non-string entry refuses the whole map. Drive map v3.8 carries the first list; older Atlas ignores the key.
-
-### Changed
-
-- **Repo is now `tyler-figureground/Atlas`, marketplace renamed `atlas`.** The skills-for-architects fork is archived; history carries over whole. Install namespace moves with it: `claude plugin marketplace add tyler-figureground/Atlas`, `claude plugin install 01-site-planning@atlas`. The output hook stamps `generated_by: atlas`.
-
-### Added
-
-- **Atlas - `atlas refs doctor` and `atlas refs index`** (robustness plan 1.1/1.2). `doctor` validates every reference set: card front-matter keys and status vocabulary, ISO dates, approval fields on approved cards, a `NOTES.md` with a non-empty `leak_list` per exemplar/near-miss/redline folder, card-named ids on disk, the 150-line / 2,000-character caps, no `.lnk`; a past `next_review` flags STALE (warning). Exit 0 clean, 2 on problems or error; `--json` per ADR 0008. `index` rebuilds the sets README's `atlas:contents` block from card front matter - dry-run diff by default, `--apply` writes, unchanged regenerates are byte-identical.
-- **Atlas `0.11.2` - firm name `Solid + Void`.** Tyler 2026-10-07: on every title block and document, supersedes 2026-10-05 "Solid Void". Dimensions stay 1/4" uniform - never a single 1/8" value.
-- **Atlas `0.11.1` - Tyler's drafting rulings (Pyvoid #769).** Baseline *Drawings* section: clouds always on the sheet, sketched clockwise; witness lines fixed to the dimension line, clear of the drawing; casework dimensioned as subject only; door marks `D01`; ceiling heights in the tag label; ALL CAPS everywhere on a sheet; no pricing on drawings; level-split schedules one way per set; view numbers from the lower-right corner except standard-detail sheets (grid module). S+V standards amended to match.
-- **Atlas `0.11.0` - the baseline knows Revit, drawings and code (ADR 0017).** `agents-rules.md` opens with four rule kinds (hard line, Tyler's call, house default, project input) and a precedence order, and gains *Do the task asked*, *Working in the Revit model*, *Drawings - native over drawn* and *Code work*. Native tags with native leaders, native schedules, viewport titles, live references and model views instead of drawn imitations; one writer, save local, Tyler syncs; code basis before any citation. Minutes leave out money and personal talk. Evidence: `docs/research/agent-baseline-rules-evidence.md`.
-- **10-norma `1.4.2` - a project never routes to `-j ibc`.** The 2009 IBC is reference-only for generic questions; an unresolved project jurisdiction is a stop.
-- **Two task lists per project (ADR 0016).** `00 Tasks/TASKS.md` is the production list (lanes `AGENT`/`MODEL`/`DECISION`/`WAIT`, In-progress claims, agent pickup rules); `00 Tasks/TYLER.md` holds Tyler's personal errands, add-only for agents. Drive map v3.6 seeds it; `atlas tyler` (Atlas 0.10.0) rolls both up into `_tools/TYLER-TODAY.md`, refreshed hourly by the `Atlas Tyler Digest` scheduled task.
-- **Skills `/tasks` and `/meeting-closeout`** (09-project-dossier): work the two lists; close out a meeting transcript into minutes, decisions, facts, both task lists and a rebuilt brief.
-- **Atlas `0.10.1` - control-file limits raised.** `agents-rules.md`: `PROJECT.md` narrative prompt 30 KB -> 100 KB; no line over 2,000 characters (was 1,000), the file reader's own cut-off. ADR 0014 amended.
-- **Reference Sets** (ADR 0015, `docs/research/reference-sets.md`). One curated, Tyler-approved set per deliverable type in `LIBRARY - Reference\00 Office Standards and Administration\Reference Sets\`: a card (`SET.md`), up to three exemplars - California residential, code issue, commercial - and a near-miss, each exemplar with a `NOTES.md` leak list. Pilot sets: Code Analysis, Meeting Minutes, G-Series Sheets (Solid Void). The third-party drawing sets folder is renamed `Precedent Sets`.
-- **Atlas `0.9.0` - look before you make.** `atlas refs` lists reference sets with status, review dates and problems; `atlas refs check <draft>` greps a draft for the facts its exemplars' projects own. `agents-rules.md` gains "Look before you make": read the set, mark the draft, check it, name the set in the run receipt. The run template gains a `Reference:` line. Drive map v3.4 adds top-level `referenceSets`.
-- **Atlas `0.9.4` - retired exemplars stay retired.** An exemplar whose `NOTES.md` says `status: retired` is listed apart by `atlas refs` and never leak-checked. The meeting-minutes set is approved with a new E2 (64th Lane rebid walkthrough, written to the card); the old E2 is kept as X2.
-- **Atlas `0.9.3` - minutes keep their timestamps.** The minutes re-test (calibrated judge, which now agrees with Tyler's pick) showed agents dropping every timestamp because the meeting step said never to name the recording. Step 1 now asks for a bare `[mm:ss]` on every decision and action. Re-test: with-set preferred 2 of 2 on accuracy and format; completeness still lower with the set, so the next fix is a fuller exemplar.
-- **Atlas `0.9.2` - `atlas pdf` and Tyler's calibration.** `atlas pdf <file.md>` prints a Markdown deliverable to a PDF beside it through headless Edge or Chrome (nothing to install on a Windows PC); a PDF newer than its source is kept unless `--force`. From Tyler's blind grades: minutes are prepared by Tyler, carry no file paths, transcript or transcription tool, and flag doubt inline; narrative items are lists, tables only for numeric grids; everything filed for a person gets a PDF. 10-norma `1.4.1`: dwelling memos run occupant load for the most likely use, labelled informational; memos are printed with `atlas pdf`.
-- **Atlas `0.9.1` - leak check without false alarms.** The pilot eval (10 blind drafts, with-set preferred 5 of 5, 38% fewer edits) found no copied facts but false hits on every draft, and agents rewording true facts to clear them. `atlas refs check` now ignores dates, times, sums, dimensions and short IDs (`DR-019`); takes `--project` for a draft kept outside its project; reads studio-wide names from `leak_ignore` in the sets README. The rule now says a true fact stays and is named in the receipt.
-- **08-dispatcher `1.3.0` - `post-write-reference-check` hook.** On a Write of a draft carrying `<!-- architecture-studio:reference: ... -->`, runs `atlas refs check`; leaks go back to the agent (exit 2). Silent without `atlas`. Rule `rules/reference-sets.md`.
-- **10-norma `1.4.0` - code-analysis.** Reference-set step and marker; a dwelling variant that keeps the nine headings and maps them to the residential code; verify suffixes use a spaced hyphen, not an em dash.
-
-- **Atlas `0.7.0` - project templates.** A drive map's `templates` list names files every project carries; the words live in `tools/atlas/src/atlas/templates/project/` and ship in the wheel. `atlas new` writes them, doctor reports an absent one, conform creates it and never overwrites. `controlPlane.agentsRules` puts the agent filing rules into every AGENTS.md Atlas block. ADR 0012.
-- **Atlas `0.7.0` - seeded children.** A map child may be `{"name": ..., "seed": true}`: made with a new project, kept by clean, backfilled by conform when its section exists.
-- **Atlas `0.7.0` - `atlas runs (--project NAME | --all) [--days N] [--apply]`.** Lists agent runs under `controlPlane.runsDir` and zips closed ones (idle `runRetentionDays`, named by no task list or handoff) into `archiveDir`, verifying each zip before removing the folder. ADR 0011.
-- **Studio templates** `TASKS.md`, `Task List Template.md`, `AHJ-REGISTER.md`, `RESEARCH-INDEX.md`, `RUN-TEMPLATE.md`, `agents-rules.md`.
-- **Launchers** in `tools/atlas/launchers/`: every `_tools\*.bat` now goes through `Atlas.bat`; `Archive-Agent-Runs.bat` added.
-- **`Setup-New-Plus.bat`** - once-per-PC setup for dated `YYMMDD_Description` folders from right-click: installs PowerToys if missing, turns on New+ and its date variables, points it at `_tools\New+ Templates`. The one launcher that does not call Atlas.
-- **Atlas `0.7.1` - research and asking** (Pyvoid grill #2899): `agents-rules.md` gains the client-job research rule (requirement row + done-test, 30 min per question, draw with best basis then ask, asks at the top of the receipt, parked findings); new template `INTAKE.md` holds the 12 day-1 intake questions (map entry `00 Tasks/INTAKE.md`); `TASKS.md` gains "Parked - outside sheet scope"; new PROJECT.md front matter carries `basis: []`, documented in **09-project-dossier**.
-- **Atlas `0.8.0` - brief and ask-last rules.** New template `BRIEF.md` at every project root (now, settled - do not ask, open, holds, latest meeting; map entry `BRIEF.md`). `agents-rules.md` gains "Read first, ask last" (read the brief before anything; every question cites what was checked), "After every meeting" (minutes, decisions, facts, to-do list in `TASKS.md`, brief, report - all six), and "Control files stay small" (`PROJECT.md` facts only, no line over 1,000 characters, session narrative to `.agent/PROJECT-HISTORY.md`, spreadsheet registers mirrored to `decisions/REGISTER.md`, no `.lnk` pointers). Fixes agents re-asking settled scope. ADR 0014.
-- **Atlas `0.8.1`/`0.8.2`.** Conform backfills `.agent/runs` and `.agent/backups` into projects made before the agent workspace existed, so the back-up-first rule has somewhere to write. The `PROJECT.md` size rule becomes a prompt to move narrative out, never to cut facts.
-- ADRs 0011 (agent run folders), 0012 (project templates), 0013 (`00 Tasks` and `13 AHJ`). Research report `docs/research/project-folder-usage-and-agent-output.md`.
-
-### Changed
-
-- **09-project-dossier `1.4.0`:** PROJECT.md holds no tasks and no session logs; they go to `00 Tasks/TASKS.md` and the run's `RUN.md`.
-- Atlas: the PROJECT.md canonical-map block points at Atlas, not `Add-Section.bat`, and tags seeded children.
 
 ### Fixed
 
-- Atlas test `test_new_project_wizard_creates_complete_project` asserted a `260` date prefix and failed from October 2026; it now checks today's stamp.
-- `scripts/lint.sh` link check skips fenced code and HTML comments, where example links such as `Lists/YYMMDD-slug.md` are text.
+- Baseline `agents-rules.md` drafting rules brought in line with Tyler's
+  2026-10-07 settlements: revision clouds live in the view when the change is
+  view-specific (supersedes the 2026-09-23 on-sheet ruling); witness lines pull
+  back so they never cross building elements (supersedes fixed-to-dimension-line).
+  Both match the S+V standards as written; posted to Pyvoid #769.
+
+## [0.12.0] - 2026-10-07
+
+### Added
+
+- **Atlas `0.12.0` - the map tolerates root names that only work at the root (ADR 0018, ticket 29).** New optional top-level map key `tolerated`: bare root names or fnmatch globs doctor never flags unfiled, because they only work at the project root - agent tool config (`.mcp.json`, `.pi`, `.claude`, `.codex`, `.agents`). Matches surface as `ignored` in doctor text and `--json` (never a silent skip), File Rules never match them, conform never plans on them. A separator or non-string entry refuses the whole map. Drive map v3.8 carries the first list; older Atlas ignores the key.
+
+- **Atlas - `atlas refs doctor` and `atlas refs index`** (robustness plan 1.1/1.2). `doctor` validates every reference set: card front-matter keys and status vocabulary, ISO dates, approval fields on approved cards, a `NOTES.md` with a non-empty `leak_list` per exemplar/near-miss/redline folder, card-named ids on disk, the 150-line / 2,000-character caps, no `.lnk`; a past `next_review` flags STALE (warning). Exit 0 clean, 2 on problems or error; `--json` per ADR 0008. `index` rebuilds the sets README's `atlas:contents` block from card front matter - dry-run diff by default, `--apply` writes, unchanged regenerates are byte-identical.
 
 ## [1.8.0] - 2026-09-23
 
@@ -340,7 +312,9 @@ First public release.
 - **3 hooks** — post-write disclaimer check, post-output metadata, pre-commit spec lint.
 - Marketplace install: `claude plugin marketplace add AlpacaLabsLLC/skills-for-architects`.
 
-[Unreleased]: https://github.com/tyler-figureground/skills-for-architects/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.13.0
+[0.12.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.12.0
 [1.5.0]: https://github.com/tyler-figureground/skills-for-architects/releases/tag/v1.5.0
 [1.4.0]: https://github.com/tyler-figureground/skills-for-architects/releases/tag/v1.4.0
 [1.3.0]: https://github.com/tyler-figureground/skills-for-architects/releases/tag/v1.3.0

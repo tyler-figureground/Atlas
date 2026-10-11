@@ -70,11 +70,15 @@ def test_recent_drafting_rulings_are_not_reversed(fixture_drive):
         "Ceiling heights in the ceiling tag label",
         "No pricing on drawings",
         "Casework is dimensioned as the subject, never as a reference",
-        "always on the sheet, never in a view",
+        # Clouds settled 2026-10-07 (review-pack pass): in the view when the
+        # change is view-specific - supersedes the 2026-09-23 on-sheet ruling.
+        "in the view when the change is view-specific",
         "sketched clockwise",
         "ALL CAPS everywhere on a sheet",
         "every other sheet from the lower-right corner, up then left",
         "one master on a G-series sheet, or level by level",
+        # Witness lines settled 2026-10-07: pulled back off building elements.
+        "never cross building elements",
     ):
         assert settled in rules
 
