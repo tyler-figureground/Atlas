@@ -350,6 +350,25 @@ The name of the File Rule that made a file Loose. Carried beside the Sweep and s
 wherever the Sweep is shown - `doctor` text, `--json`, the console's project
 detail. A Sweep from a glob relocation has none; the relocation explains itself.
 
+**Receipt Rule**
+A drive map entry (`receiptRules`) that fires below the Project root, where File
+Rules never reach. Name Filters only - a Content Filter at depth is a download per
+candidate - and its target must resolve inside the agent workspace (`runsDir` or
+`backupsDir`), so the class can move machine receipts out of the numbered tree and
+can never reorder a person's filing. A match is a doctor finding with a Sweep
+Offer, never a Filing State: Containment still decides those at every depth.
+Evaluated only in a Deep Pass. A malformed Receipt Rule refuses the whole map, as
+a File Rule does. Ticket 26, built by ticket 31; ADR 0009 amendment.
+
+**Deep Pass**
+The opt-in walk below a Project root that evaluates Receipt Rules:
+`atlas doctor --deep PROJECT` to report, `atlas conform PROJECT --deep` to plan
+and apply. Enumeration only - the walk never opens a file - bounded by one
+project; `--all --deep` pays the full drive walk by flag, never by default. The
+default `doctor` / `conform` pass stays root-only, and its cost bound depends on
+it. Deep findings emit Sweeps or nothing, through the same Plan, preview, Move
+Manifest and undo as any other conform.
+
 
 ## Atlas Agent Files
 

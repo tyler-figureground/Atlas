@@ -120,7 +120,7 @@ def test_report_json_shape(fixture_drive):
     (proj,) = [p for p in d["projects"] if p["name"] == "260108_Any"]
     assert set(proj) == {
         "name", "status", "sections_present", "missing_control_plane",
-        "drift", "relocations", "sweeps", "unfiled", "ignored", "unreadable",
+        "drift", "relocations", "sweeps", "receipts", "unfiled", "ignored", "unreadable",
     }
     # An agent reading this must be able to tell "nothing wrong here" from
     # "Atlas could not look". ADR 0004.

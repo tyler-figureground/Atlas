@@ -47,6 +47,7 @@ from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
 from .core.pdfexport import PdfError, export_pdf
+from .core.receipts import scan_receipts
 from .core.refsets import (
     RefSetError,
     check_draft,
@@ -145,8 +146,24 @@ def cmd_lint(args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
+    inventory = _scan(root)
+    deep = None
+    if args.deep:
+        if args.all and args.project:
+            raise UsageError("--all cannot be combined with a project name")
+        if args.all:
+            deep = frozenset(p.name for p in inventory.projects)
+        elif args.project:
+            _resolve_project(root, args.project)
+            deep = frozenset({args.project})
+        else:
+            raise UsageError("--deep walks one project: name it, or pass --all to "
+                             "pay the whole drive")
+    elif args.project:
+        raise UsageError("doctor's default pass is root-only; --deep PROJECT is "
+                         "the scoped walk below a project root")
     try:
-        report = report_drive(_scan(root))
+        report = report_drive(inventory, deep=deep)
     except (MapError, FileNotFoundError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -172,6 +189,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             for name, dst in p.sweeps:
                 because = f" (rule: {rules[name]})" if name in rules else ""
                 print(f"    sweep pending: {name} -> {dst}{because}")
+            for hit in p.receipts:
+                print(f"    sweep pending (deep): {hit.path} -> {hit.target} "
+                      f"(rule: {hit.rule})")
             for name in p.unfiled:
                 print(f"    unfiled: {name}")
             # Map-tolerated entries are not findings, but they are never a
@@ -1214,12 +1234,21 @@ def cmd_conform(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
     inventory = _scan(root)
     m = inventory.map
+    if args.deep and args.revert:
+        # A revert replays a manifest; there is nothing to walk for.
+        print("error: --deep cannot be combined with --revert", file=sys.stderr)
+        return 2
     if args.revert:
         return cmd_revert(args, root, m)
     if args.all and (args.project or args.node):
         # --all used to win silently, dropping --project and planning --node
         # in every project on the drive.
         print("error: --all cannot be combined with --project or --node", file=sys.stderr)
+        return 2
+    if args.deep and args.node:
+        # A node repair is one action at a path the operator named; deep
+        # findings never earn the inline repair key (ticket 26).
+        print("error: --deep cannot be combined with --node", file=sys.stderr)
         return 2
     if args.node and not args.project:
         # A Node Key is project-relative, so the same key names a different
@@ -1247,7 +1276,12 @@ def cmd_conform(args: argparse.Namespace) -> int:
     # cannot be read cannot be planned - and never reported as fine.
     unread: dict[str, tuple[str, ...]] = {}
     for inv in targets:
-        report = report_project(inv, m)
+        if args.deep and m.receipt_rules:
+            scan = scan_receipts(inv.path, m)
+            report = report_project(inv, m, receipts=scan.hits,
+                                    deep_unreadable=scan.unreadable)
+        else:
+            report = report_project(inv, m)
         if report.unreadable:
             unread[inv.name] = report.unreadable
         if not report.root_readable:
@@ -1535,6 +1569,19 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["runs"].add_argument("--apply", action="store_true", help="zip closed runs and remove their folders")
     sub.choices["runs"].add_argument("--days", type=int,
                                      help="idle days before a run is closed (default: the map's runRetentionDays, else 14)")
+    sub.choices["doctor"].add_argument(
+        "project", nargs="?",
+        help="with --deep: the one project whose tree is walked for Receipt Rule "
+             "matches")
+    sub.choices["doctor"].add_argument(
+        "--deep", action="store_true",
+        help="opt-in deep pass: walk below one project's root for Receipt Rule "
+             "matches (agent receipts in numbered sections). Enumeration only, "
+             "never a content read; one project's walk, bounded by that project. "
+             "--deep --all pays the full drive walk by flag, never by default")
+    sub.choices["doctor"].add_argument(
+        "--all", action="store_true",
+        help="with --deep: every project pays the deep walk")
     sub.choices["conform"].add_argument("--project", help="project folder name")
     sub.choices["conform"].add_argument(
         "--revert", metavar="FILE",
@@ -1544,6 +1591,11 @@ def main(argv: list[str] | None = None) -> int:
         help="repair one node by its project-relative path; needs --project. "
              "Unlike --only, which filters by action class, this names a folder")
     sub.choices["conform"].add_argument("--all", action="store_true", help="every project on the drive")
+    sub.choices["conform"].add_argument(
+        "--deep", action="store_true",
+        help="include Receipt Rule matches below the project root in the plan "
+             "(opt-in; the default pass is root-only). One project's walk per "
+             "project planned; --all --deep pays the full drive walk by flag")
     sub.choices["conform"].add_argument("--apply", action="store_true", help="perform the plan")
     sub.choices["conform"].add_argument("--only", action="append",
                                         choices=["backfill", "rename", "relocate", "sweep"],

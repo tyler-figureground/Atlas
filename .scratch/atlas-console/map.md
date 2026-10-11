@@ -305,6 +305,15 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   the default root-only report and its cost bound are unchanged. Emits a Sweep
   or nothing; no new action kind; ADR 0009 gets an amendment line (drafted on
   the ticket). Build: ticket 31.
+- [Receipt Rules below the root, built](issues/31-receipt-rules-below-the-root.md)
+  - **built.** The `receiptRules` map key loads strictly (name filters only,
+    targets pinned to the agent workspace, a malformed rule refuses the map),
+    and the opt-in deep pass - `doctor --deep PROJECT`, `conform --deep` -
+    walks one project, reports matches as findings naming the rule, and sweeps
+    them through the unchanged Plan/preview/Manifest/undo path. Containment
+    untouched; the default pass stays root-only; `--json` carries `receipts`
+    with `"deep": true`. ADR 0009 amendment applied; Receipt Rule and Deep
+    Pass in `/CONTEXT.md`. 963 tests, up from 926. CLI-only: no console key.
 - [Archive a project, as an Atlas action](issues/30-archive-a-project.md) -
   **a new drive-scoped action kind (ARCHIVE/UNARCHIVE), not a relocation:**
   archiving is an operator ruling, not map-derived drift, and the conform
@@ -350,9 +359,6 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
 
 ## Open tickets
 
-- [Receipt Rules below the root, built](issues/31-receipt-rules-below-the-root.md)
-  - task. The ticket 26 design: `receiptRules` map key, opt-in deep pass,
-  Sweep-only emission.
 - [Archive and un-archive a project, as Atlas verbs](issues/32-archive-a-project-verb.md)
   - task. The ticket 30 design: drive-scoped ARCHIVE/UNARCHIVE, index-row
   stamping, precondition check. Unblocks plan Phase 5.

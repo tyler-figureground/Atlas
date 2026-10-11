@@ -60,6 +60,27 @@ class FileRule:
 
 
 @dataclass(frozen=True)
+class ReceiptRule:
+    """One rule sweeping a machine receipt found below a project root.
+
+    Name filters only - a content filter at depth is a download per candidate
+    with no enumeration gate in front of it, so `pdfText` here refuses the
+    map. The target must resolve inside the agent workspace (runsDir or
+    backupsDir): the class can move machine receipts out of the numbered tree
+    and is structurally incapable of reordering a person's filing. A match is
+    a doctor finding with a Sweep Offer, never a Filing State - containment
+    (ADR 0007) still decides those at every depth. Ticket 26/31; ADR 0009's
+    amendment.
+    """
+
+    name: str
+    target: str
+    extensions: tuple[str, ...] = ()   # lowercased, no leading dot
+    names: tuple[str, ...] = ()        # fnmatch globs, case-insensitive
+    name_regex: str = ""               # re.search, case-insensitive
+
+
+@dataclass(frozen=True)
 class DriveMap:
     path: Path
     drive: str
@@ -76,6 +97,9 @@ class DriveMap:
     # the studio decides what is blessed; matches surface as 'ignored', never
     # as unfiled, and conform never plans on them. Ticket 29.
     tolerated: tuple[str, ...] = ()
+    # Machine-receipt rules for the opt-in deep pass (ticket 31). Inert in the
+    # default root-only report; see ReceiptRule.
+    receipt_rules: tuple[ReceiptRule, ...] = ()
 
     @property
     def section_ids(self) -> tuple[str, ...]:
@@ -204,6 +228,14 @@ def load_map(path: Path) -> DriveMap:
         if not k.startswith("_")
     }
 
+    control_plane = _string_map(raw, "controlPlane", path, strings=False)
+    # Receipt Rule targets must resolve inside the agent workspace, so the
+    # workspace has to be known before the rules are parsed.
+    workspace = tuple(
+        d for d in (control_plane.get("runsDir"), control_plane.get("backupsDir"))
+        if isinstance(d, str) and d
+    )
+
     return DriveMap(
         path=path,
         drive=raw["drive"],
@@ -212,10 +244,11 @@ def load_map(path: Path) -> DriveMap:
         sections=tuple(sections),
         drift_map=_string_map(raw, "driftMap", path),
         relocations=relocations,
-        control_plane=_string_map(raw, "controlPlane", path, strings=False),
+        control_plane=control_plane,
         file_rules=_parse_file_rules(raw.get("fileRules", []), path),
         templates=_parse_templates(raw.get("templates", []), path),
         tolerated=_parse_tolerated(raw.get("tolerated", []), path),
+        receipt_rules=_parse_receipt_rules(raw.get("receiptRules", []), path, workspace),
     )
 
 
@@ -329,6 +362,64 @@ def _parse_file_rules(raw: object, path: Path) -> tuple[FileRule, ...]:
         if "nameRegex" in match:
             fields["name_regex"] = _regex(match["nameRegex"], f"{where} nameRegex", path)
         rules.append(FileRule(name=name, target=target, **fields))
+    return tuple(rules)
+
+
+# Match keys a Receipt Rule may use: the File Rule name filters, and nothing
+# else. `pdfText` is named on its own so the refusal says why, not just "unknown".
+_RECEIPT_MATCH_KEYS = ("extensions", "names", "nameRegex")
+
+
+def _parse_receipt_rules(raw: object, path: Path,
+                         workspace: tuple[str, ...]) -> tuple[ReceiptRule, ...]:
+    """Strictly, exactly as File Rules: every problem refuses the whole map.
+
+    Two further fences make the class safe to opt into (ticket 26): name
+    filters only, and a target that resolves inside the agent workspace.
+    """
+    if not isinstance(raw, list):
+        raise MapError(f"receiptRules must be a list of rules: {path}")
+    rules: list[ReceiptRule] = []
+    homes = tuple(w.replace("\\", "/").strip("/") for w in workspace)
+    for index, entry in enumerate(raw):
+        where = f"receiptRules[{index}]"
+        if not isinstance(entry, dict):
+            raise MapError(f"{where} is not an object: {path}")
+        name = entry.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise MapError(f"{where} needs a 'name': {path}")
+        where = f"{where} '{name}'"
+        target = _safe_target(entry.get("target"), where, path)
+        normalised = target.replace("\\", "/").strip("/")
+        if not any(normalised == home or normalised.startswith(home + "/")
+                   for home in homes):
+            raise MapError(
+                f"{where}: target '{target}' must resolve inside the agent "
+                f"workspace (controlPlane runsDir or backupsDir): {path}"
+            )
+        match = entry.get("match")
+        if not isinstance(match, dict) or not match:
+            raise MapError(f"{where} needs a non-empty 'match' - an empty one matches every file: {path}")
+        if "pdfText" in match:
+            raise MapError(
+                f"{where}: no content filters below the root - a pdfText test at "
+                f"depth is a download per candidate (ticket 26): {path}"
+            )
+        unknown = sorted(set(match) - set(_RECEIPT_MATCH_KEYS))
+        if unknown:
+            raise MapError(
+                f"{where}: unknown match key {', '.join(repr(k) for k in unknown)} "
+                f"(expected one of {', '.join(_RECEIPT_MATCH_KEYS)}): {path}"
+            )
+        fields: dict[str, object] = {}
+        for key in ("extensions", "names"):
+            if key in match:
+                fields[key] = _string_list(match[key], f"{where} {key}", path)
+        if "extensions" in fields:
+            fields["extensions"] = tuple(e.lower().lstrip(".") for e in fields["extensions"])
+        if "nameRegex" in match:
+            fields["name_regex"] = _regex(match["nameRegex"], f"{where} nameRegex", path)
+        rules.append(ReceiptRule(name=name, target=target, **fields))
     return tuple(rules)
 
 

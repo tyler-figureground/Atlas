@@ -20,7 +20,9 @@ def _extension(name: str) -> str:
     return name.rpartition(".")[2].lower() if "." in name else ""
 
 
-def _names_match(rule: FileRule, name: str) -> bool:
+def names_match(rule, name: str) -> bool:
+    """The name filters, for FileRule and ReceiptRule alike. Public so the
+    deep pass (core/receipts.py) runs the identical tests."""
     if rule.extensions and _extension(name) not in rule.extensions:
         return False
     folded = name.casefold()
@@ -45,7 +47,7 @@ def _content_matches(rule: FileRule, name: str, path: Path) -> bool:
 
 
 def matches(rule: FileRule, name: str, path: Path) -> bool:
-    return _names_match(rule, name) and _content_matches(rule, name, path)
+    return names_match(rule, name) and _content_matches(rule, name, path)
 
 
 def first_match(rules: tuple[FileRule, ...], name: str, path: Path) -> FileRule | None:

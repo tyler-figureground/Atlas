@@ -1,12 +1,25 @@
 # Receipt Rules - machine-file sweeps below the project root
 
 Type: task
-Status: open
+Status: closed (2026-10-08)
 Blocked by: -
 Parent: ../map.md
 
 Graduated from [ticket 26](26-file-rules-below-the-root.md), which decided the
 design. Build it.
+
+**Built 2026-10-08.** `receiptRules` map key (strict parse, name filters only,
+targets restricted to `runsDir`/`backupsDir`), `core/receipts.py` deep pass
+(prunable scandir walk, long_path at every level, workspace and junctions
+never entered, unreadable reported), `doctor --deep PROJECT|--all` and
+`conform --deep` planning receipt SWEEPs through the unchanged
+plan/apply/manifest/`--revert` path; `--json` gains a per-project `receipts`
+array flagged `"deep": true`; lint warns on duplicate receipt rule names. ADR
+0009 amendment applied, Receipt Rule and Deep Pass landed in `/CONTEXT.md`,
+research backlog item 2 marked done. 963 tests pass (926 before + 37 new).
+Deviation: the deep pass is CLI-only - the console surfaces deep findings only
+when an operator runs the deep pass there, and no console key was added
+(ticket 31's done-when does not ask for one).
 
 ## What to build
 

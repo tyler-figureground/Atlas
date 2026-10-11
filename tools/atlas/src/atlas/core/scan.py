@@ -189,7 +189,7 @@ def scan_drive(drive_root: Path) -> DriveInventory:
                           root_listing=root_listing)
 
 
-def _is_link(entry: os.DirEntry) -> bool:
+def is_link(entry: os.DirEntry) -> bool:
     """A symlink or an NTFS junction. ``os.walk(followlinks=False)`` only skips
     the first: a junction answers ``islink()`` False and ``isjunction()`` True,
     so it was walked into, counted through and emptied."""
@@ -228,7 +228,7 @@ def walk(top: Path | str, *, topdown: bool = True,
     files: list[str] = []
     links: list[str] = []
     for entry in entries:
-        if _is_link(entry):
+        if is_link(entry):
             links.append(entry.name)
         elif entry.is_dir(follow_symlinks=False):
             dirs.append(entry.name)

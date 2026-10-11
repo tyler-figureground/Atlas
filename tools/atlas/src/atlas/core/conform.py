@@ -198,6 +198,11 @@ def build_plan(report: ProjectReport, m: DriveMap, project: Path | None = None) 
         actions.append(Action(kind=RELOCATE, src=hit.source, dst=hit.target, file_count=hit.file_count))
     for name, target in report.sweeps:
         actions.append(Action(kind=SWEEP, src=name, dst=target))
+    # Receipt Rule matches from the opt-in deep pass (ticket 31). A nested src
+    # is an ordinary SWEEP - no new action kind (ADR 0006) - and the Guard's
+    # watched parents, the Move Manifest and undo already cover it.
+    for hit in report.receipts:
+        actions.append(Action(kind=SWEEP, src=hit.path, dst=hit.target))
     measured = tuple(
         replace(a, path_length=_path_length(project, a)) for a in actions
     )

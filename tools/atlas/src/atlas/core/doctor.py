@@ -15,6 +15,7 @@ from pathlib import Path
 from .filerules import first_match
 from .mapfile import DriveMap
 from .projectmd import agents_block_current, is_claude_pointer
+from .receipts import ReceiptHit, scan_receipts
 from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
 # Files tolerated at a project root without being flagged: OS noise plus the
@@ -56,6 +57,11 @@ class ProjectReport:
     # Folders Atlas could not enumerate. Not actionable - Atlas cannot repair what
     # it cannot read - but never silently treated as empty. See ADR 0004.
     unreadable: tuple[str, ...] = ()
+    # Receipt Rule matches below the root (ticket 31). Filled only by an opt-in
+    # deep pass (`doctor --deep`, `conform --deep`); the default root-only
+    # report leaves it empty. A finding, never a Filing State - containment
+    # (ADR 0007) still decides those at every depth.
+    receipts: tuple[ReceiptHit, ...] = ()
     # False when the project root itself could not be listed. Every other finding
     # is then empty and ``sections_present`` means nothing: an unreadable project
     # never reads as an empty one (#13, ADR 0004).
@@ -63,7 +69,8 @@ class ProjectReport:
 
     @property
     def actionable(self) -> bool:
-        return bool(self.missing_control_plane or self.drift or self.relocations or self.sweeps)
+        return bool(self.missing_control_plane or self.drift or self.relocations
+                    or self.sweeps or self.receipts)
 
 
 @dataclass(frozen=True)
@@ -164,12 +171,18 @@ def _dir_exists_exact(base: Path, rel: str) -> bool:
 
 
 def report_project(inv: ProjectInventory, m: DriveMap, *,
-                   count_files: bool = True) -> ProjectReport:
+                   count_files: bool = True,
+                   receipts: tuple[ReceiptHit, ...] = (),
+                   deep_unreadable: tuple[str, ...] = ()) -> ProjectReport:
     """One project's conformance facts.
 
     ``count_files=False`` skips the one walk here - the file count under each
     relocation source - leaving ``file_count`` None (unknown). For the scoped
     Guard, which needs to know what work is due, not how big it is (#46).
+
+    ``receipts`` and ``deep_unreadable`` are the opt-in deep pass's facts
+    (``core.receipts.scan_receipts``), gathered by the caller. The default is
+    no deep pass at all: this function never walks below the root itself.
     """
     if not inv.root_entries.readable:
         # Nothing below is knowable. Every check would run against the failed
@@ -312,13 +325,17 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         if e.name not in explained and e.name not in swept and _map_tolerated(e.name, m)
     )
 
+    # Deep-pass unreadables join the project's own: a folder the receipt walk
+    # could not open is a person-has-to-look finding, never an empty folder.
+    unreadable.extend(deep_unreadable)
+
     if unreadable:
         # A person has to look. Never STUB - "no sections found" would claim we
         # looked and saw nothing, and never CONFORM, which would claim it is fine.
         status = STATUS_UNFILED
     elif sections_present == 0:
         status = STATUS_STUB
-    elif missing or drift or reloc_hits or sweeps:
+    elif missing or drift or reloc_hits or sweeps or receipts:
         status = STATUS_DRIFT
     elif unfiled:
         status = STATUS_UNFILED
@@ -337,15 +354,28 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         unfiled=tuple(unfiled),
         ignored=tuple(ignored),
         unreadable=tuple(unreadable),
+        receipts=receipts,
     )
 
 
-def report_drive(inventory: DriveInventory) -> DriveReport:
+def report_drive(inventory: DriveInventory, *,
+                 deep: frozenset[str] | None = None) -> DriveReport:
+    """The drive-wide report. ``deep`` names the projects that also get the
+    opt-in deep pass (Receipt Rules below the root, ticket 31); None - the
+    default everywhere else - keeps the report root-only."""
+    projects: list[ProjectReport] = []
+    for p in inventory.projects:
+        if deep is not None and p.name in deep and inventory.map.receipt_rules:
+            scan = scan_receipts(p.path, inventory.map)
+            projects.append(report_project(p, inventory.map, receipts=scan.hits,
+                                           deep_unreadable=scan.unreadable))
+        else:
+            projects.append(report_project(p, inventory.map))
     return DriveReport(
         root=inventory.root,
         drive=inventory.map.drive,
         map_version=inventory.map.version,
-        projects=tuple(report_project(p, inventory.map) for p in inventory.projects),
+        projects=tuple(projects),
     )
 
 
@@ -369,6 +399,10 @@ def report_to_dict(report: DriveReport) -> dict:
                 "sweeps": [
                     {"file": a, "target": b, "rule": dict(p.sweep_rules).get(a)}
                     for a, b in p.sweeps
+                ],
+                "receipts": [
+                    {"file": h.path, "target": h.target, "rule": h.rule, "deep": True}
+                    for h in p.receipts
                 ],
                 "unfiled": list(p.unfiled),
                 "ignored": list(p.ignored),

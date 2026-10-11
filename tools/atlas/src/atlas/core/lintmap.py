@@ -121,6 +121,18 @@ def lint_map(m: DriveMap) -> list[Finding]:
                 Finding(WARN, "FILE-RULE-DUP-NAME", f"file rule name '{name}' is used {count} times; doctor names the rule that filed each file, and cannot tell these apart")
             )
 
+    # -- receipt rules: load_map already refused a bad structure, a content
+    # filter, or a target outside the agent workspace (ticket 31). What is left
+    # is the same ambiguity File Rules get warned for.
+    receipt_names: dict[str, int] = {}
+    for rule in m.receipt_rules:
+        receipt_names[rule.name] = receipt_names.get(rule.name, 0) + 1
+    for name, count in receipt_names.items():
+        if count > 1:
+            findings.append(
+                Finding(WARN, "RECEIPT-RULE-DUP-NAME", f"receipt rule name '{name}' is used {count} times; doctor names the rule behind each deep finding, and cannot tell these apart")
+            )
+
     # -- controlPlane.analysisDir must be a blessed path ----------------------
     if m.analysis_dir:
         head = _first_segment(m.analysis_dir)

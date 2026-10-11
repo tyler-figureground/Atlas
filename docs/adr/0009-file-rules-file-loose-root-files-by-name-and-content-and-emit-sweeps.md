@@ -109,3 +109,15 @@ re-derives the Plan before writing and a Plan whose rule stopped matching is Sta
 But the tree's 60-second Shelf Life keys on listings, so a tree row can say Loose for
 up to a minute after its content changed. Acceptable - the Guard refuses the write -
 and recorded here so nobody rediscovers it.
+
+## Amendments
+
+**Amendment (ticket 26, 2026-10-07; built by ticket 31): "Root files only" holds
+for `fileRules`; a second rule class, `receiptRules`, fires below the root.** A
+Receipt Rule uses name filters only (`extensions`, `names`, `nameRegex` -
+never `pdfText`), targets only the agent workspace (`runsDir`, `backupsDir`),
+and is evaluated only in an explicitly requested deep pass (`doctor --deep`,
+`conform --deep`), never in the default root-only report. Its match is not a
+Filing State - containment (ADR 0007) decides those at every depth - it is a
+doctor finding that emits a SWEEP and nothing else. A malformed Receipt Rule
+refuses the whole map, as File Rules do.

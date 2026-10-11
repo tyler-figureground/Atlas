@@ -17,6 +17,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 |---|---|
 | `atlas [--drive D]` | Interactive operations console: inspect, filter, sort, create, clean, and conform. `--drive` skips the drive picker |
 | `atlas doctor [--drive D] [--json]` | Drive-wide read-only conformance report |
+| `atlas doctor --deep NAME [--json]` | The opt-in deep pass: walk below one project's root for Receipt Rule matches. Enumeration only, one project's walk; `--deep --all` pays the full drive walk by flag, never by default |
 | `atlas lint [--drive D] [--json]` | Validate the map file itself |
 | `atlas new --name NAME --street STREET --city CITY --state ST --zip ZIP --use-case USE_CASE --billing-contact ID_OR_EMAIL [...]` | Create a complete mapped project |
 | `atlas contacts list [--drive D] [--json]` | List reusable drive contacts |
@@ -26,7 +27,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 | `atlas add --project NAME --section SECTION` | Add map-approved project folders |
 | `atlas clean --project NAME [--apply]` | Preview or remove folders with no files anywhere beneath |
 | `atlas tree NAME [--depth N] [--json]` | One project's folders and files below the root: Filing State, Load State, child counts, and unmet Expectations as a separate list. Read-only |
-| `atlas conform --project NAME [--apply]` | Preview or apply mapped repairs |
+| `atlas conform --project NAME [--apply]` | Preview or apply mapped repairs. `--deep` includes Receipt Rule matches below the project root (one project's walk per project planned) |
 | `atlas conform --project NAME --node PATH [--apply]` | Preview or apply the repair for one node, by project-relative path |
 | `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
 | `atlas runs (--project NAME \| --all) [--days N] [--apply]` | List agent runs; zip the closed ones into `.agent/archive/` (ADR 0011). Preview by default |
@@ -118,6 +119,35 @@ opens a file after the rule's name filters pass, only when it is named `*.pdf`, 
 never above 64 MB. Reads are cached per file until it changes. A PDF that cannot be
 read - damaged, or locked with a password - never matches; a set that is merely locked
 against editing reads normally.
+
+## Receipt Rules below the root
+
+File Rules stop at the project root. Agent scratch - a run zip, a log - that lands
+inside a numbered section is the same filing mistake one folder down, and the map's
+`receiptRules` catch it (ticket 26, ADR 0009 amendment):
+
+```json
+"receiptRules": [
+  { "name": "Run zips", "target": ".agent/runs",    "match": { "extensions": ["zip"] } },
+  { "name": "Logs",     "target": ".agent/backups", "match": { "nameRegex": "\\.log$" } }
+]
+```
+
+Same shape as `fileRules`, three fences tighter: name filters only (`pdfText` refuses
+the map - a content test at depth is a download per candidate), and the target must
+resolve inside the agent workspace (`runsDir` or `backupsDir`), so a Receipt Rule can
+move machine receipts out of the numbered tree and can never reorder a person's
+filing. A match is a finding, never a Filing State - a receipt inside `06 Research`
+is still Mapped by containment.
+
+Receipt Rules are evaluated only in the opt-in deep pass: `atlas doctor --deep NAME`
+reports matches as `sweep pending (deep)` with the rule name, and `atlas conform
+--project NAME --deep` previews and applies the resulting Sweeps through the same
+Plan, Move Manifest and `conform --revert` undo as any other conform. The walk
+enumerates and never opens a file; it is one project at a time (`--all --deep` pays
+the full drive walk by flag, never by default). The default `doctor` / `conform`
+pass stays root-only. In `--json`, deep matches are the project row's `receipts`
+array, flagged `"deep": true` beside the root-only `sweeps`.
 
 ## Root names Atlas never flags
 
@@ -259,7 +289,7 @@ CLI edit commands are interactive when run in a terminal. Omitted fields retain 
 
 Atlas has not been validated with assistive technology and makes no accessibility conformance claim. Textual's screen-reader support is unresolved upstream ([textual#2425](https://github.com/Textualize/textual/issues/2425)), so the console should not be assumed usable with a screen reader.
 
-Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `conform --node` for a single repair, `conform --revert` for undo. Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
+Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `conform --node` for a single repair, `conform --revert` for undo, and `--deep` on `doctor`/`conform` for Receipt Rule matches below a project root (CLI-only by design - the console surfaces deep findings only from an operator-run deep pass). Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
 
 Within the console, colour reinforces a distinction and never carries one alone. A folder or file with something wrong with it names what is wrong in words; when the terminal is too narrow for the full phrase the word abbreviates - `NAME`, `PLACE`, `LOOSE`, `UNMAPPED`, `unread` - rather than leaving the glyph and its colour to say it. A long name shortens in the middle so the word always stays on screen.
 
