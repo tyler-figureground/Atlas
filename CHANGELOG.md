@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-09
+
 ### Added
 
 - **Atlas - the deep pass grows three findings (robustness plan 1.4-1.6).**
@@ -412,7 +414,8 @@ First public release.
 - **3 hooks** — post-write disclaimer check, post-output metadata, pre-commit spec lint.
 - Marketplace install: `claude plugin marketplace add AlpacaLabsLLC/skills-for-architects`.
 
-[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.14.0
 [0.13.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.13.0
 [0.12.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.12.0
 [1.5.0]: https://github.com/tyler-figureground/skills-for-architects/releases/tag/v1.5.0

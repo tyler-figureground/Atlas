@@ -441,39 +441,9 @@ Fog toward the destination. Graduates into tickets as the frontier clears it.
   cycles them, **which Region has focus has to be legible without moving the
   cursor**, and in Single-Region Composition it has to be legible when only one is
   drawn. Small, and easy to forget until it looks wrong.
-- **A `doctor` finding for over-long paths.** Ticket 04 put the length warning on
-  the Action at plan-building time, which covers what Atlas is about to create. It
-  does not surface paths already over the limit that nobody is currently moving.
-  Considered and deferred once already as a new finding type; still deferred, now
-  for a narrower reason.
-- **Deep unreadable detection in `doctor`.** *Mostly cleared.* The tree and
-  `atlas tree` show an Unreadable folder at any depth they read, and `doctor` now
-  lists an unreadable folder inside a relocation source instead of counting it as
-  zero files (#24). What remains: `doctor` itself still enumerates only the project
-  root, so a deep unreadable folder nobody opens is still invisible to it.
-- **Tree states.** *Mostly built.* Loading (after 120 ms, never on a warm read),
-  Unreadable (never drawn as empty, including a `cannot read` row for an unreadable
-  project root), Partial (a folder over the 500-entry count cap), and a stale tree
-  after a rescan (every cached tree takes the fresh report). Left: an external
-  change reaches an open tree only through the 60 s TTL or `r`, and a Partial
-  listing the filesystem itself truncates (CPython 102993) is not distinguishable
-  from a complete one.
-- **Test strategy for the new surface.** The current three-happy-path TUI coverage
-  will not hold a tree, a search overlay, and a dossier panel. Ticket 05 shows the
-  shape that works: probe scripts driving real widgets through `App.run_test()`
-  against the pinned venv, asserting on measured syscall and message counts rather
-  than on rendered output.
-- **Rebuild cost at depth.** `Tree._build()` is linear in expanded nodes and calls
-  `render_label` once per line, and it fires on any mutation, resize or style
-  change. Ticket 05 measured 20-30ms at 5000 expanded nodes and cut the median from
-  25.4ms to 6.4ms by overriding `get_label_width`. Whether Atlas needs that, and
-  what caps expansion depth, is unspecified.
-- **Staff redeploy of 0.6.0.** README, CHANGELOG and version are current as of
-  0.6.0 (#43). An editable install never reaches staff: they run the pinned wheel
-  on the drive through `Atlas.bat`, and the last build the repo records reaching the
-  drive is 0.4.0. Rebuilding the
-  wheel, repinning the launcher and updating the drive's `HOW-TO.md` is a
-  production write that needs the user's go-ahead. Steps in `tools/atlas/README.md`.
+- ~~A `doctor` finding for over-long paths~~ - **built**
+  2026-10-09 with the deep pass (plan 1.4): dirs flag at 259, files at 260,
+  a warning finding that never changes project status.
 
 ## Out of scope
 

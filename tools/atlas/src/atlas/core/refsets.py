@@ -548,9 +548,9 @@ def contents_lines(sets: list[RefSet], today: date) -> list[str]:
     changes is byte-identical and the dry run says so. The stale flag is a
     word in the Status column: text, never colour or glyph alone (ADR 0008).
     Entity and Skill come from card front matter; the Exemplars cell is each
-    id with the first line of its NOTES 'Why this one' (the folder descriptor
-    when there is none), so the generated table carries what the
-    hand-maintained one did.
+    id with its folder descriptor ("E1 Monte Vista - CRC addition"), which is
+    the curated one-line summary - NOTES prose proved too long and clipped
+    mid-sentence on the first real generate.
     """
     lines = [
         CONTENTS_BEGIN,
@@ -562,7 +562,7 @@ def contents_lines(sets: list[RefSet], today: date) -> list[str]:
         status = refset.status or "?"
         if refset.stale(today):
             status += " (STALE)"
-        exemplars = "; ".join(f"{ex.id} - {ex.why or _descriptor(ex)}"
+        exemplars = "; ".join(f"{ex.id} {_descriptor(ex)}"
                                for ex in refset.exemplars) or "-"
         lines.append(f"| `{refset.type}` | {refset.title} | {refset.entity or '-'} | "
                      f"{status} | {refset.reviewed or '-'} | {exemplars} | "

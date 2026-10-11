@@ -255,7 +255,8 @@ def test_contents_lines_shape(good_root: Path):
 
 def test_contents_lines_rich_columns(tmp_path: Path):
     """Entity and Skill come from card front matter; the Exemplars cell is
-    each id with the first line of its NOTES 'Why this one'."""
+    each id with its folder descriptor - NOTES prose clipped mid-sentence on
+    the first real generate, so the curated folder name carries the summary."""
     from atlas.core.refsets import list_sets
     root = tmp_path / "Reference Sets"
     folder = _set(root, "Code Analysis", CARD_RICH)
@@ -266,8 +267,7 @@ def test_contents_lines_rich_columns(tmp_path: Path):
     cells = [cell.strip() for cell in row.split("|")]
     assert cells[3] == "shared"
     assert cells[7] == "00-due-diligence:code-analysis"
-    assert cells[6] == ("E1 - Only memo with the full zoning table worked through.; "
-                        "N1 - McKean - debug notes")  # no Why section: the folder says it
+    assert cells[6] == "E1 Monte Vista - CRC; N1 McKean - debug notes"
 
 
 def test_contents_lines_rich_columns_absent(good_root: Path):
@@ -278,7 +278,7 @@ def test_contents_lines_rich_columns_absent(good_root: Path):
              if line.startswith("| `")]
     cells = [cell.strip() for cell in row.split("|")]
     assert cells[3] == "-" and cells[7] == "-"
-    assert cells[6] == "E1 - Monte Vista - CRC; N1 - McKean - debug notes"
+    assert cells[6] == "E1 Monte Vista - CRC; N1 McKean - debug notes"
 
 
 def test_splice_requires_exactly_one_marker_block():

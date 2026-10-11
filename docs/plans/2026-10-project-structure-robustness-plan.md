@@ -291,6 +291,23 @@ instead of a periodic surprise (1.6, Phase 5).
   33-36 (search overlay, content index, dossier mode), plan 1.4-1.6 (MAX_PATH
   doctor finding, deep unreadable, drive item budget), refs index richer
   columns (Entity/Exemplars/Skill) before markers go into the README.
+
+**2026-10-09 (quota reset) - the queue cleared**
+- Tickets 33, 34, 35, 36 all built and closed: session Name Index + Search
+  Overlay on `g` + `atlas search`; per-machine Content Index (PDF text +
+  Markdown, path+size+mtime keyed, background resumable builds, ADR 0020);
+  content matches in the overlay and `--content`; DOSSIER Companion Mode +
+  `atlas dossier`. **Console map open tickets: zero.** 1119 tests.
+- Plan 1.4-1.6 built: over-long path finding (dirs 259, files 260, warning
+  never a status change), deep unreadable as its own finding, drive item
+  budget vs the 400k cap behind `--deep`. `core/deep.py` generalizes the walk.
+- refs index now emits Entity/Exemplars/Skill; the real README's Sets table is
+  wrapped in `atlas:contents` markers and `atlas refs index --apply` ran -
+  regenerate is byte-idempotent. Exemplars cell uses folder descriptors after
+  NOTES prose proved to clip mid-sentence.
+- **Atlas 0.14.0 released and deployed** (backup `_tools\logs\atlas-0.14.0-deploy-
+  20261011-155213`, `Atlas.bat --version` verified, HOW-TO search/dossier
+  section, lint clean). Repo pushed to origin/main.
 - Known pre-existing: 2 test_project_data.py rename tests fail on clean HEAD;
   post-output-metadata hook times out on this machine (environmental).
 
