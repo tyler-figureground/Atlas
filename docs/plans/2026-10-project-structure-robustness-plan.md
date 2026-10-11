@@ -258,6 +258,17 @@ instead of a periodic surprise (1.6, Phase 5).
   **Cost datum:** 1,386 files took 48 min to zip over Drive File Stream - big-run
   sweeps are a background job, not an interactive one; feed into Q5's automation
   timing.
+
+**2026-10-08 - Phase 2.1 batch (a) drafted (sa-5)**
+- Three new candidate sets, `atlas refs doctor` clean across all 11 sets:
+  `decision-record` (E1 Monte Vista 0001, E2 Bucktown 0002 supersedes pattern,
+  E3 64th Lane 0010; N1 Coleman DECISION-LOG reconstructed-months-later; 149-line
+  card), `client-email` (Bucktown critical-path, 64th Lane window-hold, San Vicente
+  JADU - a found third beyond the brief), `client-brief` (211 Centre TPA brief only
+  - CA-residential and code-issue cells honestly open).
+- README Sets table + v1.4 row updated on the library drive.
+- Held for Tyler's batch review (2.3) before batch (b) - zoning-memo,
+  research-report, agency-letter - starts, so his edits to batch (a) set the bar.
 - `refs index` follow-up: the generator's table (type/title/status/reviewed/card)
   is thinner than the README's hand-maintained one (adds Entity, Exemplars, Skill).
   Do NOT wrap `atlas:contents` markers or apply until the generator emits those
