@@ -26,6 +26,17 @@ def _bundled_templates(monkeypatch):
     """
     monkeypatch.delenv(TEMPLATES_ENV_VAR, raising=False)
 
+
+@pytest.fixture(autouse=True)
+def _local_cache(monkeypatch):
+    """Tests never touch the machine's real Content Index cache.
+
+    ATLAS_CACHE_DIR exists so tests and unusual machines can point the cache
+    elsewhere; a machine that has it set must not change what the suite
+    asserts, and the suite must never write there.
+    """
+    monkeypatch.delenv("ATLAS_CACHE_DIR", raising=False)
+
 FIXTURE_MAP = {
     "drive": "TESTDRIVE",
     "version": "2.0",

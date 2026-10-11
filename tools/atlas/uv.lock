@@ -312,6 +312,7 @@ version = "0.13.0"
 source = { editable = "." }
 dependencies = [
     { name = "markdown-it-py" },
+    { name = "platformdirs" },
     { name = "pypdf", extra = ["crypto"] },
     { name = "textual" },
 ]
@@ -325,6 +326,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "markdown-it-py", specifier = ">=3" },
+    { name = "platformdirs", specifier = ">=4" },
     { name = "pypdf", extras = ["crypto"], specifier = ">=6.18,<7" },
     { name = "textual", specifier = ">=8.2,<9" },
 ]

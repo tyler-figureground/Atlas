@@ -35,6 +35,7 @@ from .core.conform import (
     node_key,
     plan_from_dict,
 )
+from .core.contentindex import build_index, index_path, load_index
 from .core.contacts import (
     Contact,
     ContactDraft,
@@ -1330,6 +1331,80 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0 if result.hits else 1
 
 
+def cmd_index_build(args: argparse.Namespace) -> int:
+    """Build or top up the per-machine Content Index (ticket 34, ADR 0020).
+
+    Incremental by path+size+mtime: the first build reads every PDF and
+    Markdown file under the project roots; later runs re-read only what
+    changed. Writes only to the local cache, never to the drive. Exit 0 on
+    success, 2 on error - a build has no findings state.
+    """
+    root = _resolve_drive(args.drive)
+    read = {"count": 0}
+
+    def progress(done: int, total: int) -> None:
+        read["count"] = done
+        if not args.json and (done == total or done % 50 == 0):
+            # Progress goes to stderr so --json stdout stays clean.
+            print(f"indexing {done}/{total} files...", file=sys.stderr)
+
+    index = build_index(root, progress=progress, save_every=50)
+    skipped = len(index.skipped)
+    unreadable = len(index.unreadable)
+    if args.json:
+        print(json.dumps({
+            "drive": index.drive,
+            "path": str(index_path(root)),
+            "indexed_at": index.indexed_at,
+            "files": len(index.files),
+            "read": read["count"],
+            "skipped": skipped,
+            "unreadable": unreadable,
+        }, indent=2))
+    else:
+        noun = "file" if len(index.files) == 1 else "files"
+        print(f"indexed {len(index.files)} {noun} "
+              f"({read['count']} read, {len(index.files) - read['count']} unchanged, "
+              f"{skipped} skipped), indexed at {index.indexed_at}")
+        if unreadable:
+            print(f"note: {unreadable} folder(s) could not be read - "
+                  "the index may be incomplete", file=sys.stderr)
+    return 0
+
+
+def cmd_index_status(args: argparse.Namespace) -> int:
+    """Report the local Content Index: the Indexed-At Stamp and the counts.
+
+    Exit 0 with an index, 1 when none exists yet (build is the pending work),
+    2 on error.
+    """
+    root = _resolve_drive(args.drive)
+    index = load_index(root)
+    if args.json:
+        payload = {"exists": index is not None,
+                   "path": str(index_path(root))}
+        if index is not None:
+            payload.update({
+                "drive": index.drive,
+                "indexed_at": index.indexed_at,
+                "files": len(index.files),
+                "skipped": len(index.skipped),
+                "unreadable": len(index.unreadable),
+            })
+        print(json.dumps(payload, indent=2))
+        return 0 if index is not None else 1
+    if index is None:
+        print("no content index for this drive - run `atlas index build` "
+              "(per-machine; the first build reads every PDF and Markdown file)")
+        return 1
+    noun = "file" if len(index.files) == 1 else "files"
+    print(f"content index: {index_path(root)}")
+    print(f"indexed at {index.indexed_at}; {len(index.files)} {noun}, "
+          f"{len(index.skipped)} skipped, "
+          f"{len(index.unreadable)} unreadable folder(s)")
+    return 0
+
+
 def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
     """Undo an applied conform from the manifest it printed.
 
@@ -1642,6 +1717,24 @@ def main(argv: list[str] | None = None) -> int:
     contacts_edit.add_argument("--address-zip")
     contacts_edit.add_argument("--clear-address", action="store_true")
     contacts_edit.set_defaults(fn=cmd_contacts_edit)
+
+    index_cmd = sub.add_parser(
+        "index", help="the per-machine Content Index: PDF text and Markdown, cached "
+                      "locally, never on the drive")
+    index_commands = index_cmd.add_subparsers(dest="index_command", required=True)
+    index_build = index_commands.add_parser(
+        "build", help="build or top up the index (incremental by path+size+mtime; "
+                      "the first build reads every PDF and Markdown file)")
+    index_build.add_argument(
+        "--drive", help="drive root (default: walk up from cwd, else auto-discover)")
+    index_build.add_argument("--json", action="store_true", help="machine-readable output")
+    index_build.set_defaults(fn=cmd_index_build)
+    index_status = index_commands.add_parser(
+        "status", help="report the index: Indexed-At Stamp and counts")
+    index_status.add_argument(
+        "--drive", help="drive root (default: walk up from cwd, else auto-discover)")
+    index_status.add_argument("--json", action="store_true", help="machine-readable output")
+    index_status.set_defaults(fn=cmd_index_status)
 
     project = sub.add_parser("project", help="manage an existing project")
     project_commands = project.add_subparsers(dest="project_command", required=True)

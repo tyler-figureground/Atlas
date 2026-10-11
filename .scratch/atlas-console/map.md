@@ -373,6 +373,19 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   QUERY [--json]` in the same session. The key (`g`), project-roots-only scope
   and the zero-content-read deferral of dossier facts are recorded on the
   ticket. ADR 0005 amendment applied verbatim. 1049 tests.
+- [The local content index](issues/34-local-content-index.md) - **built.**
+  `core/contentindex.py`: the per-machine Content Index in the platformdirs
+  user cache, keyed per drive root, never on the drive. Path+size+mtime
+  keying (ADR 0009's cache key) over every PDF, Markdown and text file under
+  the project roots; extraction is the `pdfText` machinery with the 64 MB
+  Read Limit as one number for every kind and silence on damaged files;
+  skipped files keep their keys. Builds are incremental top-ups, resumable by
+  key after interruption, with a progress callback; every save carries the
+  Indexed-At Stamp; queries revalidate candidate keys by stat and count stale
+  matches rather than trusting them. A corrupt index rebuilds, never crashes.
+  `atlas index build` / `atlas index status` with `--json` (ADR 0008). ADR
+  0020; PDF text scope (metadata + page one) recorded there as a named limit.
+  1073 tests. Ticket 35 layers content matches onto the overlay.
 
 ## Open tickets
 

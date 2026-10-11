@@ -189,6 +189,29 @@ at 500 with the overflow counted. CLI form: `atlas search QUERY [--json]`
 loaded and never reads more.
 _Avoid_: global filter, spotlight, command palette.
 
+**Content Index**
+The per-machine index of PDF text and Markdown under the project roots that
+makes content search possible without a Drive API credential story (ADR 0020,
+ticket 34). Lives in the machine's user cache via `platformdirs`, keyed per
+drive root - never on the shared drive, where it would be shared mutable state
+with no locking story and a bulk derived artifact (the anti-preload finding in
+reverse). Keyed path+size+mtime, the ADR 0009 cache key: unchanged files are
+never re-read, skipped files (damaged, locked, over the 64 MB Read Limit) keep
+their key and are retried only when they change. The first build is a
+background job with progress; later builds are incremental top-ups, and an
+interrupted build resumes by key. Freshness is rebuild plus query-time key
+revalidation, never filesystem watching. CLI: `atlas index build`, `atlas
+index status`.
+_Avoid_: search database, drive index (implies on the drive).
+
+**Indexed-At Stamp**
+The timestamp every Content Index save carries, naming when the build that
+wrote it ran. Consumers show it rather than implying freshness: the index is a
+cache of disk truth, and the stamp plus query-time key revalidation is the
+whole honesty story. A partial save from an interrupted build is stamped too -
+the stamp says when, never claims completeness.
+_Avoid_: last-updated (implies it is current), freshness guarantee.
+
 ## Atlas Writes
 
 **Plan**

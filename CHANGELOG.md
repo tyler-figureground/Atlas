@@ -19,6 +19,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   QUERY [--drive D] [--json]`, exit 0 with matches, 1 with none, 2 on error.
   Content search waits for the per-machine index (tickets 34, 35).
 
+- **Atlas - the local Content Index (ticket 34, ADR 0020).** The ticket 08/11
+  foundation for content search: PDF text (metadata plus page one, the ADR 0009
+  `pdfText` machinery) and Markdown/plain text under the project roots,
+  extracted over the mount and cached on the local machine - platformdirs user
+  cache keyed per drive root, `$ATLAS_CACHE_DIR` to override, never on the
+  shared drive. Keyed path+size+mtime: the first build reads every candidate
+  with progress and persists partial progress (resumable by key); later builds
+  re-read only changed or new files, and skipped files - damaged, locked, or
+  over the 64 MB Read Limit, silent per ADR 0009 - keep their key so they are
+  not retried every run. Queries revalidate each matching candidate's key
+  against the disk and report changed or vanished matches as stale rather than
+  trusting them; every save carries an Indexed-At Stamp. A corrupt index
+  rebuilds, never crashes; writes are atomic. CLI (ADR 0008): `atlas index
+  build` / `atlas index status`, `--json`, exit 0/1/2. Nothing written to the
+  drive; no console wiring yet - ticket 35 layers content matches onto the
+  Search Overlay.
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

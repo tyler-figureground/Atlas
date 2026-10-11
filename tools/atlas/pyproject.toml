@@ -5,6 +5,7 @@ description = "Atlas - map-driven TUI/CLI for studio shared-drive project toolin
 requires-python = ">=3.12"
 dependencies = [
     "markdown-it-py>=3",
+    "platformdirs>=4",
     "pypdf[crypto]>=6.18,<7",
     "textual>=8.2,<9",
 ]
