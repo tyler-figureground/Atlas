@@ -370,6 +370,18 @@ it. Deep findings emit Sweeps or nothing, through the same Plan, preview, Move
 Manifest and undo as any other conform.
 
 
+**Archive Root**
+The map-named folder (`controlPlane.archiveRoot`, default `_Archived Projects`) that
+archived projects move under. Its first segment must start with `_` - the prefix is
+what keeps archived projects out of the scan, making them invisible to doctor, the
+tree and the console with no further work. ADR 0019.
+
+**Archive Precondition**
+What `atlas archive` / `unarchive` refuse at plan build: a name that is not one
+project folder, an unreadable root, a taken destination name. Model-file counts and
+open task items warn in the preview instead - a cross-project Revit-link scan is not
+knowable from the mount, so the count is the honest substitute (ADR 0019).
+
 ## Atlas Agent Files
 
 **Agent Files**

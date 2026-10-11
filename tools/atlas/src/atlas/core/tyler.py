@@ -104,6 +104,13 @@ def _read(path: Path) -> str | None:
         return None
 
 
+def open_items(text: str, *, lane: str | None = None) -> tuple[DigestItem, ...]:
+    """The open checkbox items in a task list's text. Public seam over the
+    digest parser, so the archive preview counts open work by exactly the rule
+    the Tyler digest rolls it up - one parse, two readers (ticket 32)."""
+    return _parse_items(text, lane=lane)
+
+
 def collect(inventory: DriveInventory) -> Digest:
     projects: list[ProjectDigest] = []
     # Sorted by name: scan order is the filesystem's, which differs by OS.

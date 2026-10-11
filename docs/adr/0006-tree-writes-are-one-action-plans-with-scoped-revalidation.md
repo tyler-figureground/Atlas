@@ -149,3 +149,15 @@ section. An unmet Expectation therefore carries its kind, and only a control-pla
 one offers a Repair - `f` in the Companion arms it (#42). A missing section keeps
 the add-folders path, `a`. The Decision section above, and the "empty mapped
 folder" example under it, should be read with that limit.
+
+## Amendments
+
+**Amendment (ticket 30, 2026-10-07): the action set gains ARCHIVE and
+UNARCHIVE, drive-scoped.** These move a whole project between the drive
+root and the map's `controlPlane.archiveRoot`. They are not map-derived:
+an operator names the project, and the plan carries the folder Move plus
+the project-index row's before/after text so the inverse restores both.
+Their Guard watches the two drive-level parents rather than project
+folders. Confirmation is always the modal, an explicit exception to
+inline-for-one-action: a whole-project move is the largest single action
+Atlas applies. Full design: ADR 0019.

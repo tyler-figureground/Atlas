@@ -357,11 +357,17 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   Reversal trigger recorded on the ticket. The content index builds over the
   mount: ticket 34.
 
+- [Archive a project, as an Atlas action](issues/30-archive-a-project.md)
+  and [the verb](issues/32-archive-a-project-verb.md) - **decided and built.**
+  ARCHIVE/UNARCHIVE action kinds on a drive-scoped plan; destination is the
+  map's `controlPlane.archiveRoot` (default `_Archived Projects`, `_` prefix
+  load-bearing); the index row is stamped `archived`, restored verbatim on
+  undo; model files and open tasks warn, never refuse; confirmation always
+  explicit, one named project at a time; CLI-only this session, the console
+  key remains. ADR 0019, ADR 0006 amended. 1021 tests.
+
 ## Open tickets
 
-- [Archive and un-archive a project, as Atlas verbs](issues/32-archive-a-project-verb.md)
-  - task. The ticket 30 design: drive-scoped ARCHIVE/UNARCHIVE, index-row
-  stamping, precondition check. Unblocks plan Phase 5.
 - [Global name search](issues/33-global-name-search.md) - task. The ticket 08
   phase A: session name index from one walk, the Search Overlay, `atlas
   search`. Carries the drafted ADR 0005 amendment.

@@ -12,6 +12,15 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .core.archive import (
+    ArchiveGuard,
+    apply_archive_plan,
+    archive_plan_from_dict,
+    archive_plan_to_dict,
+    build_archive_plan,
+    build_unarchive_plan,
+    invert_archive_plan,
+)
 from .core.conform import (
     DONE,
     FAILED,
@@ -873,6 +882,131 @@ def cmd_runs(args: argparse.Namespace) -> int:
     return 1 if pending else 0
 
 
+# ---------------------------------------------------------------- archive
+
+
+def _print_archive_plan(plan, *, applied: bool) -> None:
+    for a in plan.actions:
+        print(_action_line(a))
+    for warning in plan.warnings:
+        print(f"    warning: {warning}")
+    for note in plan.notes:
+        print(f"    note: {note}")
+    if not applied:
+        print("(dry run - pass --apply to perform)")
+
+
+def _run_archive_plan(args: argparse.Namespace, root: Path, m, plan) -> int:
+    if not args.apply:
+        if args.json:
+            print(json.dumps([archive_plan_to_dict(plan, m.drive)], indent=2))
+        else:
+            _print_archive_plan(plan, applied=False)
+        return 1
+    stale = ArchiveGuard.for_plan(root, m, plan).check(root)
+    if stale:
+        print(f"error: {stale}; preview again before applying", file=sys.stderr)
+        return 2
+    applied = apply_archive_plan(root, m, plan)
+    if args.json:
+        print(json.dumps([archive_plan_to_dict(applied, m.drive)], indent=2))
+    else:
+        _print_archive_plan(applied, applied=True)
+    if any(a.status == FAILED for a in applied.actions):
+        return 2
+    return 0 if all(a.status == DONE for a in applied.actions) else 1
+
+
+def cmd_archive(args: argparse.Namespace) -> int:
+    """Archive one project to the map's archiveRoot (ADR 0019). Dry run by default."""
+    root = _resolve_drive(args.drive)
+    m = load_map(find_map(root))
+    try:
+        plan = build_archive_plan(root, m, args.name)
+    except OpsError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    return _run_archive_plan(args, root, m, plan)
+
+
+def cmd_unarchive(args: argparse.Namespace) -> int:
+    """Bring an archived project back by name, or undo an applied archive from
+    the manifest it printed (`--json` out, `--revert` in - the same shape as
+    conform's revert; the CLI holds no undo stack)."""
+    root = _resolve_drive(args.drive)
+    m = load_map(find_map(root))
+    if args.name and args.revert:
+        print("error: pass a project name or --revert FILE, not both", file=sys.stderr)
+        return 2
+    if args.revert:
+        return _archive_revert(args, root, m)
+    if not args.name:
+        print("error: pass a project name or --revert FILE", file=sys.stderr)
+        return 2
+    try:
+        plan = build_unarchive_plan(root, m, args.name)
+    except OpsError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+    return _run_archive_plan(args, root, m, plan)
+
+
+def _archive_revert(args: argparse.Namespace, root: Path, m) -> int:
+    manifest = Path(args.revert)
+    try:
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
+        return 2
+    plans = payload if isinstance(payload, list) else [payload]
+    inverses = []
+    for p in plans:
+        # A manifest from drive A must never move folders on drive B.
+        if not isinstance(p, dict) or p.get("drive") != m.drive:
+            found = p.get("drive") if isinstance(p, dict) else None
+            print(f"error: {manifest} is from drive {found or '(unnamed)'}, "
+                  f"not {m.drive}; nothing moved", file=sys.stderr)
+            return 2
+        try:
+            plan = archive_plan_from_dict(p)
+        except OpsError as error:
+            print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
+            return 2
+        # A preview's manifest reverses nothing - only an applied one can.
+        if any(a.status != DONE for a in plan.actions):
+            print(f"error: {manifest} records a preview, not an applied archive; "
+                  f"nothing to revert", file=sys.stderr)
+            return 2
+        try:
+            inverses.append(invert_archive_plan(plan))
+        except NotInvertible as error:
+            print(f"error: cannot reverse this manifest: {error}", file=sys.stderr)
+            return 2
+    # Every source still where the archive left it, before anything moves.
+    for inverse in inverses:
+        for action in inverse.actions:
+            if not (root / action.src).is_dir():
+                print(f"error: {action.src} is no longer where the archive left it; "
+                      f"nothing moved", file=sys.stderr)
+                return 2
+    if not args.apply:
+        if args.json:
+            print(json.dumps([archive_plan_to_dict(p, m.drive) for p in inverses], indent=2))
+        else:
+            for inverse in inverses:
+                _print_archive_plan(inverse, applied=False)
+        return 1
+    results = [apply_archive_plan(root, m, inverse) for inverse in inverses]
+    if args.json:
+        print(json.dumps([archive_plan_to_dict(p, m.drive) for p in results], indent=2))
+    else:
+        for result in results:
+            _print_archive_plan(result, applied=True)
+    if any(a.status == FAILED for p in results for a in p.actions):
+        return 2
+    return 0 if all(a.status == DONE for p in results for a in p.actions) else 1
+
+
 REFERENCE_SETS_ENV = "ATLAS_REFERENCE_SETS"
 
 
@@ -1388,6 +1522,8 @@ def main(argv: list[str] | None = None) -> int:
         ("tree", cmd_tree, "one project's folders and files: Filing State, Load State, "
                            "unmet Expectations (read-only)"),
         ("runs", cmd_runs, "list agent runs; zip closed ones into the archive (dry run by default)"),
+        ("archive", cmd_archive, "archive a project to the archive root (dry run by default)"),
+        ("unarchive", cmd_unarchive, "bring an archived project back, by name or --revert manifest"),
         ("tyler", cmd_tyler, "Tyler digest: open errands + DECISION blockers across projects "
                              "(read-only; --write regenerates _tools/TYLER-TODAY.md)"),
     ):
@@ -1569,6 +1705,16 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["runs"].add_argument("--apply", action="store_true", help="zip closed runs and remove their folders")
     sub.choices["runs"].add_argument("--days", type=int,
                                      help="idle days before a run is closed (default: the map's runRetentionDays, else 14)")
+    sub.choices["archive"].add_argument("name", help="project folder name at the drive root")
+    sub.choices["archive"].add_argument("--apply", action="store_true",
+                                        help="move the project and stamp the project index row")
+    sub.choices["unarchive"].add_argument("name", nargs="?",
+                                          help="project folder name under the archive root")
+    sub.choices["unarchive"].add_argument("--apply", action="store_true",
+                                          help="move the project back and restore the index row")
+    sub.choices["unarchive"].add_argument(
+        "--revert", metavar="FILE",
+        help="undo an applied archive from the JSON manifest `archive --apply --json` printed")
     sub.choices["doctor"].add_argument(
         "project", nargs="?",
         help="with --deep: the one project whose tree is walked for Receipt Rule "

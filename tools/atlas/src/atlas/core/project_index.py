@@ -19,6 +19,8 @@ __all__ = [
     "ProjectIndexError",
     "append_project_index_row",
     "preflight_project_index",
+    "restore_project_index_row",
+    "stamp_project_index_status",
     "update_project_index_row",
 ]
 
@@ -349,6 +351,95 @@ def append_project_index_row(
         _atomic_write(path, updated, existing_contents)
 
 
+def _find_row(lines: list[str], header_index: int, row_end: int,
+              folder_name: str) -> int | None:
+    """The table-row index for ``folder_name``, or None. Duplicates refuse:
+    rewriting one of two matching rows would leave the register ambiguous."""
+    matches: list[int] = []
+    for index in range(header_index + 2, row_end):
+        cells = _split_table_row(lines[index])
+        assert cells is not None
+        if _untable(cells[0]) == folder_name:
+            matches.append(index)
+    if len(matches) > 1:
+        raise ProjectIndexError(
+            f"project index has duplicate matching rows for '{folder_name}'; index unchanged"
+        )
+    return matches[0] if matches else None
+
+
+def stamp_project_index_status(
+    drive_root: Path,
+    drive_map: DriveMap,
+    folder_name: str,
+    status: str,
+) -> str | None:
+    """Set the Status cell of ``folder_name``'s row; return the row's prior text.
+
+    The other cells are rewritten from their own raw text, so nothing but the
+    Status column moves. The returned line is the raw row as it stood - the
+    archive manifest carries it so the inverse can restore the row verbatim
+    (ticket 32, ADR 0019). No matching row is not an error: the register may
+    predate Atlas, so None is returned and the index is left unchanged.
+    """
+
+    path = Path(drive_root) / INDEX_NAME
+    with _index_lock(path):
+        try:
+            contents = path.read_bytes()
+            lines = contents.decode("utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as error:
+            raise ProjectIndexError(
+                f"cannot read UTF-8 project index {path}: {error}; index unchanged"
+            ) from error
+        header_index, row_end = _expanded_table_bounds(path, lines)
+        match = _find_row(lines, header_index, row_end, folder_name)
+        if match is None:
+            return None
+        prior = lines[match]
+        cells = _split_table_row(prior)
+        assert cells is not None
+        lines[match] = "| " + " | ".join([*cells[:6], _table(status)]) + " |"
+        _atomic_write(path, _crlf_bytes(lines), contents)
+        return prior
+
+
+def restore_project_index_row(
+    drive_root: Path,
+    drive_map: DriveMap,
+    folder_name: str,
+    prior_row: str,
+) -> str | None:
+    """Put back the exact row text a stamp recorded; return the row it replaced.
+
+    The inverse of ``stamp_project_index_status``: the row is replaced verbatim,
+    not reconstructed, so whatever the register said before the archive is what
+    it says after the un-archive. No matching row: None, index unchanged.
+    """
+
+    if _split_table_row(prior_row) is None:
+        raise ProjectIndexError(
+            f"recorded prior row is not a project-index table row: {prior_row!r}"
+        )
+    path = Path(drive_root) / INDEX_NAME
+    with _index_lock(path):
+        try:
+            contents = path.read_bytes()
+            lines = contents.decode("utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as error:
+            raise ProjectIndexError(
+                f"cannot read UTF-8 project index {path}: {error}; index unchanged"
+            ) from error
+        header_index, row_end = _expanded_table_bounds(path, lines)
+        match = _find_row(lines, header_index, row_end, folder_name)
+        if match is None:
+            return None
+        replaced = lines[match]
+        lines[match] = prior_row
+        _atomic_write(path, _crlf_bytes(lines), contents)
+        return replaced
+
+
 def update_project_index_row(
     drive_root: Path,
     drive_map: DriveMap,
@@ -374,22 +465,13 @@ def update_project_index_row(
                 f"project index changed since preview: {path}; review changes and retry"
             )
         header_index, row_end = _expanded_table_bounds(path, lines)
-        matches: list[int] = []
-        for index in range(header_index + 2, row_end):
-            cells = _split_table_row(lines[index])
-            assert cells is not None
-            if _untable(cells[0]) == old_folder_name:
-                matches.append(index)
-        if len(matches) > 1:
-            raise ProjectIndexError(
-                f"project index has duplicate matching rows for '{old_folder_name}'; index unchanged"
-            )
-        if not matches:
+        match = _find_row(lines, header_index, row_end, old_folder_name)
+        if match is None:
             lines.insert(row_end, _project_row(new_folder_name, intake))
         else:
-            existing_cells = _split_table_row(lines[matches[0]])
+            existing_cells = _split_table_row(lines[match])
             assert existing_cells is not None
-            lines[matches[0]] = _project_row(
+            lines[match] = _project_row(
                 new_folder_name, intake, _untable(existing_cells[6])
             )
         _atomic_write(path, _crlf_bytes(lines), contents)

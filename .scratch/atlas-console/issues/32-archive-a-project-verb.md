@@ -1,7 +1,7 @@
 # Archive and un-archive a project, as Atlas verbs
 
 Type: task
-Status: open
+Status: closed (2026-10-09)
 Blocked by: -
 Parent: ../map.md
 
@@ -77,3 +77,19 @@ shape:
   project list; `unarchive` finds them by name anyway.
 - Tests green (`uv run pytest`); ADR 0006 amendment applied, ADR 0019 authored,
   `/CONTEXT.md` terms landed.
+
+## Build summary (2026-10-09)
+
+Built as specified: `atlas archive NAME` / `atlas unarchive [NAME] [--revert
+FILE]`, drive-scoped `ArchivePlan` with ARCHIVE/UNARCHIVE action kinds in
+`core/archive.py`; `controlPlane.archiveRoot` strict-parsed with the `_` prefix
+enforced (mapfile.py); index stamp/restore-verbatim in `project_index.py`; open
+task items surfaced from `tyler.py`'s `open_items`. CLI only this session - the
+console's modal-always archive key remains open console work (noted on the
+ticket, not built). Deviations: a missing `_Project Index.md` is the no-row
+case, not a failure (folder moves, note says so); fresh un-archive prunes the
+archive root when emptied (rmdir-only). `test_apply_never_clobbers_a_destination`
+was self-contradictory as drafted mid-run; rewritten to its own comment's intent
+(plan built before the collision; apply reports CONFLICT and merges nothing).
+1021 tests pass (58 archive). ADR 0006 amended, ADR 0019 authored, CONTEXT.md
+gained Archive Root and Archive Precondition.

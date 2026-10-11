@@ -16,6 +16,13 @@ class MapError(Exception):
     """The map file is missing, unparseable, or structurally invalid."""
 
 
+# Where `atlas archive` moves a project when the map does not say. The "_"
+# prefix is load-bearing: it is what keeps the archive root outside the
+# project list (`is_project_dir` excludes `_` roots), which is what makes an
+# archived project invisible to doctor and the console. Ticket 30/32.
+DEFAULT_ARCHIVE_ROOT = "_Archived Projects"
+
+
 @dataclass(frozen=True)
 class Section:
     id: str
@@ -146,6 +153,12 @@ class DriveMap:
         return self.control_plane.get("runsDir", "")
 
     @property
+    def archive_root(self) -> str:
+        """The drive-root-relative folder archived projects move under.
+        Validated at load; absent means the default. ADR 0019."""
+        return self.control_plane.get("archiveRoot", DEFAULT_ARCHIVE_ROOT)
+
+    @property
     def backups_dir(self) -> str:
         return self.control_plane.get("backupsDir", "")
 
@@ -229,6 +242,7 @@ def load_map(path: Path) -> DriveMap:
     }
 
     control_plane = _string_map(raw, "controlPlane", path, strings=False)
+    control_plane["archiveRoot"] = _archive_root(control_plane.get("archiveRoot"), path)
     # Receipt Rule targets must resolve inside the agent workspace, so the
     # workspace has to be known before the rules are parsed.
     workspace = tuple(
@@ -250,6 +264,32 @@ def load_map(path: Path) -> DriveMap:
         tolerated=_parse_tolerated(raw.get("tolerated", []), path),
         receipt_rules=_parse_receipt_rules(raw.get("receiptRules", []), path, workspace),
     )
+
+
+def _archive_root(value: object, path: Path) -> str:
+    """`controlPlane.archiveRoot`, strict like the other keys that name a write
+    destination: a malformed one refuses the map rather than archiving somewhere
+    the operator did not name.
+
+    The first segment must start with "_": that prefix is the whole mechanism
+    that keeps archived projects out of the scan (`is_project_dir`), so a root
+    without it would silently re-list archived work as live projects.
+    """
+    if value is None:
+        return DEFAULT_ARCHIVE_ROOT
+    where = "controlPlane.archiveRoot"
+    if not isinstance(value, str) or not value.strip():
+        raise MapError(f"{where} must be a non-empty folder path: {path}")
+    normalised = value.replace("\\", "/").strip("/")
+    if (normalised.startswith("/") or re.match(r"^[A-Za-z]:", normalised)
+            or ".." in normalised.split("/")):
+        raise MapError(f"{where} '{value}' must stay inside the drive: {path}")
+    if not normalised.split("/")[0].startswith("_"):
+        raise MapError(
+            f"{where} '{value}' must begin with a '_' folder - the prefix is what "
+            f"keeps archived projects out of the project list: {path}"
+        )
+    return normalised
 
 
 def _parse_children(raw: object, section_id: str, path: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:

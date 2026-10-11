@@ -115,6 +115,10 @@ class Action:
     # On an inverse Action only: folders the write being undone created, removed
     # after this action if they are then empty. Deepest first.
     prune: tuple[str, ...] = ()
+    # ARCHIVE/UNARCHIVE only (ADR 0019): the `_Project Index.md` row's text
+    # before this action's stamp, recorded at apply time so the inverse restores
+    # the register verbatim. Empty on every other kind.
+    index_row: str = ""
 
     @property
     def path_warning(self) -> bool:
@@ -134,7 +138,7 @@ class Plan:
         return not self.actions
 
 
-def _deepest_tail(src: Path) -> int:
+def deepest_tail(src: Path) -> int:
     """Longest path below ``src``, measured from ``src`` itself; 0 when empty.
 
     One walk per previewed action, never per render (ticket 13). What matters
@@ -179,7 +183,7 @@ def _path_length(project: Path | None, action: Action) -> int:
     src = project / action.src
     if not src.is_dir():
         return len(str(project / dst))
-    return len(str(project / dst)) + _deepest_tail(src)
+    return len(str(project / dst)) + deepest_tail(src)
 
 
 def build_plan(report: ProjectReport, m: DriveMap, project: Path | None = None) -> Plan:
@@ -266,6 +270,7 @@ def action_to_dict(action: Action) -> dict:
         "path_warning": action.path_warning,
         "created": list(action.created),
         "prune": list(action.prune),
+        "index_row": action.index_row,
     }
 
 
