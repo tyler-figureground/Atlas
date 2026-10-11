@@ -233,6 +233,12 @@ def stylesheet(palette: Palette = PALETTE) -> str:
     #companion {{ border-top: solid {p.rail}; }}
     #companion-title {{ color: {p.bone}; text-style: bold; }}
     #refusal {{ color: {p.muted}; }}
+
+    /* The Search Overlay (ticket 33): an overlay, not a Region - ADR 0005's
+       amendment. Geometry lives in the app's CSS block; colour lives here. */
+    #search-dialog {{ background: {p.surface}; border: thick {p.ember[3]}; }}
+    #search-title {{ color: {p.bone}; text-style: bold; }}
+    #search-status, #search-keys {{ color: {p.muted}; }}
     #keys {{ background: {p.surface}; color: {p.muted}; }}
     #summary {{ color: {p.muted}; }}
     #operation {{ background: {p.surface}; color: {p.ink}; }}

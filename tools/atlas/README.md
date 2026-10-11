@@ -27,6 +27,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 | `atlas add --project NAME --section SECTION` | Add map-approved project folders |
 | `atlas clean --project NAME [--apply]` | Preview or remove folders with no files anywhere beneath |
 | `atlas tree NAME [--depth N] [--json]` | One project's folders and files below the root: Filing State, Load State, child counts, and unmet Expectations as a separate list. Read-only |
+| `atlas search QUERY [--drive D] [--json]` | Drive-wide name search: projects, folders and files whose name or path contains the query (case-folded). One walk, never a content read; exit 0 with matches, 1 with none, 2 on error. `--json` emits `drive`, `query`, `total`, `shown`, `cap`, `results` (`project`, `path`, `name`, `kind`) and `unreadable` |
 | `atlas conform --project NAME [--apply]` | Preview or apply mapped repairs. `--deep` includes Receipt Rule matches below the project root (one project's walk per project planned) |
 | `atlas conform --project NAME --node PATH [--apply]` | Preview or apply the repair for one node, by project-relative path |
 | `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
@@ -44,6 +45,7 @@ TUI keys:
 | `/` | Filter the focused Region: projects by name or health, the tree by the names it has opened (never reading more). In the Companion it says what it can filter |
 | `space` | Open or close a folder in the tree; mark a project in the list |
 | `d` | Cycle the Companion: unmet Expectations, project health, dossier |
+| `g` | Search the whole drive by name: live over the session Name Index. `Enter` reveals the hit (the project in the list, or the node in the tree), `o` opens it, `Escape` closes. Results cap at 500 with the overflow counted |
 | `[` / `]` | Collapse or restore the project list / the Companion |
 | `z` | Zoom the focused Region to full width; press again to restore |
 | `f` | Conform what has focus (below) |
@@ -54,7 +56,7 @@ TUI keys:
 | `a` / `c` | Add map-approved folders / clean folders with no files |
 | `x` | Conform marked projects |
 | `s` / `r` / `l` | Sort / rescan / last result |
-| `?` / `Ctrl+P` / `q` | Help / command palette / quit. Palette entries name their key for `/`, `d`, `[`, `]`, `z`, `f`, `u`, `o`, `y` and `c` |
+| `?` / `Ctrl+P` / `q` | Help / command palette / quit. Palette entries name their key for `/`, `g`, `d`, `[`, `]`, `z`, `f`, `u`, `o`, `y` and `c` |
 
 `f` acts on whatever has focus: the whole project from the list, one folder or file from the
 tree, one unmet control-plane Expectation (a missing `decisions`, `AGENTS.md`...) from the
@@ -290,7 +292,7 @@ CLI edit commands are interactive when run in a terminal. Omitted fields retain 
 
 Atlas has not been validated with assistive technology and makes no accessibility conformance claim. Textual's screen-reader support is unresolved upstream ([textual#2425](https://github.com/Textualize/textual/issues/2425)), so the console should not be assumed usable with a screen reader.
 
-Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `conform --node` for a single repair, `conform --revert` for undo, and `--deep` on `doctor`/`conform` for Receipt Rule matches below a project root (CLI-only by design - the console surfaces deep findings only from an operator-run deep pass). Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
+Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `search` for the drive-wide Name Index, `conform --node` for a single repair, `conform --revert` for undo, and `--deep` on `doctor`/`conform` for Receipt Rule matches below a project root (CLI-only by design - the console surfaces deep findings only from an operator-run deep pass). Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
 
 Within the console, colour reinforces a distinction and never carries one alone. A folder or file with something wrong with it names what is wrong in words; when the terminal is too narrow for the full phrase the word abbreviates - `NAME`, `PLACE`, `LOOSE`, `UNMAPPED`, `unread` - rather than leaving the glyph and its colour to say it. A long name shortens in the middle so the word always stays on screen.
 

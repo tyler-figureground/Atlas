@@ -87,6 +87,7 @@ from .core.scan import (
     list_entries,
     scan_drive,
 )
+from .core.search import RESULT_CAP, build_name_index, search_names
 from .core.tree import MAPPED, TreeNode, open_project_tree
 from .core.tyler import collect as collect_tyler, digest_path, render as render_tyler
 from .tui.tokens import filing_style  # the Fault Words; pure data, no Textual
@@ -1281,6 +1282,54 @@ def cmd_tree(args: argparse.Namespace) -> int:
     return 1 if findings else 0
 
 
+def cmd_search(args: argparse.Namespace) -> int:
+    """Drive-wide name search over the session Name Index (ticket 33).
+
+    The console's Search Overlay as a fact surface (ADR 0008): one bounded
+    walk, zero content reads, names and paths only - content waits for the
+    per-machine index (tickets 34, 35). Exit 0 with matches, 1 with none,
+    2 on error, like every fact producer.
+    """
+    root = _resolve_drive(args.drive)
+    if not args.query.strip():
+        raise UsageError("pass something to search for; a blank query is a walk, "
+                         "not a search")
+    try:
+        drive_map = load_map(find_map(root))
+    except MapError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    index = build_name_index(root)
+    result = search_names(index, args.query)
+    if args.json:
+        print(json.dumps({
+            "drive": drive_map.drive,
+            "query": args.query,
+            "total": result.total,
+            "shown": len(result.hits),
+            "cap": RESULT_CAP,
+            "results": [{"project": hit.project, "path": hit.path,
+                         "name": hit.name, "kind": hit.kind}
+                        for hit in result.hits],
+            "unreadable": [{"path": path, "error": why}
+                           for path, why in index.unreadable],
+        }, indent=2))
+    else:
+        for hit in result.hits:
+            print(f"{hit.kind}  {hit.path}")
+        if not result.hits:
+            print(f"no matches for '{args.query}'")
+        elif result.overflow:
+            print(f"{result.total} matches - showing the first {len(result.hits)}; "
+                  f"{result.overflow} more - refine the query")
+        else:
+            print(f"{result.total} match" + ("es" if result.total != 1 else ""))
+        if index.unreadable:
+            print(f"note: {len(index.unreadable)} folder(s) could not be read - "
+                  "results may be incomplete", file=sys.stderr)
+    return 0 if result.hits else 1
+
+
 def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
     """Undo an applied conform from the manifest it printed.
 
@@ -1526,6 +1575,8 @@ def main(argv: list[str] | None = None) -> int:
         ("unarchive", cmd_unarchive, "bring an archived project back, by name or --revert manifest"),
         ("tyler", cmd_tyler, "Tyler digest: open errands + DECISION blockers across projects "
                              "(read-only; --write regenerates _tools/TYLER-TODAY.md)"),
+        ("search", cmd_search, "drive-wide name search: projects, folders and files by "
+                               "name (read-only; one walk, never a content read)"),
     ):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("--drive", help="drive root (default: walk up from cwd, else auto-discover)")
@@ -1541,6 +1592,8 @@ def main(argv: list[str] | None = None) -> int:
         "--depth", type=int, default=1,
         help="levels to read below the project root (default 1). Each level is one "
              "enumeration per folder; the deepest level shown stays Unread")
+    sub.choices["search"].add_argument("query", help="case-folded substring matched against "
+                                                     "every folder and file name and path")
 
     contacts = sub.add_parser("contacts", help="list, add, and edit shared contacts")
     contact_commands = contacts.add_subparsers(dest="contacts_command", required=True)

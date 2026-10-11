@@ -365,12 +365,17 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   undo; model files and open tasks warn, never refuse; confirmation always
   explicit, one named project at a time; CLI-only this session, the console
   key remains. ADR 0019, ADR 0006 amended. 1021 tests.
+- [Global name search](issues/33-global-name-search.md) - **built.** The
+  session Name Index (one `scan.walk` at session start and on `r`, project
+  roots only, unreadable recorded), the Search Overlay on `g` (live narrowing,
+  Enter reveals the project in the list or the node in the tree, `o` opens,
+  Escape undisturbs nothing; 500-cap with overflow counted), and `atlas search
+  QUERY [--json]` in the same session. The key (`g`), project-roots-only scope
+  and the zero-content-read deferral of dossier facts are recorded on the
+  ticket. ADR 0005 amendment applied verbatim. 1049 tests.
 
 ## Open tickets
 
-- [Global name search](issues/33-global-name-search.md) - task. The ticket 08
-  phase A: session name index from one walk, the Search Overlay, `atlas
-  search`. Carries the drafted ADR 0005 amendment.
 - [The local content index](issues/34-local-content-index.md) - task. The
   ticket 08/11 foundation: per-machine mtime-keyed PDF/Markdown index over
   the mount, background first build, ADR 0020 drafted and added.

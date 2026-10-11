@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Atlas - global name search (ticket 33, ADR 0005 amendment).** The console
+  gains the Search Overlay on `g`: live-as-you-type over a session Name Index
+  built from one drive walk (folders, files, and project roots; zero content
+  reads, junctions never followed, unreadable folders recorded). Enter reveals
+  the hit - the project in the list, or the node in the tree with the folders
+  leading to it opened - `o` opens the file or folder, Escape dismisses without
+  disturbing Region focus or collapse state. Results cap at 500 with the
+  overflow counted. CLI parity in the same session (ADR 0008): `atlas search
+  QUERY [--drive D] [--json]`, exit 0 with matches, 1 with none, 2 on error.
+  Content search waits for the per-machine index (tickets 34, 35).
+
 ## [0.13.0] - 2026-10-09
 
 ### Added

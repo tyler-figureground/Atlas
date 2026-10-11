@@ -133,6 +133,31 @@ def next_mode(current: str) -> str:
     return MODES[(MODES.index(current) + 1) % len(MODES)]
 
 
+# ------------------------------------------------------- the Search Overlay
+
+# Not a Region - ADR 0005's three stand (amendment, ticket 33). The overlay is
+# episodic: opened with `g`, it borrows the whole screen, and Escape hands it
+# back with focus and collapse untouched. These are its geometry rules; the
+# widget is tui/search.py and app.py applies them.
+
+# A name search stretched across a 179-column terminal is unreadable, so the
+# dialog caps; below the floor the console is refusing anyway.
+SEARCH_OVERLAY_MAX = 100
+# What the dialog's padding and the result list's scrollbar cost, in columns.
+# Result rows are fitted to the width this leaves, not to the terminal.
+SEARCH_OVERLAY_CHROME = 8
+
+
+def search_overlay_width(width: int) -> int:
+    """The dialog's width in cells at a terminal width."""
+    return max(MIN_COLUMNS, min(width - 4, SEARCH_OVERLAY_MAX))
+
+
+def search_overlay_cells(width: int) -> int:
+    """The cells a result row may use inside the dialog at a terminal width."""
+    return max(8, search_overlay_width(width) - SEARCH_OVERLAY_CHROME)
+
+
 # ------------------------------------------------------------- the chrome
 
 # What the footer keeps when there is no room for the rest: the keys that move.

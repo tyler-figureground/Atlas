@@ -164,6 +164,31 @@ rather than shrunk. The arrangement at narrow terminal widths, and the common on
 rather than the degraded one. The navigation model is identical in both
 Compositions; only what is on screen differs.
 
+## Atlas Search
+
+**Name Index**
+The session's drive-wide index of every folder and file name below the project
+roots, plus the project roots themselves. Built from exactly one walk of the
+drive - measured at 4.24 seconds on the live drive (ticket 12) - on a background
+worker at session start and on `r`, never blocking, never reading a file's
+content. Junctions are never followed; a folder the walk cannot open is recorded
+on the index as unreadable rather than vanishing. It lives in memory, never on
+the drive: an index file on the shared drive is shared mutable state with no
+locking story across studio machines.
+
+**Search Overlay**
+The console's drive-wide name search, opened with `g`. An overlay, not a fourth
+Region (ADR 0005 amendment): search is episodic - asked, answered, dismissed
+with Escape - so it takes the screen while open and hands it back with Region
+focus, collapse state and cursors untouched. Live-as-you-type against the warm
+Name Index; it never enumerates or reads content at keystroke time. Enter
+reveals the hit - the project in the Project List, or the node in the tree with
+the folders leading to it opened - and `o` opens the file or folder. Results cap
+at 500 with the overflow counted. CLI form: `atlas search QUERY [--json]`
+(ADR 0008). Distinct from the `/` Region filter, which narrows facts already
+loaded and never reads more.
+_Avoid_: global filter, spotlight, command palette.
+
 ## Atlas Writes
 
 **Plan**

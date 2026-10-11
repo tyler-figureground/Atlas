@@ -132,3 +132,21 @@ tree to Companion. Ticket 03 had Enter toggle a folder and open a file inside th
 tree; that was not built. `space` toggles a folder when the tree has focus, and `o`
 opens the file or folder under the cursor. The deviation is recorded in ticket 03.
 Nothing here changes with width, so the constant-navigation rule stands.
+
+## Amendment, 2026-10-09: drive-wide search is an overlay, not a Region
+
+Drafted in ticket 08 (2026-10-08), added verbatim by ticket 33, which built it:
+
+**Amendment (ticket 08, 2026-10-08): drive-wide search is an overlay, not
+a Region.** The three-Region model stands; search is episodic, takes the
+screen while open, and dismisses with Escape without disturbing Region
+focus or collapse state. It reads a session name index built from one
+drive walk, and content matches from the per-machine content index; it
+never enumerates or reads content at keystroke time. The `/` Region filter
+is unchanged: navigation over loaded facts, not search.
+
+As built (ticket 33): the Search Overlay opens on `g`, matches live against the
+in-memory Name Index, and Enter reveals the hit - the project in the list, or the
+node in the tree with the folders leading to it opened - while `o` opens the file
+or folder. The content-index half of the second sentence lands with tickets 34
+and 35.

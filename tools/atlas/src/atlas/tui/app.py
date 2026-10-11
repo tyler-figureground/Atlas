@@ -91,6 +91,7 @@ from ..core.scan import (
     list_entries,
     scan_drive,
 )
+from ..core.search import NameHit, NameIndex, build_name_index
 from ..core.tree import (
     CONTRACT,
     UNFILED,
@@ -132,6 +133,7 @@ from .repair import (
     repair_offer,
     results_line,
 )
+from .search import OPEN, REVEAL, SearchOverlay
 from .treeview import ProjectTreeView, middle_ellipsis
 
 @dataclass(frozen=True)
@@ -903,6 +905,8 @@ class AtlasApp(App):
     #workspace-title { height: 1; padding: 0 2; }
     #tree { height: 1fr; padding: 0 2; }
     #tree-body { height: 1fr; }
+    #search-dialog { height: 80%; padding: 1 2; }
+    #search-results { height: 1fr; }
     #companion { height: 1fr; padding: 0 2; }
     #companion-title { height: auto; }
     #companion-body { height: auto; }
@@ -923,6 +927,7 @@ class AtlasApp(App):
         # Atlas's own key in every Region, so the tree does not get to take it.
         Binding("enter", "drill", "Open", priority=True),
         Binding("d", "cycle_companion", "Companion", show=False),
+        Binding("g", "search", "Search"),
         Binding("left_square_bracket", "collapse_list", "Collapse list", show=False),
         Binding("right_square_bracket", "collapse_companion", "Collapse companion", show=False),
         Binding("z", "zoom_region", "Zoom", show=False),
@@ -978,6 +983,15 @@ class AtlasApp(App):
         self._unmet: tuple[Expectation, ...] = ()
         self._drives: list[Path] = []
         self._inventory: DriveInventory | None = None
+        # The session Name Index (ticket 33): one background walk of the drive,
+        # rebuilt with every scan. None until the first build lands - the
+        # overlay says so rather than pretend nothing matches.
+        self._name_index: NameIndex | None = None
+        # A Search Overlay reveal waiting on the Workspace to populate: the
+        # tree for the hit's project is drawn off the UI thread, and the
+        # reveal rides the moment it lands.
+        self._reveal_key: str | None = None
+        self._reveal_project = ""
         self._rows: tuple[ProjectRow, ...] = ()
         self._visible_rows: tuple[ProjectRow, ...] = ()
         self._marked: set[str] = set()
@@ -1185,6 +1199,9 @@ class AtlasApp(App):
             yield SystemCommand("Filter projects",
                                 "/ - the focused Region: projects by name or health, the tree by opened names",
                                 self.action_filter_projects)
+            yield SystemCommand("Search the drive",
+                                "g - every folder, file and project name, live",
+                                self.action_search)
             yield SystemCommand("Refresh drive", "Rescan project health", self.action_refresh)
             if self._inventory_fresh:
                 yield SystemCommand("New project", "Create a mapped project", self.action_new_project)
@@ -1230,6 +1247,12 @@ class AtlasApp(App):
             return True if not self._busy else None
         if action in {"filter_projects", "cycle_sort"}:
             return True if has_drive and not self._busy else None
+        if action == "search":
+            # Read-only over the in-memory index, so a busy drive is no reason
+            # to refuse. Over a modal it is the modal's keyboard, not ours.
+            if self.screen is not self.screen_stack[0]:
+                return False
+            return True if self._showing == "projects" else None
         if action in {"new_project", "manage_contacts"}:
             return True if has_drive and self._inventory_fresh and not self._busy else None
         if action == "edit_project":
@@ -1309,6 +1332,8 @@ class AtlasApp(App):
         self._undo = UndoStack()
         self._trees.clear()
         self._workspace_project = ""
+        self._name_index = None
+        self._reveal_key = None
         self.query_one(ProjectTreeView).set_source(None)
 
     def _open_drive(self, root: Path, *, announce: bool = True) -> None:
@@ -1327,6 +1352,7 @@ class AtlasApp(App):
         if announce:
             self._announced_scan_generation = generation
             self._set_operation(f"Scanning {root.name}...")
+        self._name_index = None     # rebuilt behind the scan it belongs to
         self.refresh_bindings()
         self._scan_drive_worker(root, generation)
 
@@ -1379,10 +1405,38 @@ class AtlasApp(App):
         self._fill()
         if generation == self._announced_scan_generation:
             self._set_operation(f"Scan complete - {len(self._rows)} project(s)")
+        # The session Name Index rides every scan (ticket 33): session start
+        # and `r` are exactly the freshness ticket 08 promised, and the overlay
+        # never enumerates at keystroke time.
+        self._index_worker(inventory.root, generation)
         # Through the Region model, never table.focus(): every modal write
         # rescans, and in Single-Region Composition the list may be hidden.
         self._focus_current_region()
         self.refresh_bindings()
+
+    @work(thread=True, exclusive=True, group="search-index", exit_on_error=False)
+    def _index_worker(self, root: Path, generation: int) -> None:
+        """The one drive walk the Name Index costs, off the UI thread."""
+        try:
+            index = build_name_index(root)
+        except Exception as error:  # a vanishing mount mid-walk, not a query failure
+            self.call_from_thread(self._index_failed, generation, error)
+            return
+        self.call_from_thread(self._index_ready, generation, index)
+
+    def _index_ready(self, generation: int, index: NameIndex) -> None:
+        if generation != self._scan_generation:
+            return
+        self._name_index = index
+        # Warm an overlay that opened before the build landed.
+        if isinstance(self.screen, SearchOverlay):
+            self.screen.set_index(index)
+
+    def _index_failed(self, generation: int, error: Exception) -> None:
+        if generation != self._scan_generation:
+            return
+        self._set_operation(f"Name search is unavailable: {error}. Press r to retry.",
+                            "error")
 
     def _refresh_trees(self, inventory: DriveInventory, rows: tuple[ProjectRow, ...]) -> None:
         """Hand every cached tree the fresh scan (#12).
@@ -1603,6 +1657,15 @@ class AtlasApp(App):
             view.set_source(tree, narrow=narrow)
         elif view.narrow != narrow:
             view.reload(narrow=narrow)
+        # A Search Overlay reveal waits here: the tree it targets exists only
+        # once the Workspace has populated for its project.
+        if self._reveal_key is not None and row.key == self._reveal_project:
+            key, self._reveal_key = self._reveal_key, None
+            tree_filter = self.query_one("#tree-filter", Input)
+            tree_filter.value = ""
+            tree_filter.display = False
+            view.reveal(key)
+            self._move_to_region(TREE)
         self._render_companion(row, tree)
 
     def _render_companion(self, row: ProjectRow, tree: ProjectTree | None) -> None:
@@ -1877,6 +1940,65 @@ class AtlasApp(App):
         self._zoomed = None if self._zoomed is not None else self._focus_region
         self._apply_layout()
         self._focus_current_region()
+
+    def action_search(self) -> None:
+        """Open the Search Overlay over the session Name Index (ticket 33).
+
+        The overlay is episodic - asked, answered, dismissed with Escape - and
+        never a fourth Region (ADR 0005 amendment)."""
+        if self._showing != "projects":
+            return
+
+        def done(choice: tuple[str, NameHit] | None) -> None:
+            if choice is None:
+                return      # Escape: nothing to do, nothing disturbed
+            action, hit = choice
+            if action == OPEN:
+                self._open_hit(hit)
+            else:
+                self._reveal_hit(hit)
+
+        self.push_screen(SearchOverlay(self._name_index), done)
+
+    def _open_hit(self, hit: NameHit) -> None:
+        """`o` on a result: open the file or folder with the OS. Never writes."""
+        if self._inventory is None:
+            return
+        path = self._inventory.root / hit.path
+        try:
+            open_path(path)
+        except OSError as error:
+            self._set_operation(f"Could not open {hit.name}: {error}", "error")
+            return
+        self._set_operation(f"Opened {hit.path}")
+
+    def _reveal_hit(self, hit: NameHit) -> None:
+        """Enter on a result: select the project, and for a node inside it,
+        open the tree to the node and put the cursor on it.
+
+        The index may be older than the list by a rescan, so a hit whose
+        project is gone says so instead of landing somewhere else. A project
+        the list filter is hiding is found by clearing the filter - the hit is
+        the answer to a question the filter cannot see."""
+        if self._inventory is None:
+            return
+        filter_input = self.query_one("#filter", Input)
+        if filter_input.value:
+            filter_input.value = ""
+        filter_input.display = False
+        if hit.node_key:
+            self._reveal_project = hit.project
+            self._reveal_key = hit.node_key
+        self._fill(preserve=hit.project)
+        selected = self._selected_row()
+        if selected is None or selected.key != hit.project:
+            self._reveal_key = None
+            self._set_operation(
+                f"{hit.project} is no longer on the drive - press r to rescan", "warning")
+            return
+        if not hit.node_key:
+            # A project hit reveals in the list itself.
+            self._move_to_region(PROJECT_LIST)
 
     def action_filter_projects(self) -> None:
         """`/` filters whichever Region has focus (ADR 0005): the Project List

@@ -267,6 +267,10 @@ class ProjectTreeView(Tree):
                     else parent.add_leaf(child.name, data=child.key))
             self._by_key[child.key] = node
             if child.is_dir and child.key in self._reopen:
+                # Consumed as spent: a reveal's reopen set is a one-way chain
+                # down to its target, not a standing wish to see those folders
+                # open the next time they are drawn.
+                self._reopen.discard(child.key)
                 node.expand()   # posts NodeExpanded, which loads it off-thread
         if not key and not parent.children and self.source.load_state("") == UNREADABLE:
             # The root is hidden, so an unreadable project would draw nothing -
@@ -412,6 +416,30 @@ class ProjectTreeView(Tree):
             return
         self._pending_key = None
         self.call_after_refresh(self.select_node, node)
+
+    def reveal(self, key: str) -> None:
+        """Open the folders leading to a Node Key and put the cursor on it.
+
+        The Search Overlay's reveal (ticket 33). The expansion chains through
+        ``_fill``: each folder drawn that leads to the key is expanded, its
+        load runs off the UI thread, and the next level expands when it lands
+        - so a hit deep in a project nobody has opened still arrives. The
+        cursor is ``select_key``'s business: pending until the node exists.
+        """
+        if self._filter:
+            # A filter is a narrowing of exactly the nodes reveal needs.
+            self.set_filter("")
+        ancestors: list[str] = []
+        parent = parent_key(key)
+        while parent:
+            ancestors.append(parent)
+            parent = parent_key(parent)
+        self._reopen = set(ancestors)
+        for ancestor in ancestors:
+            node = self._by_key.get(ancestor)
+            if node is not None and not node.is_expanded:
+                node.expand()
+        self.select_key(key)
 
     # ---- lazy loading ----------------------------------------------------
 
