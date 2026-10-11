@@ -259,6 +259,41 @@ instead of a periodic surprise (1.6, Phase 5).
   sweeps are a background job, not an interactive one; feed into Q5's automation
   timing.
 
+**2026-10-08/09 - the big push (Tyler: "proceed, don't stop until all phases are done")**
+- Phase 2.1 batches (b) and (c) + 2.2 + 2.6 all drafted: 19 new candidate sets
+  total across the day (batches a/b/c + 7 gap-type cards + 3 control-file
+  skeleton sets). **`atlas refs doctor`: 0 problems across 27 sets.** Every set
+  awaits Tyler's batch review (2.3).
+- Tickets 08/09/11 grilled closed: search = names now (background walk) +
+  content via a per-machine index (never on the drive); dossier = read-only
+  facts Companion Mode + `atlas dossier`; Drive API = no build (filesystem-only
+  is now a standing constraint with a written reversal trigger). Build tickets
+  33-36 opened.
+- Ticket 31 built (sa-7): `receiptRules`, `doctor --deep`, `conform --deep`,
+  ADR 0009 amendment. 963 tests.
+- Ticket 32 built (sa-11 died mid-run on the model's 5-hour quota; finished
+  in-session): `atlas archive`/`unarchive`, ADR 0019, ADR 0006 amendment. 1021
+  tests.
+- **Phase 5 executed:** 103 Mosco, 389 Bushwick, ADNY LL97, Dekalb, Huckleberry
+  archived with manifests logged to `_tools\logs\archive-20261009\`; Coleman
+  excepted per Tyler. Drive root = active projects only; doctor 10/10 conform.
+  Note: legacy projects had no `_Project Index.md` rows - the no-row case,
+  nothing stamped (ADR 0019).
+- Baseline template corrected to the 2026-10-07 settlements (clouds in view;
+  witness lines pulled back) - 0.11.1 had shipped the reversed rulings; all
+  project AGENTS.md blocks need one more conform pass after 0.13.0 deploy.
+- **Atlas 0.13.0 released and deployed** (wheel + sha256, launchers repinned,
+  backup in `_tools\logs\atlas-0.13.0-deploy-20261011-114830`, HOW-TO archive
+  section, `Atlas.bat --version` verified 0.13.0, lint clean).
+- New+ Templates filled (meeting, site visit, transmittal, presentation
+  skeletons in the PowerToys `$YY$MM$DD_*` folders).
+- NOT done (blocked on the subagent model's 5-hour quota, then ready): tickets
+  33-36 (search overlay, content index, dossier mode), plan 1.4-1.6 (MAX_PATH
+  doctor finding, deep unreadable, drive item budget), refs index richer
+  columns (Entity/Exemplars/Skill) before markers go into the README.
+- Known pre-existing: 2 test_project_data.py rename tests fail on clean HEAD;
+  post-output-metadata hook times out on this machine (environmental).
+
 **2026-10-08 - Phase 2.1 batch (a) drafted (sa-5)**
 - Three new candidate sets, `atlas refs doctor` clean across all 11 sets:
   `decision-record` (E1 Monte Vista 0001, E2 Bucktown 0002 supersedes pattern,
