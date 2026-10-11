@@ -66,7 +66,7 @@ into `.scratch/atlas-console/issues/` tickets per the console map's convention.
 | # | Work | Done when |
 |---|---|---|
 | 0.1 | Tyler reviews the 8 candidate sets in batches (Code Analysis + Meeting Minutes + G-Series first - the measured pilots; then the 5 drawing sets). Agents pre-stage: card diffs since pilot, eval RESULTS.md summary per set | `status: approved` + `reviewed:` bumped on approved cards; corrections filed as Known issues or near-misses same sitting |
-| 0.2 | Tyler grades the pilot calibration sample (3-5 blind drafts against the card checklist) so the LLM judge has its anchor | Calibration recorded in the evals folder; judge agreement re-measured |
+| 0.2 | ~~Tyler grades the pilot calibration sample~~ **Declined 2026-10-07 (Tyler): trusts the LLM judge as-is.** The judge is not unanchored - his 2026-10-05 grading of 4 pilot drafts already calibrates it and surfaced the standing caveat: judges undercount real edits ~3x, so judge scores are comparative signals, not absolute bars. Calibration Sample folder stays filed on the drive as the ready-made instrument if trust ever needs re-checking (e.g. after a model change) | Closed - no action |
 | 0.3 | Disposition per unmapped root folder (G8). **Decided 2026-10-07 (Tyler):** conform them anyway - live projects get the full migration; archive everything dormant EXCEPT `250828_1757 Coleman A-Rental`, which stays on the root and conforms. Dormant = 103 Mosco, 389 Bushwick Ave, ADNY LL97, 242924 Dekalb, 250622 Huckleberry; these move under `_Archived Projects` via Atlas Plans | Every root folder is mapped, conformed, or archived |
 | 0.4 | Answer open questions (section 5) | Answers recorded here |
 
@@ -250,7 +250,9 @@ instead of a periodic surprise (1.6, Phase 5).
   cross building elements; view numbering bottom-up then left). Card updated,
   rulings posted to Pyvoid #769 (comment 6087898819). Remaining blocker for its
   approval: no issued, clean plan exemplar exists yet (card's own Known issue).
-- Calibration sample NOT graded - still open for Tyler (~30 min).
+- Calibration sample declined by Tyler 2026-10-07 (trusts the judge; his
+  2026-10-05 grading of 4 pilot drafts already anchors it). Folder stays filed as
+  the ready-made instrument.
 - Weekly ritual first run: `atlas runs` zipped 64th Lane's `legacy-qa` and
   `legacy-tmp` runs - both archived, run folders gone, zero closed runs remain.
   **Cost datum:** 1,386 files took 48 min to zip over Drive File Stream - big-run
