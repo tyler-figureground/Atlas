@@ -22,7 +22,7 @@ def _extension(name: str) -> str:
 
 def names_match(rule, name: str) -> bool:
     """The name filters, for FileRule and ReceiptRule alike. Public so the
-    deep pass (core/receipts.py) runs the identical tests."""
+    deep pass (core/deep.py) runs the identical tests."""
     if rule.extensions and _extension(name) not in rule.extensions:
         return False
     folded = name.casefold()

@@ -21,7 +21,7 @@ from atlas.core.conform import CONFLICT, SWEEP, apply_plan, build_plan, invert_p
 from atlas.core.doctor import report_project, report_to_dict
 from atlas.core.lintmap import lint_map
 from atlas.core.mapfile import MapError, ReceiptRule, find_map, load_map
-from atlas.core.receipts import ReceiptHit, scan_receipts
+from atlas.core.deep import ReceiptHit, scan_deep
 from atlas.core.scan import scan_drive
 from atlas.core.tree import MAPPED, open_project_tree
 
@@ -68,7 +68,7 @@ def report_for(drive, name, *, deep=False):
     m = inventory.map
     if not deep:
         return report_project(inv, m), inv, m
-    scan = scan_receipts(inv.path, m)
+    scan = scan_deep(inv.path, m)
     return report_project(inv, m, receipts=scan.hits,
                           deep_unreadable=scan.unreadable), inv, m
 
@@ -181,7 +181,7 @@ def test_a_receipt_below_the_root_is_found_by_name(fixture_drive):
     project = project_with(fixture_drive, "260930_Deep",
                            {"06 Research/notes.zip": "z", "06 Research/Code/keep.py": "p"})
 
-    scan = scan_receipts(project, load_map(find_map(fixture_drive)))
+    scan = scan_deep(project, load_map(find_map(fixture_drive)))
 
     assert scan.hits == (ReceiptHit(path="06 Research/notes.zip",
                                     target=".agent/runs", rule="Run zips"),)
@@ -272,7 +272,9 @@ def test_a_deep_unreadable_folder_is_reported_never_empty(fixture_drive, monkeyp
 
     report, _inv, _m = report_for(fixture_drive, "260936_Denied", deep=True)
 
-    assert any("06 Research/Code" in line for line in report.unreadable)
+    # Their own finding since plan 1.5, never bundled with the root list.
+    assert any("06 Research/Code" in line for line in report.deep_unreadable)
+    assert report.unreadable == ()
     assert report.status == "unfiled"
 
 
@@ -286,7 +288,7 @@ def test_the_deep_pass_never_descends_into_a_junction(fixture_drive, tmp_path):
     (elsewhere / "off-drive.zip").write_text("z", encoding="utf-8")
     _winapi.CreateJunction(str(elsewhere), str(project / "06 Research" / "Linked"))
 
-    scan = scan_receipts(project, load_map(find_map(fixture_drive)))
+    scan = scan_deep(project, load_map(find_map(fixture_drive)))
 
     assert scan.hits == ()
     assert (elsewhere / "off-drive.zip").is_file()

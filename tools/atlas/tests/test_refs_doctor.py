@@ -54,6 +54,30 @@ leak_list: ["Alpha House", "Lot 12"]
 # {id}
 """
 
+# The richer index columns (Entity, Exemplars with one-line summaries, Skill)
+# come from card front matter and each exemplar's NOTES "Why this one".
+CARD_RICH = CARD_FULL.replace(
+    "next_review: 2027-04-05\n",
+    "next_review: 2027-04-05\nentity: shared\nskill: 00-due-diligence:code-analysis\n")
+
+NOTES_WHY = """---
+id: {id}
+set: code-analysis
+source_path: G:\\Shared drives\\ARCHITECTURE\\P1 Alpha\\06 Research\\memo.md
+leak_list: ["Alpha House", "Lot 12"]
+---
+
+# {id} - P1 Alpha
+
+## Why this one
+
+Only memo with the full zoning table worked through.
+
+## Callouts
+
+Section 3.
+"""
+
 
 def _set(root: Path, name: str, card: str) -> Path:
     folder = root / name
@@ -224,6 +248,37 @@ def test_contents_lines_shape(good_root: Path):
     assert "approved (STALE)" in row
     assert "2026-10-05" in row
     assert "Code Analysis\\SET.md" in row
+    [header] = [line for line in lines if line.startswith("| Type ")]
+    assert header == ("| Type | Set | Entity | Status | Reviewed | Exemplars | "
+                      "Skill | Card |")
+
+
+def test_contents_lines_rich_columns(tmp_path: Path):
+    """Entity and Skill come from card front matter; the Exemplars cell is
+    each id with the first line of its NOTES 'Why this one'."""
+    from atlas.core.refsets import list_sets
+    root = tmp_path / "Reference Sets"
+    folder = _set(root, "Code Analysis", CARD_RICH)
+    _exemplar(folder, "E1 Monte Vista - CRC", "E1", NOTES_WHY)
+    _exemplar(folder, "N1 McKean - debug notes", "N1", NOTES_FULL)
+    [row] = [line for line in contents_lines(list_sets(root), TODAY)
+             if line.startswith("| `")]
+    cells = [cell.strip() for cell in row.split("|")]
+    assert cells[3] == "shared"
+    assert cells[7] == "00-due-diligence:code-analysis"
+    assert cells[6] == ("E1 - Only memo with the full zoning table worked through.; "
+                        "N1 - McKean - debug notes")  # no Why section: the folder says it
+
+
+def test_contents_lines_rich_columns_absent(good_root: Path):
+    """A card without entity/skill and NOTES without a Why section degrade to
+    dashes and folder descriptors, never to blanks or errors."""
+    from atlas.core.refsets import list_sets
+    [row] = [line for line in contents_lines(list_sets(good_root), TODAY)
+             if line.startswith("| `")]
+    cells = [cell.strip() for cell in row.split("|")]
+    assert cells[3] == "-" and cells[7] == "-"
+    assert cells[6] == "E1 - Monte Vista - CRC; N1 - McKean - debug notes"
 
 
 def test_splice_requires_exactly_one_marker_block():

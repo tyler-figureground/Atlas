@@ -17,7 +17,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 |---|---|
 | `atlas [--drive D]` | Interactive operations console: inspect, filter, sort, create, clean, and conform. `--drive` skips the drive picker |
 | `atlas doctor [--drive D] [--json]` | Drive-wide read-only conformance report |
-| `atlas doctor --deep NAME [--json]` | The opt-in deep pass: walk below one project's root for Receipt Rule matches. Enumeration only, one project's walk; `--deep --all` pays the full drive walk by flag, never by default |
+| `atlas doctor --deep NAME [--json]` | The opt-in deep pass: walk below one project's root. One enumeration per folder gathers Receipt Rule matches, over-long paths already on disk (Win32's 260 - dirs flag at 259, the enumeration suffix needs the extra room), deep unreadable folders, and the item count against the 400,000 shared-drive cap. Enumeration only, depth-guarded; `--deep --all` pays the full drive walk by flag, never by default |
 | `atlas lint [--drive D] [--json]` | Validate the map file itself |
 | `atlas new --name NAME --street STREET --city CITY --state ST --zip ZIP --use-case USE_CASE --billing-contact ID_OR_EMAIL [...]` | Create a complete mapped project |
 | `atlas contacts list [--drive D] [--json]` | List reusable drive contacts |
@@ -155,6 +155,25 @@ the full drive walk by flag, never by default). The default `doctor` / `conform`
 pass stays root-only. In `--json`, deep matches are the project row's `receipts`
 array, flagged `"deep": true` beside the root-only `sweeps`.
 
+The same walk gathers three more findings, each its own line in the report and its own
+`--json` field, never bundled into the sweep counts (plan 1.4-1.6):
+
+- **Over-long paths** (`overlong`): paths already past the length Win32 opens without the
+  extended-length prefix, named with their length - ticket 04's warning covers what Atlas
+  is about to create; this covers what nobody is moving. Only the first crossing per
+  branch is named; everything below an over-long folder inherits it. A warning finding:
+  it never changes a project's status, because shortening a path is a person's call.
+- **Deep unreadable folders** (`unreadable_deep`): a folder the walk could not open is
+  reported, never read as empty (ADR 0004) - even on a map with no `receiptRules` at all.
+- **Item counts** (`items`, and the drive-level `budget` block): files and folders per
+  project against the 400,000-item shared-drive cap, free on top of the enumeration.
+  The text report prints a one-line budget summary once the count passes half the cap;
+  `--json` always carries it, with `items: null` and `counted: false` in the default
+  pass - uncounted is null, never a silent zero.
+
+A pathological tree is bounded by a depth guard (64 levels); a folder at the boundary is
+named in `depth_capped` rather than the scan pretending it saw everything.
+
 ## Root names Atlas never flags
 
 Some files only work at a project root: `.mcp.json` is read from the root by MCP-capable
@@ -258,7 +277,10 @@ a problem. Exit 0 clean, 2 on problems or error.
 
 `atlas refs index` rebuilds the sets README's contents block (between
 `<!-- atlas:contents-begin -->` / `<!-- atlas:contents-end -->` markers) from card front
-matter: type, title, status, reviewed date, stale flag, card path. Dry run prints the diff;
+matter and the exemplar NOTES files: type, title, entity, status, reviewed date, stale
+flag, one row of exemplar summaries (each id plus the first line of its NOTES "Why this
+one", or the folder descriptor when there is none), the card's `skill`, and the card
+path. Dry run prints the diff;
 `--apply` writes. An unchanged regenerate is byte-identical. This is the refs module's one
 write; everything else is read-only.
 The card templates are in `src/atlas/templates/reference-set/`.
@@ -295,7 +317,7 @@ CLI edit commands are interactive when run in a terminal. Omitted fields retain 
 
 Atlas has not been validated with assistive technology and makes no accessibility conformance claim. Textual's screen-reader support is unresolved upstream ([textual#2425](https://github.com/Textualize/textual/issues/2425)), so the console should not be assumed usable with a screen reader.
 
-Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `search` for the drive-wide Name Index, `index status` for the per-machine Content Index, `conform --node` for a single repair, `conform --revert` for undo, and `--deep` on `doctor`/`conform` for Receipt Rule matches below a project root (CLI-only by design - the console surfaces deep findings only from an operator-run deep pass). Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
+Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `search` for the drive-wide Name Index, `index status` for the per-machine Content Index, `conform --node` for a single repair, `conform --revert` for undo, and `--deep` on `doctor`/`conform` for the deep pass below a project root (CLI-only by design - the console surfaces deep findings only from an operator-run deep pass). Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
 
 Within the console, colour reinforces a distinction and never carries one alone. A folder or file with something wrong with it names what is wrong in words; when the terminal is too narrow for the full phrase the word abbreviates - `NAME`, `PLACE`, `LOOSE`, `UNMAPPED`, `unread` - rather than leaving the glyph and its colour to say it. A long name shortens in the middle so the word always stays on screen.
 

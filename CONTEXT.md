@@ -422,13 +422,34 @@ Evaluated only in a Deep Pass. A malformed Receipt Rule refuses the whole map, a
 a File Rule does. Ticket 26, built by ticket 31; ADR 0009 amendment.
 
 **Deep Pass**
-The opt-in walk below a Project root that evaluates Receipt Rules:
-`atlas doctor --deep PROJECT` to report, `atlas conform PROJECT --deep` to plan
-and apply. Enumeration only - the walk never opens a file - bounded by one
-project; `--all --deep` pays the full drive walk by flag, never by default. The
-default `doctor` / `conform` pass stays root-only, and its cost bound depends on
-it. Deep findings emit Sweeps or nothing, through the same Plan, preview, Move
-Manifest and undo as any other conform.
+The opt-in walk below a Project root: `atlas doctor --deep PROJECT` to report,
+`atlas conform PROJECT --deep` to plan and apply. Enumeration only - the walk
+never opens a file - bounded by one project; `--all --deep` pays the full drive
+walk by flag, never by default. One enumeration per folder gathers everything
+the pass knows, so no fact pays a second walk: Receipt Rule matches (which emit
+Sweeps or nothing, through the same Plan, preview, Move Manifest and undo as any
+other conform), deep Unreadable folders as their own finding line, Over-long
+Paths, and the Item Count behind the Drive Item Budget. The default `doctor` /
+`conform` pass stays root-only, and its cost bound depends on it. A per-folder
+depth guard (64 levels) bounds a pathological tree, and a folder at the boundary
+is named rather than scanned-past silently.
+
+**Over-long Path**
+A path already on disk past the length Win32 opens without the extended-length
+prefix - a Deep Pass finding, where the Path Length Warning is the same limit
+measured on a write Atlas is about to make. Directories flag at 259 characters,
+one earlier than files, because enumerating one needs room for the `\*` suffix
+(the latency report's live failure is a 259-character folder). Only the first
+crossing per branch is named; everything below inherits it. Never a Filing State
+and never a repair: shortening a path is a person's call.
+
+**Drive Item Budget**
+The count of files and folders under the mapped Project roots against Google's
+400,000-item cap per shared drive. Counting costs enumeration, so it rides the
+Deep Pass's walk rather than the default doctor pass; the report prints it once
+past half the cap and `--json` always carries it, with uncounted reported as
+null, never zero (ADR 0004). The agent workspace is counted, not pruned - run
+volume is what eats the cap (ADR 0011). Robustness plan 1.6.
 
 
 **Archive Root**

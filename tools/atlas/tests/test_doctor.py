@@ -120,11 +120,15 @@ def test_report_json_shape(fixture_drive):
     (proj,) = [p for p in d["projects"] if p["name"] == "260108_Any"]
     assert set(proj) == {
         "name", "status", "sections_present", "missing_control_plane",
-        "drift", "relocations", "sweeps", "receipts", "unfiled", "ignored", "unreadable",
+        "drift", "relocations", "sweeps", "receipts", "unfiled", "ignored",
+        "unreadable", "unreadable_deep", "overlong", "depth_capped", "items",
     }
     # An agent reading this must be able to tell "nothing wrong here" from
     # "Atlas could not look". ADR 0004.
     assert proj["unreadable"] == []
+    # The budget block is always there; uncounted is None, never a zero.
+    assert d["budget"]["cap"] == 400_000
+    assert d["budget"]["counted"] is False and d["budget"]["total_items"] is None
 
 
 def test_underscore_and_00_dirs_excluded(fixture_drive):

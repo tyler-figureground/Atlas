@@ -8,6 +8,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Atlas - the deep pass grows three findings (robustness plan 1.4-1.6).**
+  `atlas doctor --deep PROJECT` (and `conform --deep`) now walks below the
+  project root whether or not the map carries `receiptRules`, and one
+  enumeration per folder gathers, beside the Receipt Rule hits:
+  - **Over-long paths** (1.4): paths already past the length Win32 opens
+    without the extended-length prefix - directories flag at 259 chars (the
+    enumeration suffix needs the extra room, matching the latency report's
+    live 259-char failure), files past 260, the same bar conform's Path
+    Length Warning uses. Doctor names path and length
+    (`over-long path (N chars): ...`, `--json` `overlong`), flags only the
+    first crossing per branch, and never changes a project's status -
+    shortening a path is a person's call, not a repair.
+  - **Deep unreadable folders** (1.5): a folder the walk cannot open is its
+    own finding line (`cannot read (deep): ...`, `--json`
+    `unreadable_deep`), never bundled into sweep counts, never read as empty
+    (ADR 0004).
+  - **Drive item budget** (1.6): files+folders per project against Google's
+    400,000-item shared-drive cap. Counting is enumeration, so it rides the
+    deep walk for free rather than adding a `--count` flag that pays the same
+    walk a second way; the default pass keeps its root-only cost bound and
+    reports `items: null` / `counted: false`, never a silent zero. The text
+    report prints a one-line budget summary once past half the cap; `--json`
+    always carries the `budget` block. The agent workspace is counted, not
+    pruned - run volume is what eats the cap (ADR 0011).
+  The walk is bounded by a per-folder depth guard (64 levels); a folder at
+  the boundary is named in `depth_capped` rather than the scan pretending it
+  saw everything. `core/receipts.py` is now `core/deep.py` (`scan_deep`),
+  and `WINDOWS_MAX_PATH` lives in `core.scan` beside `long_path`.
+
+- **Atlas - `refs index` richer columns (robustness plan, refs index
+  follow-up).** The generated README contents block now carries Entity and
+  Skill from card front matter and an Exemplars column - each id with the
+  first line of its NOTES "Why this one", or the folder descriptor when the
+  section is absent - beside the existing type/title/status/reviewed/card
+  columns. Missing `entity`/`skill` degrade to a dash, never a blank.
+  Regeneration stays deterministic and byte-exact when nothing changed. This
+  is the step that unblocks wrapping the real README's hand-maintained Sets
+  table in `atlas:contents` markers.
+
 - **Atlas - global name search (ticket 33, ADR 0005 amendment).** The console
   gains the Search Overlay on `g`: live-as-you-type over a session Name Index
   built from one drive walk (folders, files, and project roots; zero content

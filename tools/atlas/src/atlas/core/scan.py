@@ -38,6 +38,14 @@ PARTIAL = "partial"
 # parents list them happily. Prefix only when close to the limit: the prefix also
 # disables all path normalisation, so it is not safe to apply blindly.
 _MAX_PATH = 240
+
+# Windows refuses a path longer than this without the extended-length prefix,
+# and so do Explorer, Revit, and the studio's PowerShell tools. Atlas warns when
+# a move would create one (conform's Path Length Warning), flags ones already
+# on disk (the deep pass, plan 1.4), and never applies long_path() on the
+# write side: routing around the limit would make the warning dishonest.
+# See ADR 0006 and ticket 19.
+WINDOWS_MAX_PATH = 260
 _LONG_PREFIX = "\\\\?\\"
 # Already-extended or device paths, in either slash form. Prefixing one again
 # would turn it into a bogus UNC path.

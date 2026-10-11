@@ -12,10 +12,11 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import deep
+from .deep import ItemCount, OverlongPath, ReceiptHit, scan_deep
 from .filerules import first_match
 from .mapfile import DriveMap
 from .projectmd import agents_block_current, is_claude_pointer
-from .receipts import ReceiptHit, scan_receipts
 from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
 # Files tolerated at a project root without being flagged: OS noise plus the
@@ -62,6 +63,16 @@ class ProjectReport:
     # report leaves it empty. A finding, never a Filing State - containment
     # (ADR 0007) still decides those at every depth.
     receipts: tuple[ReceiptHit, ...] = ()
+    # The rest of the deep pass's facts (plan 1.4-1.6), likewise empty without
+    # --deep. deep_unreadable is its own finding line, never bundled into the
+    # sweep counts or the root-level unreadable list; overlong names paths
+    # already past the Win32 limit that nobody is moving; items is None when
+    # the walk never ran - counted is a number, uncounted is None, never a
+    # silent zero (ADR 0004).
+    deep_unreadable: tuple[str, ...] = ()
+    overlong: tuple[OverlongPath, ...] = ()
+    depth_capped: tuple[str, ...] = ()
+    items: ItemCount | None = None
     # False when the project root itself could not be listed. Every other finding
     # is then empty and ``sections_present`` means nothing: an unreadable project
     # never reads as an empty one (#13, ADR 0004).
@@ -173,16 +184,19 @@ def _dir_exists_exact(base: Path, rel: str) -> bool:
 def report_project(inv: ProjectInventory, m: DriveMap, *,
                    count_files: bool = True,
                    receipts: tuple[ReceiptHit, ...] = (),
-                   deep_unreadable: tuple[str, ...] = ()) -> ProjectReport:
+                   deep_unreadable: tuple[str, ...] = (),
+                   overlong: tuple[OverlongPath, ...] = (),
+                   depth_capped: tuple[str, ...] = (),
+                   items: ItemCount | None = None) -> ProjectReport:
     """One project's conformance facts.
 
     ``count_files=False`` skips the one walk here - the file count under each
     relocation source - leaving ``file_count`` None (unknown). For the scoped
     Guard, which needs to know what work is due, not how big it is (#46).
 
-    ``receipts`` and ``deep_unreadable`` are the opt-in deep pass's facts
-    (``core.receipts.scan_receipts``), gathered by the caller. The default is
-    no deep pass at all: this function never walks below the root itself.
+    ``receipts`` and the other deep facts are the opt-in deep pass's findings
+    (``core.deep.scan_deep``), gathered by the caller. The default is no deep
+    pass at all: this function never walks below the root itself.
     """
     if not inv.root_entries.readable:
         # Nothing below is knowable. Every check would run against the failed
@@ -325,11 +339,10 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         if e.name not in explained and e.name not in swept and _map_tolerated(e.name, m)
     )
 
-    # Deep-pass unreadables join the project's own: a folder the receipt walk
-    # could not open is a person-has-to-look finding, never an empty folder.
-    unreadable.extend(deep_unreadable)
-
-    if unreadable:
+    # Deep-pass unreadables stand beside the project's own, as their own
+    # finding line: a folder the walk could not open is a person-has-to-look
+    # finding, never an empty folder - and never bundled into a sweep count.
+    if unreadable or deep_unreadable:
         # A person has to look. Never STUB - "no sections found" would claim we
         # looked and saw nothing, and never CONFORM, which would claim it is fine.
         status = STATUS_UNFILED
@@ -355,20 +368,31 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         ignored=tuple(ignored),
         unreadable=tuple(unreadable),
         receipts=receipts,
+        deep_unreadable=tuple(deep_unreadable),
+        overlong=tuple(overlong),
+        depth_capped=tuple(depth_capped),
+        items=items,
     )
 
 
 def report_drive(inventory: DriveInventory, *,
                  deep: frozenset[str] | None = None) -> DriveReport:
     """The drive-wide report. ``deep`` names the projects that also get the
-    opt-in deep pass (Receipt Rules below the root, ticket 31); None - the
-    default everywhere else - keeps the report root-only."""
+    opt-in deep pass (Receipt Rules, over-long paths, deep unreadable folders,
+    item counts); None - the default everywhere else - keeps the report
+    root-only."""
     projects: list[ProjectReport] = []
     for p in inventory.projects:
-        if deep is not None and p.name in deep and inventory.map.receipt_rules:
-            scan = scan_receipts(p.path, inventory.map)
+        if deep is not None and p.name in deep:
+            # The deep pass walks whether or not the map carries receiptRules:
+            # over-long paths, deep unreadable folders and the item count are
+            # findings on every map (plan 1.4-1.6).
+            scan = scan_deep(p.path, inventory.map)
             projects.append(report_project(p, inventory.map, receipts=scan.hits,
-                                           deep_unreadable=scan.unreadable))
+                                           deep_unreadable=scan.unreadable,
+                                           overlong=scan.overlong,
+                                           depth_capped=scan.depth_capped,
+                                           items=scan.items))
         else:
             projects.append(report_project(p, inventory.map))
     return DriveReport(
@@ -379,12 +403,38 @@ def report_drive(inventory: DriveInventory, *,
     )
 
 
+def budget(report: DriveReport) -> dict:
+    """The drive item budget (plan 1.6): counted projects' item totals against
+    the shared-drive item cap.
+
+    Counting is enumeration of every folder below a project root - the deep
+    walk already pays it, so counts ride ``--deep`` for free rather than
+    adding a ``--count`` flag that would pay the same walk a second way. The
+    default pass keeps its root-only cost bound and reports ``counted`` False
+    with a null total: uncounted is None, never a zero (ADR 0004). Only
+    mapped projects are counted - ``_tools`` and the archive root are outside
+    the project list by definition.
+    """
+    counted = [p for p in report.projects if p.items is not None]
+    total = sum(p.items.total for p in counted) if counted else None
+    cap = deep.DRIVE_ITEM_CAP
+    return {
+        "cap": cap,
+        "counted": bool(counted),
+        "projects_counted": len(counted),
+        "projects_total": len(report.projects),
+        "total_items": total,
+        "percent_of_cap": total / cap * 100 if total is not None else None,
+    }
+
+
 def report_to_dict(report: DriveReport) -> dict:
     return {
         "drive": report.drive,
         "root": str(report.root),
         "map_version": report.map_version,
         "summary": report.summary(),
+        "budget": budget(report),
         "projects": [
             {
                 "name": p.name,
@@ -407,6 +457,12 @@ def report_to_dict(report: DriveReport) -> dict:
                 "unfiled": list(p.unfiled),
                 "ignored": list(p.ignored),
                 "unreadable": list(p.unreadable),
+                "unreadable_deep": list(p.deep_unreadable),
+                "overlong": [{"path": o.path, "length": o.length} for o in p.overlong],
+                "depth_capped": list(p.depth_capped),
+                "items": ({"files": p.items.files, "folders": p.items.folders,
+                           "total": p.items.total}
+                          if p.items is not None else None),
             }
             for p in report.projects
         ],

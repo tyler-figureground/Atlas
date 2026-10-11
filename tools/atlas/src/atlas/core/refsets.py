@@ -137,6 +137,9 @@ class Exemplar:
     source_path: str
     leak_list: tuple[str, ...]
     has_notes: bool
+    # First line of the NOTES "Why this one" section - the one-line reason the
+    # exemplar was chosen. "" when the section is absent or still a placeholder.
+    why: str = ""
 
 
 @dataclass(frozen=True)
@@ -145,6 +148,7 @@ class RefSet:
     title: str
     status: str
     entity: str
+    skill: str
     reviewed: str
     next_review: str
     folder: Path
@@ -177,6 +181,27 @@ def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+def _why_summary(text: str) -> str:
+    """The first content line of the NOTES '## Why this one' section.
+
+    "" when the section is absent or holds only the template's HTML-comment
+    placeholder - the caller falls back to the folder's own descriptor.
+    """
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines)
+                  if line.strip() == "## Why this one"), None)
+    if start is None:
+        return ""
+    for line in lines[start + 1:]:
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            break
+        if not stripped or stripped.startswith("<!--"):
+            continue
+        return stripped
+    return ""
+
+
 def load_set(folder: Path) -> RefSet:
     card = front_matter(_text(folder / CARD))
     exemplars, retired = [], []
@@ -198,12 +223,14 @@ def load_set(folder: Path) -> RefSet:
             source_path=str(fm.get("source_path", "")),
             leak_list=leaks,
             has_notes=True,
+            why=_why_summary(_text(notes)),
         ))
     return RefSet(
         type=str(card.get("type", "")),
         title=str(card.get("title", folder.name)),
         status=str(card.get("status", "")),
         entity=str(card.get("entity", "")),
+        skill=str(card.get("skill", "")),
         reviewed=str(card.get("reviewed", "")),
         next_review=str(card.get("next_review", "")),
         folder=folder,
@@ -506,25 +533,40 @@ CONTENTS_BEGIN = "<!-- atlas:contents-begin -->"
 CONTENTS_END = "<!-- atlas:contents-end -->"
 
 
+def _descriptor(ex: Exemplar) -> str:
+    """The folder's own words when NOTES has no Why line: the folder named
+    'E1 Monte Vista - CRC' describes itself as 'Monte Vista - CRC'."""
+    parts = ex.folder.name.split(None, 1)
+    return parts[1] if len(parts) == 2 else ex.folder.name
+
+
 def contents_lines(sets: list[RefSet], today: date) -> list[str]:
-    """The regenerable contents block: one row per set, from card front matter.
+    """The regenerable contents block: one row per set, from card front matter
+    and the exemplars' NOTES summaries.
 
     Deterministic - same cards, same day, same bytes - so a regenerate with no
     changes is byte-identical and the dry run says so. The stale flag is a
     word in the Status column: text, never colour or glyph alone (ADR 0008).
+    Entity and Skill come from card front matter; the Exemplars cell is each
+    id with the first line of its NOTES 'Why this one' (the folder descriptor
+    when there is none), so the generated table carries what the
+    hand-maintained one did.
     """
     lines = [
         CONTENTS_BEGIN,
         "",
-        "| Type | Set | Status | Reviewed | Card |",
-        "|---|---|---|---|---|",
+        "| Type | Set | Entity | Status | Reviewed | Exemplars | Skill | Card |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for refset in sets:
         status = refset.status or "?"
         if refset.stale(today):
             status += " (STALE)"
-        lines.append(f"| `{refset.type}` | {refset.title} | {status} | "
-                     f"{refset.reviewed or '-'} | `{refset.folder.name}\\{CARD}` |")
+        exemplars = "; ".join(f"{ex.id} - {ex.why or _descriptor(ex)}"
+                               for ex in refset.exemplars) or "-"
+        lines.append(f"| `{refset.type}` | {refset.title} | {refset.entity or '-'} | "
+                     f"{status} | {refset.reviewed or '-'} | {exemplars} | "
+                     f"{refset.skill or '-'} | `{refset.folder.name}\\{CARD}` |")
     lines += ["", CONTENTS_END]
     return lines
 

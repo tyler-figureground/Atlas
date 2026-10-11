@@ -45,6 +45,7 @@ from .projectmd import (
     write_crlf_no_bom,
 )
 from .scan import (
+    WINDOWS_MAX_PATH,
     Listing,
     ProjectInventory,
     list_entries,
@@ -67,11 +68,8 @@ SKIPPED = "skipped"
 FAILED = "failed"       # an OS error stopped it; ``moved`` holds what moved first
 
 
-# Windows refuses a path longer than this without the extended-length prefix,
-# and so do Explorer, Revit, and the studio's PowerShell tools. Atlas warns when a
-# move would create one and never applies long_path() on the write side: routing
-# around the limit would make the warning dishonest. See ADR 0006 and ticket 19.
-WINDOWS_MAX_PATH = 260
+# WINDOWS_MAX_PATH comes from core.scan, beside long_path - the write side
+# warns past it, the read side routes around it, and both mean the same 260.
 
 
 class NotInvertible(OpsError):

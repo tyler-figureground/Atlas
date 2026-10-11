@@ -45,6 +45,7 @@ from .core.contacts import (
     load_contacts,
     update_contact,
 )
+from .core.doctor import budget as doctor_budget
 from .core.doctor import report_drive, report_project, report_to_dict
 from .core.intake import (
     IntakeError,
@@ -57,7 +58,7 @@ from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
 from .core.pdfexport import PdfError, export_pdf
-from .core.receipts import scan_receipts
+from .core.deep import BUDGET_WARN_FRACTION, scan_deep
 from .core.refsets import (
     RefSetError,
     check_draft,
@@ -186,6 +187,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"{report.drive} (map v{report.map_version})  "
               f"{counts['conform']} conform / {counts['drift']} drift / "
               f"{counts['unfiled']} unfiled / {counts['stub']} stub")
+        # The item budget speaks in text only once it is worth saying; --json
+        # always carries it (plan 1.6).
+        budget_info = doctor_budget(report)
+        if (budget_info["counted"] and budget_info["total_items"] is not None
+                and budget_info["total_items"] > budget_info["cap"] * BUDGET_WARN_FRACTION):
+            print(f"drive items: {budget_info['total_items']:,} of the "
+                  f"{budget_info['cap']:,} shared-drive item cap "
+                  f"({budget_info['percent_of_cap']:g}%)")
         for p in report.projects:
             sections = (f"{p.sections_present} sections" if p.root_readable
                         else "sections unknown")
@@ -204,6 +213,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             for hit in p.receipts:
                 print(f"    sweep pending (deep): {hit.path} -> {hit.target} "
                       f"(rule: {hit.rule})")
+            for entry in p.overlong:
+                print(f"    over-long path ({entry.length} chars): {entry.path}")
+            for line in p.deep_unreadable:
+                print(f"    cannot read (deep): {line}")
+            for line in p.depth_capped:
+                print(f"    depth guard: not scanned below {line}")
             for name in p.unfiled:
                 print(f"    unfiled: {name}")
             # Map-tolerated entries are not findings, but they are never a
@@ -213,7 +228,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             for line in p.unreadable:
                 print(f"    cannot read: {line}")
     # An unreadable folder is pending too: a person has to look (ADR 0004).
-    pending = any(p.actionable or p.unfiled or p.unreadable for p in report.projects)
+    # So is an over-long path or a depth-guard truncation: findings Atlas
+    # cannot repair, which is exactly what the exit code is for.
+    pending = any(p.actionable or p.unfiled or p.unreadable or p.deep_unreadable
+                  or p.overlong or p.depth_capped for p in report.projects)
     return 1 if pending else 0
 
 
@@ -1622,14 +1640,18 @@ def cmd_conform(args: argparse.Namespace) -> int:
     # cannot be read cannot be planned - and never reported as fine.
     unread: dict[str, tuple[str, ...]] = {}
     for inv in targets:
-        if args.deep and m.receipt_rules:
-            scan = scan_receipts(inv.path, m)
+        if args.deep:
+            scan = scan_deep(inv.path, m)
             report = report_project(inv, m, receipts=scan.hits,
-                                    deep_unreadable=scan.unreadable)
+                                    deep_unreadable=scan.unreadable,
+                                    overlong=scan.overlong,
+                                    depth_capped=scan.depth_capped,
+                                    items=scan.items)
         else:
             report = report_project(inv, m)
-        if report.unreadable:
-            unread[inv.name] = report.unreadable
+        unreadable = report.unreadable + report.deep_unreadable
+        if unreadable:
+            unread[inv.name] = unreadable
         if not report.root_readable:
             results.append(Plan(project=inv.name, actions=()))
             continue
@@ -1958,14 +1980,17 @@ def main(argv: list[str] | None = None) -> int:
         help="undo an applied archive from the JSON manifest `archive --apply --json` printed")
     sub.choices["doctor"].add_argument(
         "project", nargs="?",
-        help="with --deep: the one project whose tree is walked for Receipt Rule "
-             "matches")
+        help="with --deep: the one project whose tree is walked")
     sub.choices["doctor"].add_argument(
         "--deep", action="store_true",
-        help="opt-in deep pass: walk below one project's root for Receipt Rule "
-             "matches (agent receipts in numbered sections). Enumeration only, "
-             "never a content read; one project's walk, bounded by that project. "
-             "--deep --all pays the full drive walk by flag, never by default")
+        help="opt-in deep pass: walk below one project's root. One enumeration "
+             "per folder gathers Receipt Rule matches, over-long paths "
+             "(already past Win32's 260, not ones Atlas would create), deep "
+             "unreadable folders, and the item count against the 400,000 "
+             "shared-drive cap - counting costs the same walk, which is why "
+             "it rides this flag. Enumeration only, never a content read; "
+             "depth-guarded. --deep --all pays the full drive walk by flag, "
+             "never by default")
     sub.choices["doctor"].add_argument(
         "--all", action="store_true",
         help="with --deep: every project pays the deep walk")
