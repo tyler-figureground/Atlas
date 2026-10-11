@@ -58,6 +58,10 @@ Standing constraints:
   common single width is 46.
 - Google Drive File Stream latency is the performance reality, not local disk.
   Local timings are not a latency claim.
+- Atlas reads the mounted filesystem only. An authenticated Drive API read path
+  was evaluated and declined (ticket 11, 2026-10-08): its unique gifts solve
+  measured non-problems and PDF indexing is byte-bound either way. Reversal
+  trigger on the ticket.
 
 Continuity: `.agent/handoff/` per this repo's checkpoint rule.
 
@@ -315,22 +319,55 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   The staleness Guard still runs, drive-scoped; a true cross-project Revit-link
   scan is not knowable from the mount and is a recorded limit. Modal confirm
   always. Build: ticket 32.
+- [Global search scope](issues/08-global-search-scope.md) - **decided: names now,
+  content through a per-machine local index.** Q1 settled scope (everything,
+  PDF text included); the mechanics split on the measured cost classes - one
+  4.24 s walk makes drive-wide name search free, while every content read is a
+  download (1,386 files zipped in 48 min), so Markdown waits with the PDFs.
+  The index lives in the machine's user cache, never on the drive; keyed
+  path+size+mtime like ADR 0009's content cache; freshness by rebuild (names)
+  and per-file revalidation (content), watching banned. Renders as an overlay,
+  not a fourth Region - ADR 0005 amendment drafted. `atlas search QUERY
+  [--json]` owed same session. Builds: tickets 33, 34, 35.
+- [Dossier panel](issues/09-dossier-panel.md) - **decided: rendered facts table,
+  read-only, errors spoken.** The DOSSIER Companion Mode shows the intake
+  record's identity and contact snapshots plus the decisions summary - not raw
+  Markdown (`o` opens the file), no in-Atlas decision reading. Read-only
+  because both dossier write paths already exist and carry what a panel cannot:
+  `project edit` has the rename preview and Plan, conform owns the control
+  plane. Missing/malformed/legacy PROJECT.md renders the reason, never blanks.
+  `atlas dossier PROJECT [--json]` owed same session; ADR 0005 amendment
+  drafted. Build: ticket 36.
+- [An authenticated Drive API read path](issues/11-drive-api-read-path.md) -
+  **no build; filesystem-only is now a standing constraint.** Both unique API
+  gifts solve measured non-problems (4.24 s walk; Shelf Life plus Guards), and
+  PDF indexing is byte-bound - a mount read and a `files.get` download the same
+  bytes. The real cost is the auth story, and nothing is provisioned: no Google
+  credentials on any studio machine. Both hybrids rejected - one pays auth for
+  zero byte savings, the other is documented *less* fresh than the mount.
+  Reversal trigger recorded on the ticket. The content index builds over the
+  mount: ticket 34.
 
 ## Open tickets
 
-- [Global search scope](issues/08-global-search-scope.md) - grilling. What the
-  one-keystroke drive search searches. Ticket 12 removed the cost objection: a full
-  walk is 4.24 s.
-- [Dossier panel](issues/09-dossier-panel.md) - grilling. How `PROJECT.md` reads
-  inside Atlas; a Companion Mode slot exists.
-- [An authenticated Drive API read path](issues/11-drive-api-read-path.md) -
-  grilling. Whether Atlas reads through the Drive API rather than the mount.
 - [Receipt Rules below the root, built](issues/31-receipt-rules-below-the-root.md)
   - task. The ticket 26 design: `receiptRules` map key, opt-in deep pass,
   Sweep-only emission.
 - [Archive and un-archive a project, as Atlas verbs](issues/32-archive-a-project-verb.md)
   - task. The ticket 30 design: drive-scoped ARCHIVE/UNARCHIVE, index-row
   stamping, precondition check. Unblocks plan Phase 5.
+- [Global name search](issues/33-global-name-search.md) - task. The ticket 08
+  phase A: session name index from one walk, the Search Overlay, `atlas
+  search`. Carries the drafted ADR 0005 amendment.
+- [The local content index](issues/34-local-content-index.md) - task. The
+  ticket 08/11 foundation: per-machine mtime-keyed PDF/Markdown index over
+  the mount, background first build, ADR 0020 drafted and added.
+- [Content search over the index](issues/35-content-search-over-the-index.md) -
+  task. Blocked by 33 and 34. Content matches join the overlay; `atlas search
+  --content`; query-time freshness.
+- [The dossier Companion Mode](issues/36-dossier-companion-mode.md) - task. The
+  ticket 09 design: read-only facts table over `load_project_record`, errors
+  spoken, `atlas dossier`. Carries the drafted ADR 0005 amendment.
 
 ## Parked
 
