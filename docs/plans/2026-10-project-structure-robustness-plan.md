@@ -308,6 +308,13 @@ instead of a periodic surprise (1.6, Phase 5).
 - **Atlas 0.14.0 released and deployed** (backup `_tools\logs\atlas-0.14.0-deploy-
   20261011-155213`, `Atlas.bat --version` verified, HOW-TO search/dossier
   section, lint clean). Repo pushed to origin/main.
+- **Reference Sets renumbered with lifecycle-order prefixes** (Tyler 2026-10-09:
+  the flat 27-folder list was overwhelming): 01 Research Reports -> 03 Code
+  Analysis, 10-16 client/control/permitting, 19-26 drawings, 40-45
+  construction, 90-92 control files. Numbers never reused, gaps deliberate;
+  flat, no subfolders (library shallowness rule). 12 in-card cross-references
+  updated; README table regenerates in prefix order (v1.8); refs doctor clean;
+  leak check verified post-rename.
 - Known pre-existing: 2 test_project_data.py rename tests fail on clean HEAD;
   post-output-metadata hook times out on this machine (environmental).
 
