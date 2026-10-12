@@ -277,12 +277,16 @@ a problem. Exit 0 clean, 2 on problems or error.
 
 `atlas refs index` rebuilds the sets README's contents block (between
 `<!-- atlas:contents-begin -->` / `<!-- atlas:contents-end -->` markers) from card front
-matter and the exemplar NOTES files: type, title, entity, status, reviewed date, stale
-flag, one row of exemplar summaries (each id plus the first line of its NOTES "Why this
-one", or the folder descriptor when there is none), the card's `skill`, and the card
-path. Dry run prints the diff;
-`--apply` writes. An unchanged regenerate is byte-identical. This is the refs module's one
-write; everything else is read-only.
+matter (ergonomics plan Phase 2, rules/visual-markdown.md). The block is a Mermaid
+`flowchart LR` band map - one subgraph per lifecycle band (bands from the folder-number
+prefix: 01-09 due diligence, 10-13 client & control, 14-16 permitting, 19 design, 20-29
+drawings, 40-49 construction, 90-99 control files; a data-driven table in
+`core/refsets.py`, so a new band is a one-line edit), one short node per set, status as
+classDef colour plus a word legend, never a click link - then one 3-column table per band
+(`Set | Status | Card`, %20-escaped relative links, `(STALE)` as a word, never colour
+alone). Map and tables come from the same front matter, so they cannot drift. Dry run
+prints the diff; `--apply` writes. An unchanged regenerate is byte-identical. This is the
+refs module's one write; everything else is read-only.
 The card templates are in `src/atlas/templates/reference-set/`.
 
 ## PDF export

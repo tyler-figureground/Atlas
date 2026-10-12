@@ -1,4 +1,7 @@
-"""Reference Sets: `atlas refs doctor` validation and `atlas refs index` (plan 1.1/1.2)."""
+"""Reference Sets: `atlas refs doctor` validation (plan 1.1).
+
+`refs index` tests live in test_refs_index.py (ergonomics plan Phase 2).
+"""
 
 from __future__ import annotations
 
@@ -9,14 +12,7 @@ from pathlib import Path
 import pytest
 
 from atlas.cli import main
-from atlas.core.refsets import (
-    CONTENTS_BEGIN,
-    CONTENTS_END,
-    RefSetError,
-    contents_lines,
-    doctor_sets,
-    splice_contents,
-)
+from atlas.core.refsets import doctor_sets
 
 TODAY = date(2026, 10, 10)
 
@@ -53,31 +49,6 @@ leak_list: ["Alpha House", "Lot 12"]
 
 # {id}
 """
-
-# The richer index columns (Entity, Exemplars with one-line summaries, Skill)
-# come from card front matter and each exemplar's NOTES "Why this one".
-CARD_RICH = CARD_FULL.replace(
-    "next_review: 2027-04-05\n",
-    "next_review: 2027-04-05\nentity: shared\nskill: 00-due-diligence:code-analysis\n")
-
-NOTES_WHY = """---
-id: {id}
-set: code-analysis
-source_path: G:\\Shared drives\\ARCHITECTURE\\P1 Alpha\\06 Research\\memo.md
-leak_list: ["Alpha House", "Lot 12"]
----
-
-# {id} - P1 Alpha
-
-## Why this one
-
-Only memo with the full zoning table worked through.
-
-## Callouts
-
-Section 3.
-"""
-
 
 def _set(root: Path, name: str, card: str) -> Path:
     folder = root / name
@@ -227,121 +198,3 @@ def test_doctor_cli_exit_codes_and_json(tmp_path: Path, capsys):
 def test_doctor_missing_root_is_an_error(tmp_path: Path):
     assert main(["refs", "doctor", "--root", str(tmp_path / "nope")]) == 2
 
-
-# ---- index ----------------------------------------------------------------
-
-
-def _readme(block: str | None = None) -> str:
-    inner = block if block is not None else "<!-- placeholder -->\n"
-    return ("---\ntitle: Reference Sets\n---\n\n# Reference Sets\n\n## Sets\n\n"
-            f"{CONTENTS_BEGIN}\n{inner}{CONTENTS_END}\n\n## Rules\n")
-
-
-def test_contents_lines_shape(good_root: Path):
-    from atlas.core.refsets import list_sets
-    sets = list_sets(good_root)
-    lines = contents_lines(sets, date(2027, 10, 1))  # next_review passed: stale
-    assert lines[0] == CONTENTS_BEGIN and lines[-1] == CONTENTS_END
-    [row] = [line for line in lines if line.startswith("| `")]
-    assert "`code-analysis`" in row
-    assert "Code Analysis Memo" in row
-    assert "approved (STALE)" in row
-    assert "2026-10-05" in row
-    assert "Code Analysis\\SET.md" in row
-    [header] = [line for line in lines if line.startswith("| Type ")]
-    assert header == ("| Type | Set | Entity | Status | Reviewed | Exemplars | "
-                      "Skill | Card |")
-
-
-def test_contents_lines_rich_columns(tmp_path: Path):
-    """Entity and Skill come from card front matter; the Exemplars cell is
-    each id with its folder descriptor - NOTES prose clipped mid-sentence on
-    the first real generate, so the curated folder name carries the summary."""
-    from atlas.core.refsets import list_sets
-    root = tmp_path / "Reference Sets"
-    folder = _set(root, "Code Analysis", CARD_RICH)
-    _exemplar(folder, "E1 Monte Vista - CRC", "E1", NOTES_WHY)
-    _exemplar(folder, "N1 McKean - debug notes", "N1", NOTES_FULL)
-    [row] = [line for line in contents_lines(list_sets(root), TODAY)
-             if line.startswith("| `")]
-    cells = [cell.strip() for cell in row.split("|")]
-    assert cells[3] == "shared"
-    assert cells[7] == "00-due-diligence:code-analysis"
-    assert cells[6] == "E1 Monte Vista - CRC; N1 McKean - debug notes"
-
-
-def test_contents_lines_rich_columns_absent(good_root: Path):
-    """A card without entity/skill and NOTES without a Why section degrade to
-    dashes and folder descriptors, never to blanks or errors."""
-    from atlas.core.refsets import list_sets
-    [row] = [line for line in contents_lines(list_sets(good_root), TODAY)
-             if line.startswith("| `")]
-    cells = [cell.strip() for cell in row.split("|")]
-    assert cells[3] == "-" and cells[7] == "-"
-    assert cells[6] == "E1 Monte Vista - CRC; N1 McKean - debug notes"
-
-
-def test_splice_requires_exactly_one_marker_block():
-    with pytest.raises(RefSetError):
-        splice_contents(["# README", "no markers"], [CONTENTS_BEGIN, CONTENTS_END])
-    doubled = [CONTENTS_BEGIN, CONTENTS_BEGIN, CONTENTS_END, CONTENTS_END]
-    with pytest.raises(RefSetError):
-        splice_contents(doubled, [CONTENTS_BEGIN, CONTENTS_END])
-
-
-def test_index_dry_run_previews_without_writing(good_root: Path, capsys):
-    readme = good_root / "README.md"
-    readme.write_text(_readme(), encoding="utf-8")
-    before = readme.read_bytes()
-    assert main(["refs", "index", "--root", str(good_root)]) == 1  # pending, like `runs`
-    out = capsys.readouterr().out
-    assert "-<!-- placeholder -->" in out and "+| `code-analysis`" in out
-    assert "--apply" in out
-    assert readme.read_bytes() == before
-
-
-def test_index_apply_is_byte_idempotent(good_root: Path, capsys):
-    readme = good_root / "README.md"
-    readme.write_text(_readme(), encoding="utf-8")
-    assert main(["refs", "index", "--root", str(good_root), "--apply"]) == 0
-    first = readme.read_bytes()
-    assert CONTENTS_BEGIN.encode() in first
-    assert b"| `code-analysis` |" in first
-    assert b"## Rules" in first  # outside the markers untouched
-    assert main(["refs", "index", "--root", str(good_root), "--apply"]) == 0
-    assert "up to date" in capsys.readouterr().out
-    assert readme.read_bytes() == first
-
-
-def test_index_regenerates_only_the_block(good_root: Path):
-    readme = good_root / "README.md"
-    stale_block = f"{CONTENTS_BEGIN}\n| hand edited |\n{CONTENTS_END}"
-    readme.write_text(_readme("| hand edited |\n"), encoding="utf-8")
-    assert main(["refs", "index", "--root", str(good_root), "--apply"]) == 0
-    text = readme.read_text(encoding="utf-8")
-    assert "| hand edited |" not in text
-    assert text.startswith("---\ntitle: Reference Sets\n---")
-
-
-def test_index_keeps_crlf(good_root: Path):
-    readme = good_root / "README.md"
-    readme.write_bytes(_readme().replace("\n", "\r\n").encode("utf-8"))
-    assert main(["refs", "index", "--root", str(good_root), "--apply"]) == 0
-    raw = readme.read_bytes()
-    assert b"\r\n" in raw and b"\n" not in raw.replace(b"\r\n", b"")
-
-
-def test_index_missing_readme_or_markers(tmp_path: Path, good_root: Path):
-    bare = tmp_path / "bare"
-    bare.mkdir()
-    assert main(["refs", "index", "--root", str(bare)]) == 2
-    (good_root / "README.md").write_text("# no markers\n", encoding="utf-8")
-    assert main(["refs", "index", "--root", str(good_root)]) == 2
-
-
-def test_index_json(good_root: Path, capsys):
-    (good_root / "README.md").write_text(_readme(), encoding="utf-8")
-    assert main(["refs", "index", "--root", str(good_root), "--json"]) == 1
-    out = json.loads(capsys.readouterr().out)
-    assert out["changed"] and not out["applied"]
-    assert out["sets"] == ["code-analysis"]

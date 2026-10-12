@@ -137,9 +137,6 @@ class Exemplar:
     source_path: str
     leak_list: tuple[str, ...]
     has_notes: bool
-    # First line of the NOTES "Why this one" section - the one-line reason the
-    # exemplar was chosen. "" when the section is absent or still a placeholder.
-    why: str = ""
 
 
 @dataclass(frozen=True)
@@ -181,27 +178,6 @@ def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-def _why_summary(text: str) -> str:
-    """The first content line of the NOTES '## Why this one' section.
-
-    "" when the section is absent or holds only the template's HTML-comment
-    placeholder - the caller falls back to the folder's own descriptor.
-    """
-    lines = text.splitlines()
-    start = next((i for i, line in enumerate(lines)
-                  if line.strip() == "## Why this one"), None)
-    if start is None:
-        return ""
-    for line in lines[start + 1:]:
-        stripped = line.strip()
-        if stripped.startswith("## "):
-            break
-        if not stripped or stripped.startswith("<!--"):
-            continue
-        return stripped
-    return ""
-
-
 def load_set(folder: Path) -> RefSet:
     card = front_matter(_text(folder / CARD))
     exemplars, retired = [], []
@@ -223,7 +199,6 @@ def load_set(folder: Path) -> RefSet:
             source_path=str(fm.get("source_path", "")),
             leak_list=leaks,
             has_notes=True,
-            why=_why_summary(_text(notes)),
         ))
     return RefSet(
         type=str(card.get("type", "")),
@@ -525,48 +500,143 @@ def doctor_sets(root: Path, today: date) -> list[SetReport]:
     return [doctor_set(p, today) for p in sorted(root.iterdir()) if p.is_dir()]
 
 
-# ---- refs index: the README contents block (robustness plan 1.2) ----------
+# ---- refs index: the README contents block (robustness plan 1.2,
+# ergonomics plan Phase 2) --------------------------------------------------
 
 # The library's atlas:contents pattern, mirroring atlas:agents in AGENTS.md:
 # Atlas owns the lines between the markers and nothing outside them.
 CONTENTS_BEGIN = "<!-- atlas:contents-begin -->"
 CONTENTS_END = "<!-- atlas:contents-end -->"
 
+# Lifecycle bands by numeric folder prefix (the 2026-10-09 renumbering). A new
+# band is a one-line edit: add (low, high, "Band name", "SUBGRAPH_ID") - the
+# Mermaid map and the per-band tables both follow.
+BANDS: tuple[tuple[int, int, str, str], ...] = (
+    (1, 9, "Due diligence", "DD"),
+    (10, 13, "Client & control", "CC"),
+    (14, 16, "Permitting", "PER"),
+    (19, 19, "Design", "DES"),
+    (20, 29, "Drawings", "DW"),
+    (40, 49, "Construction", "CON"),
+    (90, 99, "Control files", "CF"),
+)
+OTHER_BAND = ("Other", "OTH")  # no numeric prefix, or a gap number: never dropped
+NODE_LABEL_MAX = 25  # rules/visual-markdown.md: node labels stay short
 
-def _descriptor(ex: Exemplar) -> str:
-    """The folder's own words when NOTES has no Why line: the folder named
-    'E1 Monte Vista - CRC' describes itself as 'Monte Vista - CRC'."""
-    parts = ex.folder.name.split(None, 1)
-    return parts[1] if len(parts) == 2 else ex.folder.name
+# Status is a word in the tables AND a colour in the map - colour reinforces,
+# never carries (ADR 0008, rules/visual-markdown.md rule 5).
+STATUS_CLASSDEFS = {
+    "approved": "fill:#1a5d2e,color:#fff",
+    "candidate": "fill:#8a6d1a,color:#fff",
+    "retired": "fill:#5a5a5a,color:#fff",
+}
+
+
+def band_for(folder_name: str) -> tuple[str, str]:
+    """The (band name, subgraph id) a set folder belongs to, from its numeric
+    prefix. A folder outside every range lands in OTHER_BAND rather than
+    vanishing from the index."""
+    match = re.match(r"^(\d+)(?=\s|$)", folder_name)
+    if match:
+        prefix = int(match.group(1))
+        for low, high, name, band_id in BANDS:
+            if low <= prefix <= high:
+                return name, band_id
+    return OTHER_BAND
+
+
+def _node_id(folder_name: str) -> str:
+    """A Mermaid-safe node id: the folder's prefix+slug, non-alphanumerics as
+    underscores, letter-prefixed so a leading digit is legal."""
+    return "s" + re.sub(r"[^A-Za-z0-9]+", "_", folder_name).strip("_")
+
+
+def _node_label(folder_name: str) -> str:
+    """The folder name is the label - the number stays, it teaches the prefix.
+    An over-long name drops whole trailing words until it fits: '16
+    Comment-Response Letters' maps as '16 Comment-Response'."""
+    label = folder_name
+    while len(label) > NODE_LABEL_MAX and len(label.split()) > 2:
+        label = label.rsplit(" ", 1)[0]
+    return label
+
+
+def _banded(sets: list[RefSet]) -> list[tuple[str, str, list[RefSet]]]:
+    """Sets grouped into their lifecycle bands: BANDS order, OTHER_BAND last,
+    bands with no sets skipped."""
+    groups: dict[str, tuple[str, list[RefSet]]] = {}
+    for refset in sets:
+        name, band_id = band_for(refset.folder.name)
+        groups.setdefault(band_id, (name, []))[1].append(refset)
+    order = [band_id for _, _, _, band_id in BANDS] + [OTHER_BAND[1]]
+    return [(groups[band_id][0], band_id, groups[band_id][1])
+            for band_id in order if band_id in groups]
+
+
+def _map_lines(banded: list[tuple[str, str, list[RefSet]]]) -> list[str]:
+    """The visual map: one flowchart, one subgraph per band, one node per set,
+    bands linked in lifecycle order.
+
+    Progressive enhancement (rules/visual-markdown.md): no click links, labels
+    are the folder names the tables below also carry, and the status legend is
+    words coloured the same as the nodes. A reader on Drive web sees raw code
+    and loses nothing but the picture.
+    """
+    lines = ["```mermaid", "flowchart LR"]
+    for name, band_id, sets in banded:
+        lines.append(f'    subgraph {band_id}["{name}"]')
+        lines.append("        direction TB")
+        for refset in sets:
+            lines.append(f'        {_node_id(refset.folder.name)}'
+                         f'["{_node_label(refset.folder.name)}"]')
+        lines.append("    end")
+    if len(banded) > 1:
+        lines.append("    " + " --> ".join(band_id for _, band_id, _ in banded))
+    present = {refset.status for _, _, sets in banded for refset in sets}
+    shown = ["approved", "candidate"] + (["retired"] if "retired" in present else [])
+    for status in shown:
+        lines.append(f"    classDef {status} {STATUS_CLASSDEFS[status]}")
+    by_status: dict[str, list[str]] = {}
+    for _, _, sets in banded:
+        for refset in sets:
+            if refset.status in STATUS_CLASSDEFS:
+                by_status.setdefault(refset.status, []).append(_node_id(refset.folder.name))
+    for status in shown:
+        if by_status.get(status):
+            lines.append(f"    class {','.join(by_status[status])} {status}")
+    lines.append('    subgraph KEY["Status"]')
+    for status in shown:
+        lines.append(f'        key_{status}["{status}"]')
+    lines.append("    end")
+    for status in shown:
+        lines.append(f"    class key_{status} {status}")
+    lines.append("```")
+    return lines
 
 
 def contents_lines(sets: list[RefSet], today: date) -> list[str]:
-    """The regenerable contents block: one row per set, from card front matter
-    and the exemplars' NOTES summaries.
+    """The regenerable contents block: a Mermaid band map, then one 3-column
+    table per band - both built from the same card front matter, so they can
+    never drift (ergonomics plan Phase 2).
 
     Deterministic - same cards, same day, same bytes - so a regenerate with no
-    changes is byte-identical and the dry run says so. The stale flag is a
-    word in the Status column: text, never colour or glyph alone (ADR 0008).
-    Entity and Skill come from card front matter; the Exemplars cell is each
-    id with its folder descriptor ("E1 Monte Vista - CRC addition"), which is
-    the curated one-line summary - NOTES prose proved too long and clipped
-    mid-sentence on the first real generate.
+    changes is byte-identical and the dry run says so. The README answers
+    three questions: what exists, is it approved, where do I click; exemplar
+    detail stays one click in, on the card. The stale flag is the word
+    (STALE): text, never colour or glyph alone (ADR 0008).
     """
-    lines = [
-        CONTENTS_BEGIN,
-        "",
-        "| Type | Set | Entity | Status | Reviewed | Exemplars | Skill | Card |",
-        "|---|---|---|---|---|---|---|---|",
-    ]
-    for refset in sets:
-        status = refset.status or "?"
-        if refset.stale(today):
-            status += " (STALE)"
-        exemplars = "; ".join(f"{ex.id} {_descriptor(ex)}"
-                               for ex in refset.exemplars) or "-"
-        lines.append(f"| `{refset.type}` | {refset.title} | {refset.entity or '-'} | "
-                     f"{status} | {refset.reviewed or '-'} | {exemplars} | "
-                     f"{refset.skill or '-'} | `{refset.folder.name}\\{CARD}` |")
+    banded = _banded(sets)
+    lines = [CONTENTS_BEGIN, ""]
+    lines += _map_lines(banded)
+    for name, _, band_sets in banded:
+        lines += ["", f"### {name}", "", "| Set | Status | Card |", "|---|---|---|"]
+        for refset in band_sets:
+            status = refset.status or "?"
+            if refset.stale(today):
+                status += " (STALE)"
+            link = f"{refset.folder.name.replace(' ', '%20')}/{CARD}"
+            lines.append(f"| [{refset.folder.name}]({link}) | {status} | "
+                         f"[SET.md]({link}) |")
     lines += ["", CONTENTS_END]
     return lines
 

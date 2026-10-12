@@ -12,6 +12,7 @@ Rules are always-on conventions that shape every skill output. Unlike skills (in
 | [output-formatting](./output-formatting.md) | Tables, headings, source attribution, file naming, list structure |
 | [transparency](./transparency.md) | Show your work — link sources, expose inputs, make outputs verifiable |
 | [reference-sets](./reference-sets.md) | Look at an approved example of the deliverable before drafting; mark the draft; check it for copied facts |
+| [visual-markdown](./visual-markdown.md) | Mermaid and collapsible sections - when a diagram earns its place; words stand alone |
 
 ## How Rules Work — honestly
 

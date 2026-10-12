@@ -317,6 +317,10 @@ instead of a periodic surprise (1.6, Phase 5).
   leak check verified post-rename.
 - Known pre-existing: 2 test_project_data.py rename tests fail on clean HEAD;
   post-output-metadata hook times out on this machine (environmental).
+- 2026-10-09: README visual redesign landed (Phase 2 of the ergonomics plan):
+  `refs index` now emits a Mermaid band map plus per-band 3-column tables from
+  card front matter; applied to the real Reference Sets README (v1.9).
+- 2026-10-09: ergonomics plan Phase 3+4 - 27 card top strips, HOW-TO visual map.
 
 **2026-10-08 - Phase 2.1 batch (a) drafted (sa-5)**
 - Three new candidate sets, `atlas refs doctor` clean across all 11 sets:

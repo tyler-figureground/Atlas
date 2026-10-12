@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-09
+
+### Added
+
+- **Atlas - `refs index` emits the visual contents block (ergonomics plan
+  Phase 2).** The Reference Sets README's `atlas:contents` block is now a
+  Mermaid `flowchart LR` band map (one subgraph per lifecycle band, one short
+  node per set, status as classDef colour plus a word legend, no click links)
+  followed by one 3-column table per band (`Set | Status | Card`, %20-escaped
+  relative links, `(STALE)` as a word). Bands come from a data-driven prefix
+  table in `core/refsets.py` - a new band is a one-line edit. Map and tables
+  generate from the same card front matter, so they cannot drift; regenerate
+  stays byte-idempotent with dry-run diff and `--apply` (rules/visual-markdown.md).
+
 ## [0.14.0] - 2026-10-09
 
 ### Added
@@ -414,7 +428,8 @@ First public release.
 - **3 hooks** — post-write disclaimer check, post-output metadata, pre-commit spec lint.
 - Marketplace install: `claude plugin marketplace add AlpacaLabsLLC/skills-for-architects`.
 
-[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.15.0
 [0.14.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.14.0
 [0.13.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.13.0
 [0.12.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.12.0
