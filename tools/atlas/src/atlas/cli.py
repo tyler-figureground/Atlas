@@ -1180,6 +1180,23 @@ def cmd_refs_index(args: argparse.Namespace) -> int:
     return 1 if changed and not applied else 0
 
 
+def cmd_refs_gallery(args: argparse.Namespace) -> int:
+    """Write the human-facing gallery (``Reference Sets.html``) beside the sets
+    README. A pure generated artifact - written directly, like ``tyler --write``;
+    byte-identical on regenerate over unchanged cards. 0 = written, 2 = error."""
+    from .core.refsgallery import thumbnail, write_gallery
+    root = _reference_root(args)
+    sets = list_sets(root)
+    path = write_gallery(root, sets)
+    shots = sum(1 for s in sets if thumbnail(s.folder.name, s))
+    if args.json:
+        print(json.dumps({"gallery": str(path), "sets": [s.type for s in sets],
+                          "tiles": len(sets), "thumbnails": shots}, indent=2))
+    else:
+        print(f"wrote {path} ({len(sets)} sets, {shots} thumbnails)")
+    return 0
+
+
 def cmd_tyler(args: argparse.Namespace) -> int:
     """Roll up Tyler's open errands and DECISION blockers across projects (ADR 0016).
 
@@ -1932,6 +1949,13 @@ def main(argv: list[str] | None = None) -> int:
     refs_index.add_argument("--drive", default=argparse.SUPPRESS)
     refs_index.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
     refs_index.set_defaults(fn=cmd_refs_index)
+    refs_gallery = refs_commands.add_parser(
+        "gallery", help="write the human-facing Reference Sets.html gallery beside "
+                        "the sets README (self-contained, regenerable; always writes)")
+    refs_gallery.add_argument("--root", default=argparse.SUPPRESS)
+    refs_gallery.add_argument("--drive", default=argparse.SUPPRESS)
+    refs_gallery.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    refs_gallery.set_defaults(fn=cmd_refs_gallery)
 
     pdf = sub.add_parser("pdf", help="print a Markdown deliverable to a PDF beside it (Edge/Chrome)")
     pdf.add_argument("source", help="the .md file")

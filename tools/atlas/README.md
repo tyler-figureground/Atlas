@@ -251,6 +251,7 @@ atlas refs [--root DIR] [--json]
 atlas refs check <draft> [--type TYPE] [--exemplar ID ...] [--project DIR] [--json]
 atlas refs doctor [--root DIR] [--json]
 atlas refs index [--root DIR] [--apply] [--json]
+atlas refs gallery [--root DIR] [--json]
 ```
 
 Generic strings - dates, times, sums, dimensions, short IDs like `DR-019` - are never
@@ -285,8 +286,17 @@ drawings, 40-49 construction, 90-99 control files; a data-driven table in
 classDef colour plus a word legend, never a click link - then one 3-column table per band
 (`Set | Status | Card`, %20-escaped relative links, `(STALE)` as a word, never colour
 alone). Map and tables come from the same front matter, so they cannot drift. Dry run
-prints the diff; `--apply` writes. An unchanged regenerate is byte-identical. This is the
-refs module's one write; everything else is read-only.
+prints the diff; `--apply` writes. An unchanged regenerate is byte-identical.
+
+`atlas refs gallery` writes `Reference Sets.html` beside the README - the
+human-facing browse page (Tyler, 2026-10-09): one tile per set under the same
+bands, status as word plus colour, the card's first "Use when" line, card,
+folder and per-exemplar links (a frozen PDF links directly), and a thumbnail
+from an exemplar's `Pages/` PNGs where a drawing set has them. Self-contained
+- inline CSS, a vanilla JS filter box, a sticky band nav, every href relative
+and URL-encoded - so it opens from `file://` on the library drive. No
+timestamps: an unchanged regenerate is byte-identical. Writes directly and
+prints the path; exit 0, 2 on error.
 The card templates are in `src/atlas/templates/reference-set/`.
 
 ## PDF export

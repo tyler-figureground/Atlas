@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-09
+
+### Added
+
+- **Atlas - `refs gallery`, the human-facing Reference Sets page (Tyler,
+  2026-10-09: Option A).** `atlas refs gallery` writes `Reference Sets.html`
+  beside the sets README: a self-contained browse page (inline CSS, vanilla JS
+  filter box, sticky band nav, no network - works from `file://`), one tile per
+  set under the same lifecycle bands as `refs index`, status as word plus colour
+  (ADR 0008), the card's first "Use when" line, card/folder/exemplar links
+  (frozen PDFs link directly), and a thumbnail from an exemplar's `Pages/`
+  PNGs where a drawing set has them. A prominent header link points at the
+  Junior Quick Start one level up. Deterministic - no timestamps - so
+  regenerating over unchanged cards is byte-identical. `--json` per ADR 0008;
+  exit 0 written, 2 on error.
+
 ## [0.15.0] - 2026-10-09
 
 ### Added
@@ -428,7 +444,8 @@ First public release.
 - **3 hooks** — post-write disclaimer check, post-output metadata, pre-commit spec lint.
 - Marketplace install: `claude plugin marketplace add AlpacaLabsLLC/skills-for-architects`.
 
-[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.16.0
 [0.15.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.15.0
 [0.14.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.14.0
 [0.13.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.13.0

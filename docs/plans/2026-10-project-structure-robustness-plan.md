@@ -308,6 +308,13 @@ instead of a periodic surprise (1.6, Phase 5).
 - **Atlas 0.14.0 released and deployed** (backup `_tools\logs\atlas-0.14.0-deploy-
   20261011-155213`, `Atlas.bat --version` verified, HOW-TO search/dossier
   section, lint clean). Repo pushed to origin/main.
+- **Human-facing gallery (Tyler 2026-10-09: "I won't navigate a README, let alone
+  an intern"): `atlas refs gallery` generates a self-contained `Reference Sets.html`
+  beside the README - 27 tiles in 7 lifecycle bands, status badges as word+colour,
+  filter box, exemplar/PDF direct links, thumbnails from drawing sets' Pages PNGs,
+  junior quick-start link. Generated from the same front matter as the README map,
+  so the two can never drift. HOW-TO "Look at a good one first" points at it.
+  Atlas 0.16.0 deployed. The README stays the agent/maintainer index.
 - **Reference Sets renumbered with lifecycle-order prefixes** (Tyler 2026-10-09:
   the flat 27-folder list was overwhelming): 01 Research Reports -> 03 Code
   Analysis, 10-16 client/control/permitting, 19-26 drawings, 40-45
