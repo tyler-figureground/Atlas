@@ -324,6 +324,25 @@ instead of a periodic surprise (1.6, Phase 5).
   leak check verified post-rename.
 - Known pre-existing: 2 test_project_data.py rename tests fail on clean HEAD;
   post-output-metadata hook times out on this machine (environmental).
+
+**2026-10-13 - the remaining agent-buildable items landed (Atlas 0.17.0)**
+- Console keys for the CLI-only verbs: `A` archive (modal always, per ADR 0019),
+  `U` unarchive via picker, `D` deep pass into a new DEEP Companion mode.
+- Focus Rule shipped: the focused Region carries a heavy frame, unfocused a
+  muted rail - weight, not hue; every modal, input and overlay follows. The
+  console map's last fog item is cleared; open tickets remain zero.
+- Flakes fixed at the root: transient Windows rename locks (WinError 5/32) retry
+  with bounded backoff; the follow-timer race (NoMatches at teardown /
+  ScreenStackError) is guarded at both vectors. 1186 tests; four consecutive
+  clean full-suite runs.
+- Drawing QA measurement loop live (Phase 3.3): RUN.md template measurement
+  block, baseline record and monthly report shell in Library
+  Administration/Evals; aggregation is manual until tooled.
+- 0.17.0 deployed (backup `_tools\logstlas-0.17.0-deploy-20261013-101318` is
+  0.16.0's; this deploy's own folder is timestamped alongside) and pushed.
+- Recurring environment annoyance recorded: stale `.git/index.lock` files appear
+  after long test runs (idle VS Code git watcher nearby); removed three times
+  this session. If it recurs, the watcher is the suspect.
 - 2026-10-09: README visual redesign landed (Phase 2 of the ergonomics plan):
   `refs index` now emits a Mermaid band map plus per-band 3-column tables from
   card front matter; applied to the real Reference Sets README (v1.9).
