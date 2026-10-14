@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
-from datetime import date
+from datetime import date, datetime
 import os
 from pathlib import Path
 import subprocess
 
 from rich.text import Text
 from textual import events, work
-from textual.app import App, ComposeResult, SystemCommand
+from textual.app import App, ComposeResult, ScreenStackError, SystemCommand
 from textual.geometry import Size
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -37,6 +37,13 @@ from textual.widgets import (
     Static,
 )
 
+from ..core.archive import (
+    ArchiveGuard,
+    ArchivePlan,
+    apply_archive_plan,
+    build_archive_plan,
+    build_unarchive_plan,
+)
 from ..core.conform import (
     CONFLICT,
     DONE,
@@ -62,6 +69,7 @@ from ..core.contacts import (
     update_contact,
 )
 from ..core.doctor import DriveReport, report_project
+from ..core.deep import DeepScan, scan_deep
 from ..core.intake import (
     CONTROL_PATTERN,
     IntakeError,
@@ -109,6 +117,7 @@ from .layout import (
     ABBREVIATE_COLUMNS,
     COMPANION,
     DEFAULT_MODE,
+    DEEP,
     SPLIT_COLUMNS,
     EXPECTATIONS,
     LIST_COLUMNS,
@@ -118,6 +127,7 @@ from .layout import (
     MODE_LABELS,
     PROJECT_LIST,
     REFUSED,
+    REGION_FRAME,
     TREE,
     drill,
     footer_actions,
@@ -127,7 +137,15 @@ from .layout import (
     summary_line,
     unwind,
 )
-from .model import ProjectRow, project_detail, project_rows, visible_rows
+from .model import (
+    DEEP_EMPTY,
+    ProjectRow,
+    deep_findings_count,
+    deep_lines,
+    project_detail,
+    project_rows,
+    visible_rows,
+)
 from .dossier import dossier_error_lines, dossier_lines, dossier_missing_lines
 from .repair import (
     UndoEntry,
@@ -890,6 +908,54 @@ class ResultModal(ModalScreen[None]):
         self.dismiss(None)
 
 
+class ArchivePickerModal(ModalScreen[str | None]):
+    """Pick one archived project to bring back (ADR 0019, `U`).
+
+    The archive root is enumerated on demand - the worker that fills this list
+    is the only time Atlas looks in there. Picking a name previews the
+    un-archive plan in the usual confirm modal; this modal is a selection, not
+    a confirmation. One project at a time: no multi-pick, because every
+    archive verb is named and approved individually (ADR 0019 #5).
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel", show=False)]
+
+    def __init__(self, archive_root: str, names: list[str]) -> None:
+        super().__init__()
+        self._archive_root = archive_root
+        self._names = names
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog", classes="selection-dialog"):
+            yield Label(f"Unarchive - {self._archive_root}", classes="dialog-title", markup=False)
+            yield Static(
+                "Enter picks one project and previews the move back; nothing moves here.",
+                classes="supporting",
+                markup=False,
+            )
+            # Text, never str: an archived folder named "[old] Site Survey" is
+            # a name, not markup (ticket 05).
+            yield OptionList(
+                *(Option(Text(name)) for name in self._names),
+                id="archived-projects",
+            )
+            with Horizontal(classes="actions"):
+                yield Button("Cancel", id="cancel")
+
+    def on_mount(self) -> None:
+        self.query_one(OptionList).focus()
+
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+        if 0 <= event.option_index < len(self._names):
+            self.dismiss(self._names[event.option_index])
+
+    def on_button_pressed(self, _: Button.Pressed) -> None:
+        self.action_cancel()
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class AtlasApp(App):
     TITLE = "Atlas"
     HORIZONTAL_BREAKPOINTS = [(0, "-tiny"), (40, "-narrow"), (100, "-wide")]
@@ -937,6 +1003,9 @@ class AtlasApp(App):
         Binding("z", "zoom_region", "Zoom", show=False),
         Binding("n", "new_project", "New project"),
         Binding("e", "edit_project", "Edit project"),
+        Binding("A", "archive_project", "Archive", show=False),
+        Binding("U", "unarchive_project", "Unarchive", show=False),
+        Binding("D", "deep_pass", "Deep pass", show=False),
         Binding("m", "manage_contacts", "Contacts"),
         Binding("a", "add_section", "Add folders"),
         Binding("c", "clean", "Clean", show=False),
@@ -1006,6 +1075,10 @@ class AtlasApp(App):
         # reveal rides the moment it lands.
         self._reveal_key: str | None = None
         self._reveal_project = ""
+        # Deep-pass findings per project (ticket 31's walk, on demand from
+        # `D`): project name -> (scan, walked-at clock time). Point-in-time
+        # facts - cleared on rescan and drive switch, like the tree cache.
+        self._deep: dict[str, tuple[DeepScan, str]] = {}
         self._rows: tuple[ProjectRow, ...] = ()
         self._visible_rows: tuple[ProjectRow, ...] = ()
         self._marked: set[str] = set()
@@ -1232,6 +1305,12 @@ class AtlasApp(App):
         if self._selected_row() is not None:
             yield SystemCommand("Project health", "Show exact findings in the Companion", self.action_show_health)
             yield SystemCommand("Edit project", "Correct project intake fields", self.action_edit_project)
+            yield SystemCommand("Archive project",
+                                "A - move the focused project under the archive root; always the modal",
+                                self.action_archive_project)
+            yield SystemCommand("Deep pass",
+                                "D - walk below the root: receipt sweeps, over-long paths, unreadables",
+                                self.action_deep_pass)
             yield SystemCommand("Open project folder", "o - the tree node under the cursor, or the project",
                                 self.action_open_folder)
             yield SystemCommand("Copy path", "y - the tree node under the cursor, or the project",
@@ -1245,6 +1324,8 @@ class AtlasApp(App):
                                     "c - preview folders with no file anywhere beneath", self.action_clean)
                 yield SystemCommand("Conform project",
                                     "f - the focused project, tree node, or unmet Expectation", self.action_conform)
+                yield SystemCommand("Unarchive a project",
+                                    "U - list the archive root and bring one back", self.action_unarchive_project)
         if self._marked and self._inventory_fresh:
             yield SystemCommand(
                 "Conform marked projects",
@@ -1273,6 +1354,23 @@ class AtlasApp(App):
             return True if has_project and self._inventory_fresh and not self._busy else None
         if action in {"add_section", "clean", "conform"}:
             return True if has_project and self._inventory_fresh and not self._busy else None
+        if action == "archive_project":
+            # Over a modal the keyboard belongs to the modal - a whole-project
+            # move behind a form the operator is filling in is the failure
+            # mode ADR 0019's named-one-at-a-time rule exists to prevent.
+            if self.screen is not self.screen_stack[0]:
+                return False
+            return True if has_project and self._inventory_fresh and not self._busy else None
+        if action == "unarchive_project":
+            if self.screen is not self.screen_stack[0]:
+                return False
+            return True if has_drive and self._inventory_fresh and not self._busy else None
+        if action == "deep_pass":
+            # Read-only (a walk, never a write), so a busy drive is no reason
+            # to refuse - but over a modal the key is the modal's, not ours.
+            if self.screen is not self.screen_stack[0]:
+                return False
+            return True if has_project and self._showing == "projects" else None
         if action == "conform_marked":
             return True if self._marked and self._inventory_fresh and not self._busy else None
         if action in {"open_folder", "toggle_mark", "copy_path"}:
@@ -1346,6 +1444,7 @@ class AtlasApp(App):
         self._undo = UndoStack()
         self._trees.clear()
         self._workspace_project = ""
+        self._deep = {}
         self._name_index = None
         self._content_index = None
         self._content_building = False
@@ -1372,6 +1471,7 @@ class AtlasApp(App):
             self._set_operation(f"Scanning {root.name}...")
         self._name_index = None     # rebuilt behind the scan it belongs to
         self._content_index = None  # reloaded when the scan lands
+        self._deep = {}             # point-in-time walks; the rescan supersedes them
         self.refresh_bindings()
         self._scan_drive_worker(root, generation)
 
@@ -1567,7 +1667,7 @@ class AtlasApp(App):
             width, size.height or 24,
             focus=self._focus_region, collapsed=self._collapsed, zoomed=self._zoomed,
         )
-        return list_columns(list_width(width, layout))
+        return list_columns(list_width(width, layout) - REGION_FRAME)
 
     def _render_table(self) -> None:
         """Draw the visible rows into the list, sized to the width it has.
@@ -1731,10 +1831,25 @@ class AtlasApp(App):
 
     def _update_workspace(self, row: ProjectRow) -> None:
         self._follow_timer = None
+        try:
+            screen = self.screen
+        except ScreenStackError:
+            # A pending follow timer fired mid-shutdown: there is no screen to
+            # draw on and nothing left to populate.
+            return
+        if isinstance(screen, ModalScreen):
+            # The timer fired while a modal owns the screen: the cursor's
+            # project has not changed and the tree belongs to the console
+            # screen. The refresh after the modal closes repopulates.
+            return
+        view_query = screen.query(ProjectTreeView)
+        if not view_query:
+            # The tree is gone from the DOM (teardown): nothing to populate.
+            return
         if row.key != self._workspace_project:
             return      # the cursor moved on while this was pending
         tree = self._project_tree(row)
-        view = self.query_one(ProjectTreeView)
+        view = view_query.first()
         narrow = (self.size.width or 80) < ABBREVIATE_COLUMNS
         # Only a different project earns a rebuild. `d`, health, mark, sort and
         # the filter all come through here for the same project, and rebuilding
@@ -1774,6 +1889,17 @@ class AtlasApp(App):
                 f"  {e.label}" + ("" if e.repairable or e.kind == CONTRACT else "   (add folders)")
                 for e in unmet
             ) or "  Nothing missing - the project has what the map expects."
+        elif mode == DEEP:
+            # The opt-in walk below the root (ticket 31), run on `D`. Its facts
+            # are point-in-time; the walk's clock time leads the body.
+            entry = self._deep.get(row.key)
+            if entry is None:
+                body = DEEP_EMPTY
+                count = 0
+            else:
+                scan, walked = entry
+                body = deep_lines(scan, walked)
+                count = deep_findings_count(scan)
         else:
             body = self._render_dossier(row, tree)
             count = 0
@@ -2664,6 +2790,294 @@ class AtlasApp(App):
             ),
             done,
         )
+
+    # ------------------------------------------------- archive and un-archive
+    #
+    # The console keys for ADR 0019's drive-scoped verbs (ticket 32 shipped
+    # them CLI-only). Confirmation is ALWAYS the modal, even at one action -
+    # the recorded exception to ADR 0006's inline-for-one-action rule - so
+    # neither verb ever touches the armed-repair line. Applied plans cross
+    # ArchiveGuard.for_plan and apply_archive_plan; the rescan every operation
+    # ends with is what drops (or restores) the project-list row.
+    #
+    # The per-Project undo stack (ticket 23) does not carry archives: it is
+    # keyed by the selected list row and holds conform Plans inverted by
+    # conform's invert_plan, and an applied archive removes its row on the
+    # rescan, so `u` has nothing to select. ADR 0019's undo is the verb's own
+    # inverse - `U` runs the inverse-shaped plan through the same Guard and
+    # apply machinery, and the archive apply forgets the departed project's
+    # repair history (forget_undo), as a project-wide conform does.
+
+    def action_archive_project(self) -> None:
+        """A: archive the focused project. Always the modal (ADR 0019)."""
+        if self._busy or not self._inventory_fresh or self._inventory is None:
+            return
+        if self.screen is not self.screen_stack[0]:
+            return
+        row = self._selected_row()
+        if row is None:
+            return
+        root = self._inventory.root
+        drive_map = self._inventory.map
+        # Plan build pays one walk (the model-file count), so off the UI
+        # thread, like every other prepare step.
+        self._busy = True
+        self._work_kind = "prepare"
+        self._set_operation(f"Preparing the archive plan for {row.key}...")
+        self.refresh_bindings()
+        self._archive_plan_worker(root, drive_map, row.key)
+
+    @work(thread=True, exclusive=True, group="prepare", exit_on_error=False)
+    def _archive_plan_worker(self, root: Path, drive_map: DriveMap, name: str) -> None:
+        try:
+            plan = build_archive_plan(root, drive_map, name)
+            guard = ArchiveGuard.for_plan(root, drive_map, plan)
+        except Exception as error:  # OpsError refusals plus filesystem failures
+            self.call_from_thread(self._preparation_failed, f"archive {name}", error)
+            return
+        self.call_from_thread(self._archive_ready, root, drive_map, plan, guard)
+
+    @staticmethod
+    def _archive_lines(plan: ArchivePlan, *, verb: str) -> list[str]:
+        """The confirm modal's body: the move, the warnings, the notes.
+
+        The warnings (model files, unreadable folders, open task items) and the
+        untouched note are the plan's own - the modal shows what the preview
+        saw, even when there is nothing to warn about (ADR 0019 #3).
+        """
+        action = plan.actions[0]
+        lines = [
+            f"{verb}: {action.src} -> {action.dst} ({action.file_count} files)",
+            f"  {action.note}",
+        ]
+        if action.path_warning:
+            # ADR 0006: the warning is the only safeguard, so the modal carries it.
+            lines.append(f"  [path {action.path_length} > 260]")
+        if plan.warnings:
+            lines.append("")
+            lines.extend(f"  {warning}" for warning in plan.warnings)
+        lines.append("")
+        lines.extend(f"  {note}" for note in plan.notes)
+        return lines
+
+    def _archive_ready(self, root: Path, drive_map: DriveMap, plan: ArchivePlan,
+                       guard: ArchiveGuard) -> None:
+        self._busy = False
+        self._work_kind = None
+        self.refresh_bindings()
+        lines = self._archive_lines(plan, verb="Archive")
+        lines.append("  The project leaves the list; U (unarchive) brings it back by name.")
+
+        def done(confirmed: bool) -> None:
+            if not confirmed:
+                return
+
+            def archive() -> OperationOutcome:
+                stale = guard.check(root)
+                if stale is not None:
+                    return OperationOutcome(
+                        title="Archive plan changed",
+                        summary=f"Nothing moved - {stale}",
+                        lines=(stale, "Archive again to review the current plan."),
+                        severity="warning",
+                    )
+                result = apply_archive_plan(root, drive_map, plan)
+                action = result.actions[0]
+                if action.status == DONE:
+                    return OperationOutcome(
+                        title="Project archived",
+                        summary=f"Archived {plan.project} to {action.dst}",
+                        lines=(
+                            f"Moved: {action.src} -> {action.dst}",
+                            action.note,
+                            "U lists the archive root and brings a project back.",
+                        ),
+                        forget_undo=(plan.project,),
+                    )
+                return OperationOutcome(
+                    title="Archive did not complete",
+                    summary=f"Archive of {plan.project}: "
+                            f"{(action.status or 'planned').upper()} - {action.note}",
+                    lines=(f"{action.kind}: {action.src} -> {action.dst}", action.note),
+                    severity="error" if action.status == FAILED else "warning",
+                )
+
+            self._start_operation(f"Archiving {plan.project}", root, archive)
+
+        self.push_screen(
+            ConfirmListModal(
+                f"Archive project - {plan.project}",
+                lines,
+                f"Archive {plan.project}",
+            ),
+            done,
+        )
+
+    def action_unarchive_project(self) -> None:
+        """U: enumerate the archive root - on demand, never before - pick one
+        archived project, preview the move back in the modal, apply it."""
+        if self._busy or not self._inventory_fresh or self._inventory is None:
+            return
+        if self.screen is not self.screen_stack[0]:
+            return
+        root = self._inventory.root
+        drive_map = self._inventory.map
+        self._busy = True
+        self._work_kind = "prepare"
+        self._set_operation(f"Listing {drive_map.archive_root}...")
+        self.refresh_bindings()
+        self._archive_list_worker(root, drive_map)
+
+    @work(thread=True, exclusive=True, group="prepare", exit_on_error=False)
+    def _archive_list_worker(self, root: Path, drive_map: DriveMap) -> None:
+        try:
+            archive_path = root / drive_map.archive_root
+            names: list[str] = []
+            if archive_path.is_dir():
+                listing = list_entries(archive_path)
+                if not listing.readable:
+                    raise OSError(f"cannot read {archive_path}: {listing.error}")
+                names = sorted(entry.name for entry in listing if entry.is_dir)
+        except Exception as error:
+            self.call_from_thread(self._preparation_failed, "list the archive root", error)
+            return
+        self.call_from_thread(self._archive_list_ready, root, drive_map, names)
+
+    def _archive_list_ready(self, root: Path, drive_map: DriveMap, names: list[str]) -> None:
+        self._busy = False
+        self._work_kind = None
+        self.refresh_bindings()
+        if not names:
+            self._set_operation(f"Nothing is archived under {drive_map.archive_root}")
+            return
+
+        def picked(name: str | None) -> None:
+            if name is None:
+                return
+            self._busy = True
+            self._work_kind = "prepare"
+            self._set_operation(f"Preparing the unarchive plan for {name}...")
+            self.refresh_bindings()
+            self._unarchive_plan_worker(root, drive_map, name)
+
+        self.push_screen(ArchivePickerModal(drive_map.archive_root, names), picked)
+
+    @work(thread=True, exclusive=True, group="prepare", exit_on_error=False)
+    def _unarchive_plan_worker(self, root: Path, drive_map: DriveMap, name: str) -> None:
+        try:
+            plan = build_unarchive_plan(root, drive_map, name)
+            guard = ArchiveGuard.for_plan(root, drive_map, plan)
+        except Exception as error:
+            self.call_from_thread(self._preparation_failed, f"unarchive {name}", error)
+            return
+        self.call_from_thread(self._unarchive_ready, root, drive_map, plan, guard)
+
+    def _unarchive_ready(self, root: Path, drive_map: DriveMap, plan: ArchivePlan,
+                         guard: ArchiveGuard) -> None:
+        self._busy = False
+        self._work_kind = None
+        self.refresh_bindings()
+        lines = self._archive_lines(plan, verb="Unarchive")
+        lines.append("  The project rejoins the list; an emptied archive root is pruned.")
+
+        def done(confirmed: bool) -> None:
+            if not confirmed:
+                return
+
+            def unarchive() -> OperationOutcome:
+                stale = guard.check(root)
+                if stale is not None:
+                    return OperationOutcome(
+                        title="Unarchive plan changed",
+                        summary=f"Nothing moved - {stale}",
+                        lines=(stale, "Unarchive again to review the current plan."),
+                        severity="warning",
+                    )
+                result = apply_archive_plan(root, drive_map, plan)
+                action = result.actions[0]
+                if action.status == DONE:
+                    return OperationOutcome(
+                        title="Project unarchived",
+                        summary=f"Unarchived {plan.project} - back at the drive root",
+                        lines=(
+                            f"Moved: {action.src} -> {action.dst}",
+                            action.note,
+                        ),
+                    )
+                return OperationOutcome(
+                    title="Unarchive did not complete",
+                    summary=f"Unarchive of {plan.project}: "
+                            f"{(action.status or 'planned').upper()} - {action.note}",
+                    lines=(f"{action.kind}: {action.src} -> {action.dst}", action.note),
+                    severity="error" if action.status == FAILED else "warning",
+                )
+
+            self._start_operation(f"Unarchiving {plan.project}", root, unarchive)
+
+        self.push_screen(
+            ConfirmListModal(
+                f"Unarchive project - {plan.project}",
+                lines,
+                f"Unarchive {plan.project}",
+            ),
+            done,
+        )
+
+    # ------------------------------------------------- the deep pass
+    #
+    # `D` runs ticket 31's opt-in walk on the focused project, off the UI
+    # thread, and the findings render in the Companion's DEEP mode. Read-only:
+    # receipt sweeps earn no inline repair key (ticket 26) - the mode points
+    # at `conform --deep --apply` on the CLI.
+
+    def action_deep_pass(self) -> None:
+        if self._showing != "projects" or self._inventory is None:
+            return
+        if self.screen is not self.screen_stack[0]:
+            return
+        row = self._selected_row()
+        if row is None:
+            return
+        inventory = self._inventory
+        project = next((p for p in inventory.projects if p.name == row.key), None)
+        if project is None:
+            return
+        if self._armed is None:
+            # Never overwrite an armed confirm - the line is the write's only
+            # witness. The findings land in the Companion either way.
+            self._set_operation(
+                f"Deep pass on {row.key} - walking every folder below the root...")
+        self._deep_worker(self._scan_generation, row.key, project.path, inventory.map)
+
+    @work(thread=True, exclusive=True, group="deep", exit_on_error=False)
+    def _deep_worker(self, generation: int, name: str, project: Path,
+                     drive_map: DriveMap) -> None:
+        try:
+            scan = scan_deep(project, drive_map)
+        except Exception as error:  # a vanishing mount mid-walk, not a finding
+            self.call_from_thread(self._deep_failed, generation, name, error)
+            return
+        self.call_from_thread(self._deep_ready, generation, name, scan)
+
+    def _deep_ready(self, generation: int, name: str, scan: DeepScan) -> None:
+        if generation != self._scan_generation:
+            return      # a rescan since the key press superseded this walk
+        self._deep[name] = (scan, datetime.now().strftime("%H:%M:%S"))
+        findings = deep_findings_count(scan)
+        if self._armed is None:
+            noun = "finding" if findings == 1 else "findings"
+            self._set_operation(f"Deep pass on {name}: {findings} {noun} - in the Companion")
+        row = self._selected_row()
+        if row is not None and row.key == name:
+            # The operator asked for these findings; put them where they can
+            # be read. Another project's cursor rest leaves the mode alone.
+            self._companion_mode = DEEP
+            self._render_companion(row, self._trees.get(name))
+
+    def _deep_failed(self, generation: int, name: str, error: Exception) -> None:
+        if generation != self._scan_generation:
+            return
+        self._set_operation(f"Deep pass on {name} failed: {error}", "error")
 
     # ------------------------------------------------- the tree's writes
     #

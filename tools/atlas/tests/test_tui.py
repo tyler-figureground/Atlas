@@ -79,6 +79,47 @@ def test_new_project_action_is_visible_in_footer():
     assert binding.show
 
 
+async def test_workspace_update_during_a_modal_is_a_no_op(fixture_drive):
+    """Deterministic half of the follow-timer race: with a modal on top, a
+    pending workspace update touches nothing and raises nothing (the tree
+    belongs to the console screen, not the modal's DOM)."""
+    from types import SimpleNamespace
+
+    m = load_map(find_map(fixture_drive))
+    new_project(fixture_drive, m, make_intake(fixture_drive, "Alpha", created=date(2026, 8, 13)))
+    make_project(fixture_drive, "260813_Beta", sections=["01 Model"])
+
+    app = AtlasApp(fixture_drive)
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await pilot.press("n")
+        assert isinstance(app.screen, NewProjectModal)
+        # The stand-in carries only what the guard reads before returning.
+        app._update_workspace(SimpleNamespace(key="260813_Beta"))
+        assert isinstance(app.screen, NewProjectModal)
+        await pilot.press("escape")
+
+
+async def test_follow_timer_firing_during_teardown_is_a_no_op(fixture_drive):
+    """The workspace follows the cursor on a debounce timer. If the app shuts
+    down while that timer is pending (cursor landed on an unread project and
+    the test ends inside the debounce window), the timer fires against a DOM
+    that no longer holds the tree. It must bail, not raise NoMatches - this
+    flaked test_new_project_wizard_creates_complete_project at run_test exit."""
+    m = load_map(find_map(fixture_drive))
+    new_project(fixture_drive, m, make_intake(fixture_drive, "Alpha", created=date(2026, 8, 13)))
+    make_project(fixture_drive, "260813_Beta", sections=["01 Model"])
+
+    app = AtlasApp(fixture_drive)
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        assert app.query_one("#projects").row_count == 2
+        await pilot.press("down")      # unread project: the update arms a timer
+        assert app._follow_timer is not None
+        # Exit the context inside the debounce window: if the pending timer
+        # raises during teardown, run_test re-raises it here.
+
+
 async def test_new_project_wizard_creates_complete_project(fixture_drive):
     contact = add_contact(
         fixture_drive,

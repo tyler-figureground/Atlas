@@ -11,6 +11,9 @@ nothing in `00 Tasks/` or `.agent/handoff/` names it.
 - Ended:
 - Result filed: <absolute path, or none>
 - Reference: <set and exemplars opened, e.g. code-analysis E1, E3 - or: no set for this type>
+<!-- Fill both lines for any run that produces sheets; blank is fine otherwise. -->
+- Rounds to acceptance: <n>
+- Defects reaching Tyler: <n>
 - Tasks touched: <T-NNN done, T-NNN added>
 - Left open: <locks, unsynced model, held items>
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..core.deep import BUDGET_WARN_FRACTION, DRIVE_ITEM_CAP, DeepScan
 from ..core.doctor import ProjectReport
 from ..core.mapfile import DriveMap
 
@@ -167,4 +168,65 @@ def project_detail(row: ProjectRow) -> str:
             "  space mark  x conform marked",
         )
     )
+    return "\n".join(lines)
+
+
+# ----------------------------------------------------------- the deep pass
+
+# The DEEP Companion Mode's empty state - a walk nobody has asked for yet is
+# exactly that, never a silent blank (ADR 0004).
+DEEP_EMPTY = (
+    "No deep pass has run for this project.\n"
+    "  D runs one - it walks every folder below the project root."
+)
+
+
+def deep_findings_count(scan: DeepScan) -> int:
+    """What the summary line counts for a finished pass."""
+    return (len(scan.hits) + len(scan.unreadable) + len(scan.overlong)
+            + len(scan.depth_capped))
+
+
+def deep_lines(scan: DeepScan, walked: str) -> str:
+    """The DEEP Companion Mode's body for one finished pass.
+
+    Same finding words as `doctor --deep` prints on the CLI - the surfaces
+    disagree in vocabulary only when one of them is wrong. Receipt sweeps are
+    listed, never repaired from here (ticket 26): the pointer to
+    `conform --deep --apply` is the whole repair surface.
+    """
+    lines = [f"Walked {walked} - D re-runs."]
+
+    lines.extend(("", "SWEEP PENDING (deep)"))
+    if scan.hits:
+        lines.extend(f"  {hit.path} -> {hit.target} (rule: {hit.rule})"
+                     for hit in scan.hits)
+        lines.append("  No inline repair key - `atlas conform --deep --apply` sweeps these.")
+    else:
+        lines.append("  No receipt-rule matches below the root")
+
+    if scan.unreadable:
+        # Never folded into anything else: a folder the walk could not open is
+        # not one it found empty (ADR 0004).
+        lines.extend(("", "COULD NOT READ (deep)"))
+        lines.extend(f"  {line}" for line in scan.unreadable)
+
+    if scan.overlong:
+        lines.extend(("", "OVER-LONG PATHS"))
+        lines.extend(f"  over-long path ({entry.length} chars): {entry.path}"
+                     for entry in scan.overlong)
+        lines.append("  Shortening a path is a person's call - Atlas never repairs these.")
+
+    if scan.depth_capped:
+        lines.extend(("", "DEPTH GUARD"))
+        lines.extend(f"  not scanned below {line}" for line in scan.depth_capped)
+
+    items = scan.items
+    lines.extend(("", "ITEMS"))
+    item_line = (f"  {items.files} files, {items.folders} folders "
+                 f"({items.total} items)")
+    if items.total > DRIVE_ITEM_CAP * BUDGET_WARN_FRACTION:
+        percent = round(items.total / DRIVE_ITEM_CAP * 100)
+        item_line += f" - {percent}% of the {DRIVE_ITEM_CAP:,} shared-drive item cap"
+    lines.append(item_line)
     return "\n".join(lines)

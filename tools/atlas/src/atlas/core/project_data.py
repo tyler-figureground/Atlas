@@ -7,6 +7,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
@@ -850,22 +851,45 @@ def _same_underlying_path(first: Path, second: Path) -> bool:
         return False
 
 
+# Windows error codes raised while an antivirus, search indexer, or sync
+# client briefly holds a freshly written folder. A bounded backoff lets the
+# locker let go instead of failing the whole update (WinError 5 reproduces
+# reliably on case-only renames of new project folders).
+_TRANSIENT_RENAME_WINERRORS = frozenset({5, 32})  # ACCESS_DENIED, SHARING_VIOLATION
+_RENAME_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
+
+
+def _rename_with_retry(source: Path, destination: Path) -> None:
+    delays = iter(_RENAME_RETRY_DELAYS)
+    while True:
+        try:
+            source.rename(destination)
+            return
+        except OSError as error:
+            if getattr(error, "winerror", None) not in _TRANSIENT_RENAME_WINERRORS:
+                raise
+            delay = next(delays, None)
+            if delay is None:
+                raise
+            time.sleep(delay)
+
+
 def _rename_folder(source: Path, destination: Path) -> None:
     case_only = (
         source.name != destination.name
         and source.name.casefold() == destination.name.casefold()
     )
     if not case_only:
-        source.rename(destination)
+        _rename_with_retry(source, destination)
         return
 
     temporary = source.with_name(f".{source.name}.atlas-rename-{uuid4().hex}.tmp")
-    source.rename(temporary)
+    _rename_with_retry(source, temporary)
     try:
-        temporary.rename(destination)
+        _rename_with_retry(temporary, destination)
     except OSError as error:
         try:
-            temporary.rename(source)
+            _rename_with_retry(temporary, source)
         except OSError as rollback_error:
             raise ProjectDataError(
                 f"case-only rename failed: {error}; folder rollback failed: {rollback_error}"

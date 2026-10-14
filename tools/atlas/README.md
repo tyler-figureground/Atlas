@@ -47,7 +47,7 @@ TUI keys:
 | `Tab` | Next Region |
 | `/` | Filter the focused Region: projects by name or health, the tree by the names it has opened (never reading more). In the Companion it says what it can filter |
 | `space` | Open or close a folder in the tree; mark a project in the list |
-| `d` | Cycle the Companion: unmet Expectations, project health, dossier (the Dossier Facts Table: validated intake, contact snapshots, decisions summary - read-only; `e` edits, `o` opens) |
+| `d` | Cycle the Companion: unmet Expectations, project health, dossier (the Dossier Facts Table: validated intake, contact snapshots, decisions summary - read-only; `e` edits, `o` opens), deep pass |
 | `g` | Search the whole drive: live over the session Name Index, plus PDF text and Markdown from the local Content Index (built in the background on first use; `atlas index build` tops it up). Content matches rank below name matches with the matched line as a snippet; the Indexed-At Stamp shows under the results. `Enter` reveals the hit (the project in the list, or the node in the tree), `o` opens it, `Escape` closes. Results cap at 500 with the overflow counted |
 | `[` / `]` | Collapse or restore the project list / the Companion |
 | `z` | Zoom the focused Region to full width; press again to restore |
@@ -57,9 +57,11 @@ TUI keys:
 | `y` | Copy the full path of what has focus |
 | `n` / `e` / `m` | New project / edit selected project / manage contacts |
 | `a` / `c` | Add map-approved folders / clean folders with no files |
+| `A` / `U` | Archive the focused project / list archived projects and un-archive one. Always the modal (ADR 0019 - never the inline confirm), carrying the model-file and open-task warnings and the vault/contacts-untouched note. The list drops (or regains) the project on the rescan after apply |
+| `D` | Deep pass on the focused project: the opt-in walk below the root (receipt-rule sweeps, over-long paths, deep unreadables, item count), findings in the Companion's DEEP mode. No inline repair key - `atlas conform --deep --apply` sweeps from the CLI |
 | `x` | Conform marked projects |
 | `s` / `r` / `l` | Sort / rescan / last result |
-| `?` / `Ctrl+P` / `q` | Help / command palette / quit. Palette entries name their key for `/`, `g`, `d`, `[`, `]`, `z`, `f`, `u`, `o`, `y` and `c` |
+| `?` / `Ctrl+P` / `q` | Help / command palette / quit. Palette entries name their key for `/`, `g`, `d`, `[`, `]`, `z`, `f`, `u`, `o`, `y`, `c`, `A`, `U` and `D` |
 
 `f` acts on whatever has focus: the whole project from the list, one folder or file from the
 tree, one unmet control-plane Expectation (a missing `decisions`, `AGENTS.md`...) from the
@@ -75,7 +77,14 @@ A single repair previews on the operation line and waits for `Enter`; nothing is
 until then. `u` previews the undo the same way - inline for one move, in a modal for a
 merge's several - and the repair stays on the undo stack until the undo actually moves
 something. The stack holds 50 per project, in memory for this session; a project-wide or
-batch conform clears that project's, and switching drives clears all of it.
+batch conform clears that project's, and switching drives clears all of it. Archives ride
+their own undo: an archived project leaves the list, so there is no row for `u` to select -
+`U` is the inverse, running the un-archive plan through the same Guard and modal (ADR 0019).
+
+Which Region has focus reads without moving the cursor, in both Compositions: the focused
+Region's frame is heavy and full-strength, the rest are muted, and Region titles follow.
+The distinction is weight and luminance, never hue alone (ADR 0008); the same rule covers
+the filter inputs, modals and the search overlay.
 
 Exit codes: `0` clean, `1` findings/pending work, `2` error - every CLI error, including a
 bad map, a missing drive and an unknown project, exits `2`. `--project` takes one folder name
@@ -331,7 +340,7 @@ CLI edit commands are interactive when run in a terminal. Omitted fields retain 
 
 Atlas has not been validated with assistive technology and makes no accessibility conformance claim. Textual's screen-reader support is unresolved upstream ([textual#2425](https://github.com/Textualize/textual/issues/2425)), so the console should not be assumed usable with a screen reader.
 
-Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `search` for the drive-wide Name Index, `index status` for the per-machine Content Index, `conform --node` for a single repair, `conform --revert` for undo, and `--deep` on `doctor`/`conform` for the deep pass below a project root (CLI-only by design - the console surfaces deep findings only from an operator-run deep pass). Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
+Every capability that writes, and every fact the console can show, has a CLI form with `--json` (ADR 0008): `doctor` for the drive, `tree` for the nodes below a project root and its unmet Expectations, `search` for the drive-wide Name Index, `index status` for the per-machine Content Index, `conform --node` for a single repair, `conform --revert` for undo, and `--deep` on `doctor`/`conform` for the deep pass below a project root (in the console, `D` runs the same walk for the focused project and the Companion's DEEP mode renders it). Two differences remain. The console's undo stack lives in memory for one session, while the CLI undoes from the manifest a `--json` apply printed. `tree` reads only as deep as `--depth` asks, where the console reads each folder as you open it. The CLI is plain text and is the supported path for automation - and for anyone the console does not serve.
 
 Within the console, colour reinforces a distinction and never carries one alone. A folder or file with something wrong with it names what is wrong in words; when the terminal is too narrow for the full phrase the word abbreviates - `NAME`, `PLACE`, `LOOSE`, `UNMAPPED`, `unread` - rather than leaving the glyph and its colour to say it. A long name shortens in the middle so the word always stays on screen.
 

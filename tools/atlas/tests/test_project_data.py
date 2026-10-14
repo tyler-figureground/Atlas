@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import replace
 from datetime import date
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -304,6 +304,65 @@ def test_case_only_rename_rolls_back_exact_spelling_and_dossier_on_index_failure
     assert (project / "PROJECT.md").read_bytes() == dossier_before
     assert index.read_bytes() == duplicate_index
     assert not any(".atlas-rename-" in child.name for child in fixture_drive.iterdir())
+
+
+def test_case_only_rename_survives_transient_windows_locks(fixture_drive, monkeypatch):
+    drive_map, intake, project = _new_project(fixture_drive)
+    edited = replace(
+        intake,
+        project_address=replace(intake.project_address, street="1842 OAK STREET"),
+        description="KITCHEN",
+    )
+    plan = preview_project_update(fixture_drive, project, edited)
+
+    # Windows antivirus/search-indexer/sync clients briefly hold freshly
+    # written folders, failing renames with WinError 5. The rename must retry
+    # through the transient lock instead of failing the whole update.
+    monkeypatch.setattr(
+        "atlas.core.project_data._RENAME_RETRY_DELAYS", (0.001, 0.001, 0.001)
+    )
+    real_rename = Path.rename
+    failures = {"count": 0}
+
+    def flaky_rename(self, target):
+        if failures["count"] < 2:
+            failures["count"] += 1
+            raise PermissionError(13, "Access is denied", str(target), 5)
+        return real_rename(self, target)
+
+    monkeypatch.setattr(Path, "rename", flaky_rename)
+
+    result = apply_project_update(fixture_drive, drive_map, plan, allow_rename=True)
+
+    assert failures["count"] == 2
+    assert result.path.name == plan.new_path.name
+    assert result.path.is_dir()
+    assert not any(".atlas-rename-" in child.name for child in fixture_drive.iterdir())
+
+
+def test_case_only_rename_reports_persistent_windows_lock_after_retries(
+    fixture_drive, monkeypatch
+):
+    drive_map, intake, project = _new_project(fixture_drive)
+    dossier_before = (project / "PROJECT.md").read_bytes()
+    edited = replace(
+        intake,
+        project_address=replace(intake.project_address, street="1842 OAK STREET"),
+        description="KITCHEN",
+    )
+    plan = preview_project_update(fixture_drive, project, edited)
+
+    monkeypatch.setattr(
+        "atlas.core.project_data._RENAME_RETRY_DELAYS", (0.001, 0.001)
+    )
+
+    def locked_rename(self, target):
+        raise PermissionError(13, "Access is denied", str(target), 5)
+
+    monkeypatch.setattr(Path, "rename", locked_rename)
+
+    with pytest.raises(ProjectDataError, match="Access is denied"):
+        apply_project_update(fixture_drive, drive_map, plan, allow_rename=True)
 
 
 def test_apply_renames_and_refreshes_dossier_index_and_log(fixture_drive):

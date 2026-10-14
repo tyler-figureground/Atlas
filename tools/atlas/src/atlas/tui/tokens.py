@@ -149,6 +149,23 @@ def load_style(state: str) -> LoadStyle:
     return _LOAD[state]
 
 
+# ------------------------------------------------------------------- focus
+#
+# The Focus Rule (the last fog item from ticket 03): with three Regions and a
+# Tab that cycles them, which Region has focus must read without moving the
+# cursor - in Single-Region Composition too, where only one is drawn. One rule
+# for every interactive surface: focused = full-strength frame and title,
+# unfocused = muted. The distinction is weight and luminance - a solid frame
+# against a heavy one, a muted title against bold bone, rail against ink -
+# never hue alone (ADR 0008), so it survives every colour vision and a
+# monochrome terminal alike.
+
+# The shape half of the rule. heavy draws a full-cell line where solid draws a
+# hairline, so the focused frame reads even with every colour stripped.
+FRAME_REST = "solid"
+FRAME_FOCUS = "heavy"
+
+
 def disclosure(state: str, *, expanded: bool) -> str:
     """The marker at the head of a folder's detail.
 
@@ -223,16 +240,37 @@ def stylesheet(palette: Palette = PALETTE) -> str:
     #dialog SelectionList {{ max-height: 18; margin-bottom: 1; }}
     #dialog.selection-dialog {{ height: 80%; min-height: 12; }}
     #dialog.selection-dialog SelectionList {{ height: 1fr; max-height: 1fr; }}
+    /* The un-archive picker lists with an OptionList, not a SelectionList -
+       one project, named and approved at a time (ADR 0019 #5). */
+    #dialog.selection-dialog OptionList {{ height: 1fr; max-height: 1fr; }}
     #dialog #plan {{ max-height: 22; margin-bottom: 1; }}
     #dialog .actions {{ height: 3; align-horizontal: right; }}
     #dialog Button {{ margin-left: 2; }}
     #dialog #preview, #dialog .supporting {{ color: {p.muted}; margin-bottom: 1; }}
 
-    #workspace {{ border-left: solid {p.rail}; }}
+    /* The Focus Rule: which Region has focus reads without moving the cursor.
+       The frame is the signal in both Compositions - in Single-Region it is
+       the only one, since nothing else is drawn to compare against. */
+    #projects, #tree, #companion, #drives {{ border: {FRAME_REST} {p.rail}; }}
+    #projects:focus-within, #tree:focus-within, #companion:focus-within,
+    #drives:focus-within {{ border: {FRAME_FOCUS} {p.ink}; }}
+    /* Region titles follow the frame. The Workspace title does not: it names
+       the project rather than a Region, and the Tree Region's frame carries
+       that Region's focus on its own. */
     #workspace-title {{ color: {p.bone}; text-style: bold; }}
-    #companion {{ border-top: solid {p.rail}; }}
-    #companion-title {{ color: {p.bone}; text-style: bold; }}
+    #companion-title {{ color: {p.muted}; }}
+    #companion:focus-within #companion-title {{ color: {p.bone}; text-style: bold; }}
     #refusal {{ color: {p.muted}; }}
+
+    /* The same rule for the controls inside modals and overlays, whose focus
+       used to be Textual's default - $border and a 5% tint, neither from this
+       palette. */
+    Input {{ background: {p.surface}; color: {p.ink}; border: tall {p.dim}; }}
+    Input:focus {{ border: tall {p.ink}; background-tint: {p.surface} 0%; }}
+    Input > .input--placeholder {{ color: {p.muted}; }}
+    SelectCurrent {{ border: tall {p.dim}; }}
+    Select:focus > SelectCurrent {{ border: tall {p.ink}; background-tint: {p.surface} 0%; }}
+    Button:focus {{ text-style: bold; }}
 
     /* The Search Overlay (ticket 33): an overlay, not a Region - ADR 0005's
        amendment. Geometry lives in the app's CSS block; colour lives here. */

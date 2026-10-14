@@ -13,6 +13,7 @@ import pytest
 from atlas.tui.layout import (
     COMPANION,
     DEFAULT_MODE,
+    DEEP,
     DOSSIER,
     EXPECTATIONS,
     HEALTH,
@@ -133,13 +134,15 @@ def test_navigation_is_identical_in_both_compositions():
 # -------------------------------------------------------- Companion Modes
 
 
-def test_the_companion_cycles_three_modes_and_starts_on_expectations():
+def test_the_companion_cycles_four_modes_and_starts_on_expectations():
     """Unmet Expectations is the default because it is the only one that has to
-    be readable at the same time as the tree (ADR 0005)."""
+    be readable at the same time as the tree (ADR 0005). The deep pass is the
+    fourth mode: on demand (`D`), never part of the default root-only report."""
     assert DEFAULT_MODE == EXPECTATIONS
     assert next_mode(EXPECTATIONS) == HEALTH
     assert next_mode(HEALTH) == DOSSIER
-    assert next_mode(DOSSIER) == EXPECTATIONS
+    assert next_mode(DOSSIER) == DEEP
+    assert next_mode(DEEP) == EXPECTATIONS
 
 
 def test_every_mode_has_a_label():
@@ -147,6 +150,7 @@ def test_every_mode_has_a_label():
         EXPECTATIONS: "Unmet expectations",
         HEALTH: "Project health",
         DOSSIER: "Dossier",
+        DEEP: "Deep pass",
     }
 
 

@@ -148,6 +148,7 @@ Not done until all six. A meeting whose minutes exist but whose brief and tasks 
 ## Where agent work goes
 
 - Scratch - scripts, receipts, JSON, captures, check exports, before/after images, saved web pages - goes in `.agent/runs/YYMMDD-<slug>/`, started from `.agent/runs/_RUN-TEMPLATE.md`. Nowhere else - not `handoff/`, not a `QA` folder.
+- Drawing runs fill the measurement block in `RUN.md` - rounds to acceptance, defects reaching Tyler.
 - File a result in a numbered folder only when a person will read it: minutes, a code memo, a draft to send, an issued set. Name it `YYMMDD_Title.md`, in the section its subject belongs to. Most runs file nothing there.
 - Everything filed for a person gets a PDF beside it: `atlas pdf "<file.md>"` (re-run after every edit; the Markdown stays the source). Write decisions, actions, findings and open questions as short labelled lists; keep tables for numeric grids - occupant loads, areas, allowable vs actual - never sentences in table cells.
 - Production tasks live in `00 Tasks/TASKS.md`; Tyler's personal errands live in `00 Tasks/TYLER.md`. No other task lists anywhere. A longer list for one scope goes in `00 Tasks/Lists/`, copied from `00 Tasks/_Task List Template.md` and linked from `TASKS.md`. Agents add to `TYLER.md` but never check its items off and never send its artifacts.

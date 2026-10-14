@@ -329,6 +329,16 @@ Colour may reinforce a distinction and may never be the only thing carrying one.
 Tested by asserting that no two Filing States render identically once colour is
 stripped, at either width, rather than by pinning any colour value.
 
+**Focus Rule**
+How the console answers "which Region has focus" without the cursor moving:
+the focused surface - Region frame, Companion title, filter input, modal
+control, search overlay - draws full-strength (a heavy frame, a bold bone
+title), the rest muted (a solid frame, a muted title). The distinction is
+weight and luminance, never hue alone (the Colour-Alone Rule), so it survives
+colourblindness and reads in Single-Region Composition, where only one Region
+is drawn. The token layer generates it; tests assert the structure, never a
+hex. The last fog item from ticket 03.
+
 ## Atlas Tree Repairs
 
 **Repair**
@@ -423,7 +433,8 @@ a File Rule does. Ticket 26, built by ticket 31; ADR 0009 amendment.
 
 **Deep Pass**
 The opt-in walk below a Project root: `atlas doctor --deep PROJECT` to report,
-`atlas conform PROJECT --deep` to plan and apply. Enumeration only - the walk
+`atlas conform PROJECT --deep` to plan and apply, and in the console `D` on the
+focused Project with the findings rendered in the Companion's DEEP mode. Enumeration only - the walk
 never opens a file - bounded by one project; `--all --deep` pays the full drive
 walk by flag, never by default. One enumeration per folder gathers everything
 the pass knows, so no fact pays a second walk: Receipt Rule matches (which emit

@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows transient rename locks (WinError 5/32)** - a case-only or plain project
+  folder rename could fail when an antivirus, indexer or sync client briefly held
+  the folder; renames now retry through a bounded backoff instead of failing the
+  update (the two `test_project_data.py` failures reproduced on clean HEAD).
+- **Follow-timer race in the console** - the debounced workspace update could fire
+  while a modal owned the screen or while the app was shutting down, raising
+  `NoMatches`/`ScreenStackError` (the intermittent `test_tui.py` flake). The update
+  now bails honestly in both states; regression tests pin the modal branch
+  deterministically and the teardown branch by construction.
+
+### Added
+
+- **Atlas - console keys for the archive verbs and the deep pass.** `A`
+  archives the focused project and `U` lists the archive root (enumerated on
+  demand, never before) to un-archive a picked name - confirmation is always
+  the modal, the recorded ADR 0019 exception to ADR 0006's inline confirm,
+  carrying the plan's warnings (Revit/CAD file count, open task items) and
+  notes (prompt-vault and contacts untouched). Applied plans cross
+  `ArchiveGuard.for_plan` + `apply_archive_plan`; the rescan after apply drops
+  or restores the project-list row. Archives ride their own undo rather than
+  the per-Project repair stack (the row is gone once applied), so `U` is the
+  inverse. `D` runs the deep pass (`core.deep.scan_deep`) on the focused
+  project off the UI thread and renders findings - receipt sweeps, over-long
+  paths, deep unreadables, the item count - in the Companion's new DEEP mode,
+  which `d` also cycles to; receipt sweeps keep their no-inline-repair-key
+  rule and point at `conform --deep --apply`.
+- **Atlas - focus legibility everywhere (ticket 03's last fog item).** One
+  token-layer rule now covers every interactive surface - Region frames, the
+  Companion title, filter inputs, modal controls, the search overlay: focused
+  is a heavy full-strength frame (and bold bone title), unfocused a muted
+  solid one. The distinction is weight and luminance, never hue alone (ADR
+  0008), so it survives colourblindness and monochrome terminals, and it reads
+  in Single-Region Composition where only one Region is drawn. Region frames
+  cost the project list two columns, which the column fitting now subtracts.
+  Verified by headless renders at all six measured widths (179/153/120/87/77/46)
+  and at 30 and 24 rows.
+
 ## [0.16.0] - 2026-10-09
 
 ### Added

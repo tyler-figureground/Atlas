@@ -112,7 +112,8 @@ def unwind(current: str) -> str | None:
 EXPECTATIONS = "expectations"
 HEALTH = "health"
 DOSSIER = "dossier"
-MODES = (EXPECTATIONS, HEALTH, DOSSIER)
+DEEP = "deep"
+MODES = (EXPECTATIONS, HEALTH, DOSSIER, DEEP)
 
 # Unmet Expectations is the default because it is the only mode that has to be
 # readable at the same time as the tree - what is filed against what the map
@@ -125,6 +126,10 @@ MODE_LABELS = {
     EXPECTATIONS: "Unmet expectations",
     HEALTH: "Project health",
     DOSSIER: "Dossier",
+    # The opt-in walk below the root (ticket 31). On demand via `D`, never part
+    # of the default root-only report; the mode lists findings and offers no
+    # repair key - receipt sweeps are `conform --deep --apply` on the CLI.
+    DEEP: "Deep pass",
 }
 
 
@@ -204,6 +209,12 @@ MIN_PROJECT_CELLS = 24
 # DataTable's cell padding, both sides, and its vertical scrollbar.
 _CELL_PADDING = 2
 _SCROLLBAR = 2
+
+
+# What a Region frame (tokens.py's Focus Rule) costs the Project List, in
+# columns - one cell of border each side. The list's column fitting subtracts
+# it, or the name column claims two cells the frame is already spending.
+REGION_FRAME = 2
 
 
 def list_columns(width: int) -> tuple[tuple[str, ...], int]:

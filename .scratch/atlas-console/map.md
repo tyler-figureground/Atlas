@@ -405,6 +405,37 @@ Continuity: `.agent/handoff/` per this repo's checkpoint rule.
   `_render_companion`. `atlas dossier PROJECT [--json]` in the same session
   (ADR 0008), exit 2 with the reason on an unreadable dossier. The ticket 09
   ADR 0005 amendment applied verbatim. 1107 tests.
+- **Console keys for the archive verbs and the deep pass - built**
+  (2026-10-12, no ticket; named scope from the effort brief). `A` archives
+  the focused project, `U` un-archives a picked name - always the modal, ADR
+  0019's recorded exception to inline-for-one-action, warnings (model files,
+  open task items) and notes (vault/contacts untouched) carried from the
+  plan, applies crossing `ArchiveGuard.for_plan` + `apply_archive_plan`, and
+  the rescan after apply drops or restores the list row. Unarchive is a
+  picker modal over an on-demand archive-root enumeration, not a new overlay:
+  it is a selection, the console's modals already do selections (Add
+  folders), and an overlay is the episodic full-screen shape ADR 0005's
+  amendment gave search - this is neither. Archives ride their own undo
+  rather than ticket 23's per-Project stack: an applied archive removes its
+  row on the rescan, so `u` has nothing to select, and the stack holds
+  conform Plans inverted by conform's `invert_plan`, which an ArchivePlan
+  never enters. `U` is the inverse (ADR 0019). `D` runs the deep pass off the
+  UI thread; findings render in the Companion's new DEEP mode (a fourth mode
+  `d` cycles to, with an honest empty state), receipt sweeps keep their
+  no-inline-key rule (ticket 26) and point at `conform --deep --apply`.
+  1180 tests pass, up from 1154.
+- **Focus legibility everywhere - built** (2026-10-12, no ticket; the last
+  fog item from ticket 03). One token-layer Focus Rule covers every
+  interactive surface - Region frames, the Companion title, the filter
+  inputs, modal controls, the search overlay: focused is a heavy
+  full-strength frame (and a bold bone title), unfocused a muted solid one.
+  Weight and luminance, never hue alone (ADR 0008), so it reads in
+  Single-Region Composition where only one Region is drawn. The Workspace
+  title is exempt: it names the project, not a Region. Region frames cost the
+  project list two columns, which `list_columns` callers subtract as
+  `REGION_FRAME`. Rendered headless at all six measured widths and at 30/24
+  rows; the rule is tested by structure (weight + luminance gap), never by
+  hex.
 
 ## Open tickets
 
@@ -434,13 +465,6 @@ Fog toward the destination. Graduates into tickets as the frontier clears it.
   opt-in deep pass (ticket 31). What remains fog is only whether the general
   decision should ever be reopened - moving a file the operator picks anywhere
   the map has not named.
-- **Selection and focus rendering everywhere else.** Ticket 02 settled the cursor
-  for the project list and the tree. Modals, the filter input, the command palette,
-  and the search overlay all still show default Textual focus, which no longer
-  matches. Ticket 03 adds one to the list: with three Regions and a Tab that
-  cycles them, **which Region has focus has to be legible without moving the
-  cursor**, and in Single-Region Composition it has to be legible when only one is
-  drawn. Small, and easy to forget until it looks wrong.
 - ~~A `doctor` finding for over-long paths~~ - **built**
   2026-10-09 with the deep pass (plan 1.4): dirs flag at 259, files at 260,
   a warning finding that never changes project status.
