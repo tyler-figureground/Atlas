@@ -338,8 +338,8 @@ instead of a periodic surprise (1.6, Phase 5).
 - Drawing QA measurement loop live (Phase 3.3): RUN.md template measurement
   block, baseline record and monthly report shell in Library
   Administration/Evals; aggregation is manual until tooled.
-- 0.17.0 deployed (backup `_tools\logstlas-0.17.0-deploy-20261013-101318` is
-  0.16.0's; this deploy's own folder is timestamped alongside) and pushed.
+- 0.17.0 deployed to the drive (backup `_tools\logstlas-0.17.0-deploy-*`,
+  launcher verified) and the repo pushed.
 - Recurring environment annoyance recorded: stale `.git/index.lock` files appear
   after long test runs (idle VS Code git watcher nearby); removed three times
   this session. If it recurs, the watcher is the suspect.
