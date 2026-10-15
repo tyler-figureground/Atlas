@@ -356,8 +356,10 @@ instead of a periodic surprise (1.6, Phase 5).
 - ADR 0017 amended: its two "remain open" rulings were in fact settled by
   Tyler's 2026-10-07 #769 comment (uniform 1/4" precision; Solid + Void naming,
   headers in Pyvoid #3204). Nothing open on the S+V conflict list.
-- Content index first build: 199 files indexed, 14 skipped (active projects
-  only, by design).
+- Content index first build: **3,125 files indexed, 14 skipped** (active
+  projects only, by design) - 102 minutes over the mount; verified
+  `atlas search --content` returns real snippets. (An early status read
+  mid-build showed 199.)
 - Review Pack 2026-10-13 written for the 20 candidate sets (not 19 - count
   corrected), 598 lines, one checkbox per set.
 - Content index builds and deep passes are now the measured-cost operations:
