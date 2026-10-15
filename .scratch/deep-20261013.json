@@ -1,0 +1,316 @@
+{
+  "drive": "ARCHITECTURE",
+  "root": "G:\\Shared drives\\ARCHITECTURE",
+  "map_version": "3.8",
+  "summary": {
+    "conform": 0,
+    "drift": 10,
+    "unfiled": 0,
+    "stub": 0
+  },
+  "budget": {
+    "cap": 400000,
+    "counted": true,
+    "projects_counted": 10,
+    "projects_total": 10,
+    "total_items": 15361,
+    "percent_of_cap": 3.8402499999999997
+  },
+  "projects": [
+    {
+      "name": "230215_1221 Hayes-ADU",
+      "status": "drift",
+      "sections_present": 12,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [],
+      "depth_capped": [],
+      "items": {
+        "files": 413,
+        "folders": 250,
+        "total": 663
+      }
+    },
+    {
+      "name": "250828_1757 Coleman A-Rental",
+      "status": "drift",
+      "sections_present": 11,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [
+        ".mcp.json"
+      ],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [],
+      "depth_capped": [],
+      "items": {
+        "files": 512,
+        "folders": 65,
+        "total": 577
+      }
+    },
+    {
+      "name": "260203_262 Monte Vista Dr-Master Bed",
+      "status": "drift",
+      "sections_present": 9,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [],
+      "depth_capped": [],
+      "items": {
+        "files": 266,
+        "folders": 39,
+        "total": 305
+      }
+    },
+    {
+      "name": "260527_211 centre street ny-Montez Radio (MPR)",
+      "status": "drift",
+      "sections_present": 12,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [
+        ".claude",
+        ".mcp.json",
+        ".pi"
+      ],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A104 - LEVEL 5 - FURNITURE + MILLWORK PLAN.png",
+          "length": 263
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A103 - LEVEL 5 - PAINT + FLOOR FINISH PLAN.png",
+          "length": 263
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A202 - PERFORMANCE C ELEVATIONS + OVERALL SECT.png",
+          "length": 267
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A201 - INTERIOR ELEVATIONS - PERFORMANCE A + B.png",
+          "length": 267
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A203 - KITCHEN + WAREWASHING ELEVATIONS - EQUI.png",
+          "length": 267
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A204 - INTERIOR ELEVATIONS - OFFICE + RECEPTIO.png",
+          "length": 267
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A501 - INTERIOR DETAILS - PARTITIONS + FINISHE.png",
+          "length": 267
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A401 - ENLARGED PLANS - KITCHEN + OFFICE - COU.png",
+          "length": 267
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A504 - MILLWORK - CONVERSATION PIT SECTIONS.png",
+          "length": 264
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A505 - MILLWORK - SOUTH CLOSETS + OFFICE COUNT.png",
+          "length": 267
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - A601 - DOORS - SCHEDULE + TYPES - CLEARANCES.png",
+          "length": 265
+        },
+        {
+          "path": ".agent/runs/legacy-agent-sessions/260916-set-reorganization/review-unaccepted/REVIEW-NOT-ACCEPTED - 01 PHASE 2 - New Construction - Sheet - AD101 - EXISTING CONDITIONS - PLAN + CEILING.png",
+          "length": 265
+        }
+      ],
+      "depth_capped": [],
+      "items": {
+        "files": 6326,
+        "folders": 222,
+        "total": 6548
+      }
+    },
+    {
+      "name": "260301_80-23 64th Lane-Refactored Design",
+      "status": "drift",
+      "sections_present": 13,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [
+        {
+          "path": ".agent/runs/261014-post-framing-weekly-closeout/quality/.dicta/8da84143cb8c3bf690a3abe8358b9ab595ea9dd01ddaac79f79b4204bcdceee4/recognition/1504248dff3bea40ff6a431d7aee84a7869f4340425d13f014b9baecd806070b",
+          "length": 275
+        }
+      ],
+      "depth_capped": [],
+      "items": {
+        "files": 1484,
+        "folders": 118,
+        "total": 1602
+      }
+    },
+    {
+      "name": "260717_2267 Monticello - Mkean Residence-Addition",
+      "status": "drift",
+      "sections_present": 10,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [
+        ".mcp.json"
+      ],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [],
+      "depth_capped": [],
+      "items": {
+        "files": 235,
+        "folders": 53,
+        "total": 288
+      }
+    },
+    {
+      "name": "260729_2981 Silverado Trail-Renovation",
+      "status": "drift",
+      "sections_present": 11,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [],
+      "depth_capped": [],
+      "items": {
+        "files": 2157,
+        "folders": 124,
+        "total": 2281
+      }
+    },
+    {
+      "name": "260913_1673 St. Helena Hwy-Pestoni Winery",
+      "status": "drift",
+      "sections_present": 6,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [],
+      "depth_capped": [],
+      "items": {
+        "files": 57,
+        "folders": 37,
+        "total": 94
+      }
+    },
+    {
+      "name": "260924_315 West Ln-Beitz Fire Cleanup",
+      "status": "drift",
+      "sections_present": 11,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [
+        ".mcp.json",
+        ".pi"
+      ],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [],
+      "depth_capped": [],
+      "items": {
+        "files": 2109,
+        "folders": 94,
+        "total": 2203
+      }
+    },
+    {
+      "name": "261006_1655 San Vicente Ave-Code Compliance",
+      "status": "drift",
+      "sections_present": 11,
+      "missing_control_plane": [
+        "AGENTS.md"
+      ],
+      "drift": [],
+      "relocations": [],
+      "sweeps": [],
+      "receipts": [],
+      "unfiled": [],
+      "ignored": [],
+      "unreadable": [],
+      "unreadable_deep": [],
+      "overlong": [],
+      "depth_capped": [],
+      "items": {
+        "files": 745,
+        "folders": 55,
+        "total": 800
+      }
+    }
+  ]
+}

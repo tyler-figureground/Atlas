@@ -1,0 +1,118 @@
+[PLAN   ] 230215_1221 Hayes-ADU
+    backfill  AGENTS.md
+[PLAN   ] 250828_1757 Coleman A-Rental
+    backfill  AGENTS.md
+[PLAN   ] 260203_262 Monte Vista Dr-Master Bed
+    backfill  AGENTS.md
+[PLAN   ] 260527_211 centre street ny-Montez Radio (MPR)
+    backfill  AGENTS.md
+[PLAN   ] 260301_80-23 64th Lane-Refactored Design
+    backfill  AGENTS.md
+[PLAN   ] 260717_2267 Monticello - Mkean Residence-Addition
+    backfill  AGENTS.md
+[PLAN   ] 260729_2981 Silverado Trail-Renovation
+    backfill  AGENTS.md
+[PLAN   ] 260913_1673 St. Helena Hwy-Pestoni Winery
+    backfill  AGENTS.md
+[PLAN   ] 260924_315 West Ln-Beitz Fire Cleanup
+    backfill  AGENTS.md
+    sweep     06 Research & Existing Conditions/Code/napa-search-demolition.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-demolition.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-sitemap.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-sitemap.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-building-checklists.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-erosion-stabilization.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-building-checklists.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-erosion-stabilization.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/baaqmd-asbestos.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/baaqmd-asbestos.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-environmental-fire-recovery.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-environmental-fire-recovery.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-well-septic-permits.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-well-septic-permits.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-building-division.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-building-division.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-waste-plan.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-title-page.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-demolition-checklist.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-sample-site-plan.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-building-process.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-building-process.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-fire-debris.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-fire-debris.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-fire-faq.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-fire-faq.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-plan-review.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-plan-review.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-stormwater-regulations.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-stormwater-regulations.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/baaqmd-rule-11-2.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/baaqmd-building-department-advisory.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/baaqmd-demolition-flowchart.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/baaqmd-asbestos-faq.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/bing-napa-dar.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/bing-napa-dar.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-stormwater-ordinance.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-electronic-standards.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/ca-2025-codes.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/ca-2025-codes.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-wells-faq.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-wells-faq.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/google-napa-dar.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/google-napa-dar.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-well-septic.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-well-septic.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/waterboard-construction.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/waterboard-construction.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-script.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-script.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-script2.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-script2.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-code-interpretations.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-code-interpretations.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-municode-latest-job.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-stormwater.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-building-code.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-title13.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-foundation-results.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-foundation-results.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-results.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-results.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-municode-toc.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-ajax.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-ajax.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-foundation-ajax.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-foundation-ajax.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-uncached.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-uncached.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-title13-complete.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-title16-complete.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-title16-complete.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-title16-toc.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-pickett-dar-2025.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-pickett-requirements-2025.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-specific.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-specific.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-foundation-specific.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-foundation-specific.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-stormwater-verified.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-13.56.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-13.12.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-live-13.24.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-glass.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-glass.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-stormwater.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-dar-stormwater.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-historic-dar-deadline.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-historic-dar-deadline.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-escp.links.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-search-escp.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-escp-guidance.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/napa-grading-checklist.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/norma-held-2025-cbc-ch33.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/norma-held-napa-building-code.metadata.json -> .agent/runs
+    sweep     06 Research & Existing Conditions/Code/norma-held-napa-sources.metadata.json -> .agent/runs
+[PLAN   ] 261006_1655 San Vicente Ave-Code Compliance
+    backfill  AGENTS.md
+
+(dry run - pass --apply to perform)

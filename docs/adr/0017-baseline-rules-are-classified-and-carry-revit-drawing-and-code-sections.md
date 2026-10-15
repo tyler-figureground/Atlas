@@ -101,3 +101,12 @@ project-specific standing sync rulings outside Atlas's generated block. Tool
 availability must be checked in the connected runtime, not inferred from a merge.
 Evidence and the distinction between policy and shipped capability are recorded in
 `docs/research/agent-baseline-rules-evidence.md`.
+
+## Amendment (2026-10-13)
+
+The two rulings this ADR left open are settled. Tyler, 2026-10-07, on Pyvoid
+#769: **no isolated eighth-inch value on a quarter-inch project** - dimensions
+are 1/4" uniform, fix the model (S+V-DS-002 Rule 6.5.1); **the firm name is
+Solid + Void** on every title block and document, standards headers renamed in
+Pyvoid #3204. Nothing remains open from the original S+V conflict list. The
+Atlas baseline template carried both from 0.11.2 onward.

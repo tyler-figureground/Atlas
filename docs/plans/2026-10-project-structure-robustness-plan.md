@@ -340,6 +340,29 @@ instead of a periodic surprise (1.6, Phase 5).
   Administration/Evals; aggregation is manual until tooled.
 - 0.17.0 deployed to the drive (backup `_tools\logs\atlas-0.17.0-deploy-*`,
   launcher verified) and the repo pushed.
+**2026-10-13 (late) - everything agent-doable before Tyler's input**
+- Drive root strays swept: MigrationLog + lint_before.txt to `_tools\logs\`;
+  desktop.ini left (Explorer regenerates it).
+- Deep pass first real run: 15,361 items across 10 projects (3.8% of the 400k
+  cap - healthy); 4 over-long paths found, all inside two REFERENCED run folders
+  (MPR legacy-agent-sessions, 64L 261014 closeout) - not sweepable by rule;
+  queued for Tyler below.
+- Map v3.9/3.9.1: receiptRules live. First conform --deep --apply swept 96
+  scrape sidecars out of Beitz 06/Code into `.agent/runs/260924-code-scrape-
+  sidecars/` (manifest: `_tools\logs\conform-deep-apply-20261013.json`); rule
+  targets retargeted to `.agent/runs/swept-receipts` after the first apply
+  showed bare `.agent/runs` drops files loose at the runs root. All 10 project
+  AGENTS.md blocks refreshed with the metrics line.
+- ADR 0017 amended: its two "remain open" rulings were in fact settled by
+  Tyler's 2026-10-07 #769 comment (uniform 1/4" precision; Solid + Void naming,
+  headers in Pyvoid #3204). Nothing open on the S+V conflict list.
+- Content index first build: 199 files indexed, 14 skipped (active projects
+  only, by design).
+- Review Pack 2026-10-13 written for the 20 candidate sets (not 19 - count
+  corrected), 598 lines, one checkbox per set.
+- Content index builds and deep passes are now the measured-cost operations:
+  full index build is a background job; deep doctor ~10 projects in minutes.
+
 - Recurring environment annoyance recorded: stale `.git/index.lock` files appear
   after long test runs (idle VS Code git watcher nearby); removed three times
   this session. If it recurs, the watcher is the suspect.
