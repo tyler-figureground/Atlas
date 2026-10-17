@@ -96,15 +96,100 @@ def test_first_build_indexes_every_pdf_and_markdown(fixture_drive, cache_dir):
     assert index.drive == "TESTDRIVE"
 
 
-def test_the_build_walks_project_roots_only(fixture_drive, cache_dir):
+def _archive(drive):
+    """One archived project with a Markdown file and a PDF, plus loose files
+    at the archive root (not results) and a control-plane file (never)."""
+    archived = drive / "_Archived Projects" / "260101_Old"
+    (archived / "06 Research").mkdir(parents=True)
+    (archived / "06 Research" / "zoning memo.md").write_text(
+        "old zoning variance denied", encoding="utf-8")
+    make_pdf(archived / "CD set.pdf", text="LEVEL ONE PLAN 2019")
+    (drive / "_Archived Projects" / "index.md").write_text("loose zoning", encoding="utf-8")
+    (drive / "_tools" / "notes.md").write_text("zoning", encoding="utf-8")
+    return archived
+
+
+def test_the_build_walks_project_roots_and_the_archive(fixture_drive, cache_dir):
+    """Plan Q3 (2026-10-16): archived projects are indexed read-only; the
+    control plane and loose archive-root files are not."""
     _drive(fixture_drive)
-    archived = fixture_drive / "_Archived Projects" / "260101_Old"
-    archived.mkdir(parents=True)
-    (archived / "keep.md").write_text("zoning", encoding="utf-8")
+    _archive(fixture_drive)
 
     index = build_index(fixture_drive, cache_dir=cache_dir)
-    assert not any("_Archived Projects" in f.path or f.path.startswith("_")
-                   for f in index.files)
+    paths = {f.path for f in index.files}
+    assert "_Archived Projects/260101_Old/06 Research/zoning memo.md" in paths
+    assert "_Archived Projects/260101_Old/CD set.pdf" in paths
+    assert "_Archived Projects/index.md" not in paths
+    assert not any(p.startswith("_tools") for p in paths)
+    assert index.archive_root == "_Archived Projects"
+
+
+def test_archived_content_hits_are_tagged_and_rank_after_live(fixture_drive, cache_dir):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    index = build_index(fixture_drive, cache_dir=cache_dir)
+
+    result = query_index(index, "zoning variance")
+    assert [(h.path, h.archived) for h in result.hits] == [
+        ("260813_Alpha/06 Research/Code/zoning notes.md", False),
+        ("_Archived Projects/260101_Old/06 Research/zoning memo.md", True)]
+    archived = result.hits[1]
+    assert archived.project == "260101_Old"
+    assert archived.node_key == "06 Research/zoning memo.md"
+    assert result.archived == 1
+
+    capped = query_index(index, "zoning variance", cap=1)
+    assert [h.archived for h in capped.hits] == [False] and capped.overflow == 1
+
+    live_only = query_index(index, "zoning variance", archived=False)
+    assert [h.archived for h in live_only.hits] == [False] and live_only.total == 1
+
+
+def test_adding_the_archive_never_rereads_the_live_entries(
+        fixture_drive, cache_dir, monkeypatch):
+    """The 102-minute first build is not repeated: an index built before the
+    archive was in scope tops up with the archive files alone."""
+    _drive(fixture_drive)
+    reads = _extract_spy(monkeypatch)
+    build_index(fixture_drive, cache_dir=cache_dir)
+    assert len(reads) == 5
+
+    _archive(fixture_drive)
+    reads.clear()
+    index = build_index(fixture_drive, cache_dir=cache_dir)
+    assert sorted(os.path.basename(r) for r in reads) == ["CD set.pdf", "zoning memo.md"]
+    assert len(index.files) == 7
+
+
+def test_a_build_without_the_archive_keeps_its_entries_unread(
+        fixture_drive, cache_dir, monkeypatch):
+    """`--no-archived` caps one build's cost; it never forgets the archive."""
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    build_index(fixture_drive, cache_dir=cache_dir)
+    reads = _extract_spy(monkeypatch)
+    (fixture_drive / "_Archived Projects" / "260101_Old" / "new.md").write_text(
+        "fresh", encoding="utf-8")
+
+    index = build_index(fixture_drive, cache_dir=cache_dir, archived=False)
+    assert reads == []
+    paths = {f.path for f in index.files}
+    assert "_Archived Projects/260101_Old/06 Research/zoning memo.md" in paths
+    assert "_Archived Projects/260101_Old/new.md" not in paths
+
+
+def test_indexing_the_archive_writes_nothing_there(fixture_drive, cache_dir):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    archive = fixture_drive / "_Archived Projects"
+
+    def snapshot():
+        return sorted((os.fspath(p), p.stat().st_mtime_ns, p.stat().st_size)
+                      for p in [archive, *archive.rglob("*")])
+
+    before = snapshot()
+    build_index(fixture_drive, cache_dir=cache_dir)
+    assert snapshot() == before
 
 
 def test_second_build_rereads_only_touched_files(fixture_drive, cache_dir, monkeypatch):
@@ -461,6 +546,20 @@ def test_cli_json_shapes(fixture_drive, cache_dir, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert status == 0
     assert payload["exists"] is True and payload["files"] == 5
+
+
+def test_cli_build_counts_the_archive_and_can_skip_it(fixture_drive, cache_dir, capsys):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    status = main(["index", "build", "--no-archived", "--json",
+                   "--drive", str(fixture_drive)])
+    payload = json.loads(capsys.readouterr().out)
+    assert status == 0 and payload["files"] == 5 and payload["archived"] == 0
+
+    status = main(["index", "build", "--json", "--drive", str(fixture_drive)])
+    payload = json.loads(capsys.readouterr().out)
+    assert status == 0
+    assert payload["files"] == 7 and payload["read"] == 2 and payload["archived"] == 2
 
 
 def test_cli_errors_exit_2(fixture_drive, cache_dir, capsys, tmp_path):

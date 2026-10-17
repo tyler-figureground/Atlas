@@ -23,6 +23,13 @@ plain text are the same extractor class. The walk is ``core.scan.walk`` scoped
 to the project roots, so junctions are never followed, every level takes
 ``long_path``, and an unreadable folder is recorded, never swallowed.
 
+The Archived Projects are in scope too (plan Q3, 2026-10-16), read-only, by
+the Name Index's own ``project_roots``: each folder directly under the map's
+archive root. Their hits carry ``archived`` and rank after every live hit. A
+build with ``archived=False`` leaves the archive unwalked and carries its
+stored entries forward unread - the archive's first extraction is the long
+one, and an operator can defer it without losing what is already indexed.
+
 Freshness is rebuild and revalidate, never watching (ticket 08). Builds are
 incremental top-ups and resumable by key: an interrupted build saves what it
 extracted, and the next run re-reads only the remainder. Queries revalidate
@@ -50,9 +57,15 @@ from pathlib import Path
 from platformdirs import user_cache_path
 
 from . import content
-from .mapfile import find_map, load_map
-from .scan import is_project_dir, long_path, walk
-from .search import RESULT_CAP
+from .mapfile import DEFAULT_ARCHIVE_ROOT, find_map, load_map
+from .scan import long_path
+from .search import (
+    RESULT_CAP,
+    live_first,
+    project_roots,
+    resolve_archive_root,
+    walk_project,
+)
 
 SCHEMA = 1
 
@@ -109,6 +122,17 @@ class ContentIndex:
     files: tuple[IndexedFile, ...]
     skipped: tuple[SkippedFile, ...] = ()
     unreadable: tuple[tuple[str, str], ...] = ()
+    # The archive root this build walked, so a query can tell an archived
+    # entry from a live one without the map. An index written before the
+    # archive was in scope has none under it, so the default is honest.
+    archive_root: str = DEFAULT_ARCHIVE_ROOT
+
+    def is_archived(self, path: str) -> bool:
+        return path.startswith(f"{self.archive_root}/")
+
+    @property
+    def archived_files(self) -> int:
+        return sum(1 for f in self.files if self.is_archived(f.path))
 
 
 # ------------------------------------------------------------- location
@@ -148,6 +172,7 @@ def _save(path: Path, index: ContentIndex) -> None:
         "drive": index.drive,
         "root": os.fspath(index.root),
         "indexed_at": index.indexed_at,
+        "archive_root": index.archive_root,
         "files": [vars(f) for f in index.files],
         "skipped": [vars(s) for s in index.skipped],
         "unreadable": [list(u) for u in index.unreadable],
@@ -177,7 +202,8 @@ def load_index(root: Path | str, *,
         unreadable = tuple((where, why) for where, why in payload["unreadable"])
         return ContentIndex(root=Path(payload["root"]), drive=payload["drive"],
                             indexed_at=payload["indexed_at"], files=files,
-                            skipped=skipped, unreadable=unreadable)
+                            skipped=skipped, unreadable=unreadable,
+                            archive_root=payload.get("archive_root", DEFAULT_ARCHIVE_ROOT))
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -218,10 +244,12 @@ def _drive_label(root: str) -> str:
 def build_index(root: Path | str, *,
                 cache_dir: Path | str | None = None,
                 progress: Callable[[int, int], None] | None = None,
-                save_every: int | None = None) -> ContentIndex:
+                save_every: int | None = None,
+                archived: bool = True) -> ContentIndex:
     """Build or top up the index for one drive root. Incremental by key.
 
-    One bounded walk of the project roots finds the candidates; anything whose
+    One bounded walk of the project roots - and the Archived Projects unless
+    ``archived=False`` - finds the candidates; anything whose
     path+size+mtime matches the stored index - extracted or skipped - is
     carried without a read. The rest are extracted with ``progress(done,
     total)`` after each. A long build persists every ``save_every``
@@ -233,22 +261,26 @@ def build_index(root: Path | str, *,
     prior_files = {f.path: f for f in prior.files} if prior else {}
     prior_skipped = {s.path: s for s in prior.skipped} if prior else {}
 
+    archive_root = resolve_archive_root(base)
     errors: list[tuple[str, str]] = []
     candidates: list[tuple[str, str, str]] = []
-    for folder, dirs, files, _links in walk(base, errors=errors):
-        rel = os.path.relpath(folder, base).replace("\\", "/")
-        if rel == ".":
-            # As the Name Index: project roots only. `_`-roots stay invisible
-            # (ADR 0019), and drive-root files are the control plane.
-            dirs[:] = [d for d in dirs if is_project_dir(d)]
-            continue
-        for name in files:
-            kind = _KIND.get(os.path.splitext(name)[1].casefold())
-            if kind:
-                candidates.append((f"{rel}/{name}", os.path.join(folder, name), kind))
+    # As the Name Index: live project roots and the Archived Projects. Every
+    # other `_`-root stays out, and drive-root files are the control plane.
+    for scope in project_roots(base, archive_root=archive_root, archived=archived,
+                               errors=errors):
+        for folder, rel, _dirs, files in walk_project(base, scope, errors):
+            for name in files:
+                kind = _KIND.get(os.path.splitext(name)[1].casefold())
+                if kind:
+                    candidates.append((f"{rel}/{name}", os.path.join(folder, name), kind))
 
     kept: list[IndexedFile] = []
     skipped: list[SkippedFile] = []
+    if not archived and prior is not None and prior.archive_root == archive_root:
+        # The archive was not walked this run: carry what is stored, unread.
+        # Queries still revalidate every match against the disk.
+        kept.extend(f for f in prior.files if prior.is_archived(f.path))
+        skipped.extend(s for s in prior.skipped if prior.is_archived(s.path))
     to_read: list[tuple[str, str, str, int, int]] = []
     for rel, absolute, kind in candidates:
         try:
@@ -281,7 +313,7 @@ def build_index(root: Path | str, *,
             root=Path(base), drive=_drive_label(base), indexed_at=_stamp(),
             files=tuple(sorted(kept, key=lambda f: f.path.casefold())),
             skipped=tuple(sorted(skipped, key=lambda s: s.path.casefold())),
-            unreadable=unreadable)
+            unreadable=unreadable, archive_root=archive_root)
 
     total = len(to_read)
     try:
@@ -327,6 +359,8 @@ class ContentHit:
     path: str
     kind: str
     snippet: str = ""
+    archived: bool = False
+    root: str = ""      # the project folder's drive-relative path, when archived
 
     @property
     def name(self) -> str:
@@ -337,7 +371,7 @@ class ContentHit:
     @property
     def node_key(self) -> str:
         """The hit as a Node Key inside its project."""
-        prefix = f"{self.project}/"
+        prefix = f"{self.root or self.project}/"
         return self.path[len(prefix):] if self.path.startswith(prefix) else ""
 
 
@@ -355,6 +389,7 @@ class ContentResult:
     total: int
     stale: int
     index: ContentIndex
+    archived: int = 0   # matches in archived projects, shown or not
 
     @property
     def overflow(self) -> int:
@@ -362,12 +397,13 @@ class ContentResult:
 
 
 def query_index(index: ContentIndex, query: str, *,
-                cap: int = RESULT_CAP) -> ContentResult:
+                cap: int = RESULT_CAP, archived: bool = True) -> ContentResult:
     """Case-folded substring over the indexed text, revalidated against disk.
 
     Never reads content: the revalidation is one stat per matching candidate,
     and a match whose key changed is stale - a top-up's job, not a query-time
-    download (ticket 08).
+    download (ticket 08). Live hits rank before archived ones;
+    ``archived=False`` leaves the archive's out.
     """
     needle = content.normalise(query)
     if not needle:
@@ -375,6 +411,9 @@ def query_index(index: ContentIndex, query: str, *,
     hits: list[ContentHit] = []
     stale = 0
     for entry in index.files:
+        in_archive = index.is_archived(entry.path)
+        if in_archive and not archived:
+            continue
         where = entry.text.find(needle)
         if where < 0:
             continue
@@ -386,12 +425,18 @@ def query_index(index: ContentIndex, query: str, *,
         if stat.st_size != entry.size or stat.st_mtime_ns != entry.mtime_ns:
             stale += 1
             continue
-        hits.append(ContentHit(project=entry.path.split("/", 1)[0],
-                               path=entry.path, kind=entry.kind,
-                               snippet=_snippet(entry.text, where, len(needle))))
-    total = len(hits)
-    return ContentResult(query=query, hits=tuple(hits[:cap]), total=total,
-                         stale=stale, index=index)
+        if in_archive:
+            project = entry.path[len(index.archive_root) + 1:].split("/", 1)[0]
+            root = f"{index.archive_root}/{project}"
+        else:
+            project, root = entry.path.split("/", 1)[0], ""
+        hits.append(ContentHit(project=project, path=entry.path, kind=entry.kind,
+                               snippet=_snippet(entry.text, where, len(needle)),
+                               archived=in_archive, root=root))
+    ordered = live_first(hits)
+    return ContentResult(query=query, hits=ordered[:cap], total=len(ordered),
+                         stale=stale, index=index,
+                         archived=sum(1 for h in ordered if h.archived))
 
 
 def _snippet(text: str, where: int, length: int) -> str:

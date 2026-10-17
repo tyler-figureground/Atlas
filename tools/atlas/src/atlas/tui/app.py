@@ -1527,17 +1527,19 @@ class AtlasApp(App):
         # The session Name Index rides every scan (ticket 33): session start
         # and `r` are exactly the freshness ticket 08 promised, and the overlay
         # never enumerates at keystroke time.
-        self._index_worker(inventory.root, generation)
+        self._index_worker(inventory.root, generation, inventory.map.archive_root)
         # Through the Region model, never table.focus(): every modal write
         # rescans, and in Single-Region Composition the list may be hidden.
         self._focus_current_region()
         self.refresh_bindings()
 
     @work(thread=True, exclusive=True, group="search-index", exit_on_error=False)
-    def _index_worker(self, root: Path, generation: int) -> None:
-        """The one drive walk the Name Index costs, off the UI thread."""
+    def _index_worker(self, root: Path, generation: int, archive_root: str) -> None:
+        """The one drive walk the Name Index costs, off the UI thread. The
+        Archived Projects ride it read-only (plan Q3): search is the one
+        console surface that sees them."""
         try:
-            index = build_name_index(root)
+            index = build_name_index(root, archive_root=archive_root)
         except Exception as error:  # a vanishing mount mid-walk, not a query failure
             self.call_from_thread(self._index_failed, generation, error)
             return
@@ -2227,8 +2229,18 @@ class AtlasApp(App):
         The index may be older than the list by a rescan, so a hit whose
         project is gone says so instead of landing somewhere else. A project
         the list filter is hiding is found by clearing the filter - the hit is
-        the answer to a question the filter cannot see."""
+        the answer to a question the filter cannot see.
+
+        An archived hit has no node to land on: the archive is outside the
+        list and the tree by design (ADR 0019). Nothing moves - not the
+        filter, not the selection - and the operation line names the hit and
+        the two ways to it: U brings the project back, o opens it in place."""
         if self._inventory is None:
+            return
+        if hit.archived:
+            self._set_operation(
+                f"{hit.path} is archived - U unarchives {hit.project} to open it "
+                "in the tree; o in search opens it in place")
             return
         filter_input = self.query_one("#filter", Input)
         if filter_input.value:

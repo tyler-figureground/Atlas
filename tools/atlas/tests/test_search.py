@@ -60,18 +60,136 @@ def test_the_index_covers_projects_folders_and_files(fixture_drive):
     assert deep.project == "260813_Alpha"
 
 
-def test_the_index_walks_project_roots_only(fixture_drive):
-    """`_`-roots are out: archived projects and the control plane are invisible
-    to the console (ADR 0019), and the overlay is a console surface."""
-    _drive(fixture_drive)
-    archived = fixture_drive / "_Archived Projects" / "260101_Old"
-    archived.mkdir(parents=True)
-    (archived / "keep.md").write_text("x", encoding="utf-8")
-    index = build_name_index(fixture_drive)
-    paths = {e.path for e in index.entries}
+def _archive(drive, root="_Archived Projects"):
+    """One archived project under the archive root, plus a loose file there."""
+    archived = drive / root / "260101_Old"
+    (archived / "01 Model").mkdir(parents=True)
+    (archived / "01 Model" / "old model notes.md").write_text("x", encoding="utf-8")
+    (drive / root / "README.txt").write_text("loose", encoding="utf-8")
+    return archived
 
-    assert not any("_Archived Projects" in p or "_tools" in p for p in paths)
-    assert all(not e.name.startswith("_") for e in index.entries)
+
+def test_the_index_skips_the_control_plane(fixture_drive):
+    """`_tools` and every other `_`-root but the archive stay out: drive-root
+    files are the control plane, not search results."""
+    _drive(fixture_drive)
+    (fixture_drive / "_scratch" / "x").mkdir(parents=True)
+    index = build_name_index(fixture_drive)
+    assert not any(e.path.startswith("_") for e in index.entries)
+
+
+def test_archived_projects_are_indexed_and_tagged(fixture_drive):
+    """Plan Q3 (2026-10-16): the archive is mapped read-only so search reaches
+    it. Each child folder of the archive root is an archived project; a loose
+    file at the archive root is not a result."""
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    index = build_name_index(fixture_drive)
+    by_path = {e.path: e for e in index.entries}
+
+    root = by_path["_Archived Projects/260101_Old"]
+    assert root.archived and root.is_dir and root.project == "260101_Old"
+    assert root.node_key == ""
+    deep = by_path["_Archived Projects/260101_Old/01 Model/old model notes.md"]
+    assert deep.archived and deep.project == "260101_Old"
+    assert deep.node_key == "01 Model/old model notes.md"
+    assert "_Archived Projects" not in by_path, "the archive root is not a result"
+    assert "_Archived Projects/README.txt" not in by_path
+    # Live hits carry the flag too, false.
+    assert not by_path["260813_Alpha"].archived
+
+
+def test_the_archive_root_comes_from_the_map(fixture_drive):
+    from conftest import FIXTURE_MAP
+
+    write_map(fixture_drive, {**FIXTURE_MAP, "controlPlane": {
+        **FIXTURE_MAP["controlPlane"], "archiveRoot": "_Old Jobs/2025"}})
+    _drive(fixture_drive)
+    _archive(fixture_drive, "_Old Jobs/2025")
+    _archive(fixture_drive)        # the default root is not this drive's archive
+    index = build_name_index(fixture_drive)
+    archived = {e.path for e in index.entries if e.archived}
+
+    assert "_Old Jobs/2025/260101_Old" in archived
+    assert not any(p.startswith("_Archived Projects") for p in archived)
+
+
+def test_a_drive_without_an_archive_is_not_unreadable(fixture_drive):
+    """No archive root yet is the normal state, never a failure note."""
+    _drive(fixture_drive)
+    index = build_name_index(fixture_drive)
+    assert index.unreadable == ()
+    assert not any(e.archived for e in index.entries)
+
+
+def test_the_archive_can_be_left_out(fixture_drive):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    index = build_name_index(fixture_drive, archived=False)
+    assert not any(e.archived or e.path.startswith("_") for e in index.entries)
+
+
+def test_live_hits_rank_before_archived_ones(fixture_drive):
+    """The archive never buries current work: every live match comes first,
+    and the cap fills with live hits before any archived one."""
+    _archive(fixture_drive)
+    # Sorts before the live projects by name: ordering must not be alphabetical.
+    first = fixture_drive / "_Archived Projects" / "000_First"
+    first.mkdir()
+    (first / "model a.md").write_text("x", encoding="utf-8")
+    _drive(fixture_drive)
+    result = search_names(build_name_index(fixture_drive), "model")
+
+    flags = [h.archived for h in result.hits]
+    assert True in flags and False in flags
+    assert flags == sorted(flags), "every live hit before any archived one"
+    assert result.archived == flags.count(True)
+
+    live = flags.count(False)
+    capped = search_names(build_name_index(fixture_drive), "model", cap=live)
+    assert not any(h.archived for h in capped.hits)
+    assert capped.overflow == result.archived
+
+
+def test_archived_projects_stay_out_of_the_project_list_and_doctor(fixture_drive):
+    """Only search sees the archive (ADR 0019)."""
+    from atlas.core.doctor import report_drive
+    from atlas.core.scan import scan_drive
+
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    inventory = scan_drive(fixture_drive)
+    assert {p.name for p in inventory.projects} == {"260813_Alpha", "260901_Beta"}
+    report = report_drive(inventory)
+    assert len(report.projects) == 2
+    assert "260101_Old" not in repr(report.projects)
+
+
+def test_indexing_the_archive_writes_nothing(fixture_drive):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    archive = fixture_drive / "_Archived Projects"
+
+    def snapshot():
+        return sorted((os.fspath(p), p.stat().st_mtime_ns, p.stat().st_size)
+                      for p in [archive, *archive.rglob("*")])
+
+    before = snapshot()
+    build_name_index(fixture_drive)
+    assert snapshot() == before
+
+
+@windows_only
+def test_a_junction_in_the_archive_is_never_walked_through(fixture_drive, tmp_path):
+    elsewhere = tmp_path / "ELSEWHERE"
+    elsewhere.mkdir()
+    (elsewhere / "secret.rvt").write_text("x", encoding="utf-8")
+    archive = fixture_drive / "_Archived Projects"
+    archive.mkdir()
+    _junction(archive / "260101_Linked", elsewhere)
+
+    index = build_name_index(fixture_drive)
+    assert not any("secret" in e.path or "Linked" in e.path for e in index.entries)
 
 
 def test_unreadable_folders_are_recorded_never_swallowed(fixture_drive, monkeypatch):
@@ -178,7 +296,7 @@ def test_search_json_names_its_fields(fixture_drive, capsys):
     assert payload["unreadable"] == []
     hit = next(r for r in payload["results"] if r["path"] == "260813_Alpha/01 Model")
     assert hit == {"project": "260813_Alpha", "path": "260813_Alpha/01 Model",
-                   "name": "01 Model", "kind": "folder"}
+                   "name": "01 Model", "kind": "folder", "archived": False}
     kinds = {r["kind"] for r in payload["results"]}
     assert kinds <= {"folder", "file"}
 
@@ -212,3 +330,31 @@ def test_search_errors_exit_2(fixture_drive, capsys, tmp_path):
     stray = tmp_path / "STRAY"
     stray.mkdir()
     assert main(["search", "x", "--drive", str(stray)]) == 2
+
+
+def test_search_tags_archived_hits_in_text_and_json(fixture_drive, capsys):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    status, payload = _search(fixture_drive, capsys, "model notes")
+    assert status == 0
+    assert [(r["path"], r["archived"]) for r in payload["results"]] == [
+        ("260901_Beta/01 Model/model notes.txt", False),
+        ("_Archived Projects/260101_Old/01 Model/old model notes.md", True)]
+    assert payload["results"][1]["project"] == "260101_Old"
+    assert payload["archived"] == 1
+
+    status = main(["search", "model notes", "--drive", str(fixture_drive)])
+    lines = capsys.readouterr().out.splitlines()
+    assert "file  260901_Beta/01 Model/model notes.txt" in lines
+    assert ("file  [archived] _Archived Projects/260101_Old/01 Model/old model notes.md"
+            in lines)
+    assert any("1 archived" in line for line in lines)
+
+
+def test_search_no_archived_leaves_the_archive_out(fixture_drive, capsys):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    status, payload = _search(fixture_drive, capsys, "model notes", "--no-archived")
+    assert status == 0
+    assert [r["archived"] for r in payload["results"]] == [False]
+    assert payload["archived"] == 0

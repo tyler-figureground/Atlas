@@ -16,6 +16,12 @@ absent, building and failed states are one honest line each, never a silent
 zero (ADR 0004). Result rows keep the colour-alone rule (ADR 0008): the kind
 is a word at every width.
 
+Archived projects are searched too (plan Q3, 2026-10-16), read-only: each
+archived row carries the word ``archived`` after its kind, and every live row
+- name or content - comes before any archived one. Enter on an archived hit
+cannot reveal it (the archive is not in the tree, ADR 0019); the app says so
+on the operation line and moves nothing. ``o`` opens it in place.
+
 The geometry rules live in ``tui.layout`` (``search_overlay_width``); this
 widget applies them.
 """
@@ -54,12 +60,28 @@ def result_text(hit: NameHit, cells: int) -> Text:
     telling a folder from a file is exactly what ADR 0008 rules out.
     """
     kind = hit.kind
-    path = middle_ellipsis(hit.path, max(8, cells - len(kind) - 2))
+    path = middle_ellipsis(hit.path, max(8, cells - len(kind) - 2 - _tag_cells(hit)))
     row = Text()
     row.append(kind, style=tokens.PALETTE.muted)
     row.append("  ")
+    _append_tag(row, hit)
     row.append(path, style=tokens.PALETTE.ink)
     return row
+
+
+ARCHIVED_TAG = "archived"
+
+
+def _tag_cells(hit: NameHit | ContentHit) -> int:
+    return len(ARCHIVED_TAG) + 2 if hit.archived else 0
+
+
+def _append_tag(row: Text, hit: NameHit | ContentHit) -> None:
+    """An archived hit says so in a word, after the kind (ADR 0008: never
+    colour alone). Its path keeps the archive prefix as well."""
+    if hit.archived:
+        row.append(ARCHIVED_TAG, style=tokens.PALETTE.muted)
+        row.append("  ")
 
 
 def content_result_text(hit: ContentHit, cells: int) -> Text:
@@ -71,7 +93,7 @@ def content_result_text(hit: ContentHit, cells: int) -> Text:
     """
     kind = hit.kind
     snippet = hit.snippet
-    room = cells - len(kind) - 2
+    room = cells - len(kind) - 2 - _tag_cells(hit)
     if snippet:
         # The path keeps enough to be identified; the snippet gets the rest.
         path = middle_ellipsis(hit.path, max(8, room * 2 // 5))
@@ -81,6 +103,7 @@ def content_result_text(hit: ContentHit, cells: int) -> Text:
     row = Text()
     row.append(kind, style=tokens.PALETTE.muted)
     row.append("  ")
+    _append_tag(row, hit)
     row.append(path, style=tokens.PALETTE.ink)
     if snippet:
         row.append("  ")
@@ -261,16 +284,21 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
             self._content_total = content_result.total
             self._content_stale = content_result.stale
         content_hits = content_result.hits if content_result is not None else ()
-        # Name matches rank first (ticket 35); the two kinds never mix.
-        self._hits = (*result.hits, *content_hits)
+        # Live work first, then the archive (plan Q3) - so an archived name
+        # never pushes a live content match down. Within each, name matches
+        # rank first (ticket 35); the two kinds never mix.
+        rows = [
+            *((h, result_text) for h in result.hits if not h.archived),
+            *((h, content_result_text) for h in content_hits if not h.archived),
+            *((h, result_text) for h in result.hits if h.archived),
+            *((h, content_result_text) for h in content_hits if h.archived),
+        ]
+        self._hits = tuple(hit for hit, _render in rows)
         if not self._hits:
             status.update(f"No matches for '{query}'.")
             content_line.update(self._content_line(cells))
             return
-        options.add_options(
-            Option(result_text(hit, cells)) for hit in result.hits)
-        options.add_options(
-            Option(content_result_text(hit, cells)) for hit in content_hits)
+        options.add_options(Option(render(hit, cells)) for hit, render in rows)
         options.highlighted = 0
         noun = "match" if result.total == 1 else "matches"
         # Short enough to hold at 46 columns, where the dialog has 34 cells.
