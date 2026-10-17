@@ -306,6 +306,14 @@ def test_case_only_rename_rolls_back_exact_spelling_and_dossier_on_index_failure
     assert not any(".atlas-rename-" in child.name for child in fixture_drive.iterdir())
 
 
+def _windows_lock_error(target):
+    """A WinError 5 as Windows raises it, on every OS. The 5-arg OSError form
+    sets ``winerror`` only on Windows, so CI on Linux would never retry."""
+    error = PermissionError(13, "Access is denied", str(target))
+    error.winerror = 5
+    return error
+
+
 def test_case_only_rename_survives_transient_windows_locks(fixture_drive, monkeypatch):
     drive_map, intake, project = _new_project(fixture_drive)
     edited = replace(
@@ -327,7 +335,7 @@ def test_case_only_rename_survives_transient_windows_locks(fixture_drive, monkey
     def flaky_rename(self, target):
         if failures["count"] < 2:
             failures["count"] += 1
-            raise PermissionError(13, "Access is denied", str(target), 5)
+            raise _windows_lock_error(target)
         return real_rename(self, target)
 
     monkeypatch.setattr(Path, "rename", flaky_rename)
@@ -357,7 +365,7 @@ def test_case_only_rename_reports_persistent_windows_lock_after_retries(
     )
 
     def locked_rename(self, target):
-        raise PermissionError(13, "Access is denied", str(target), 5)
+        raise _windows_lock_error(target)
 
     monkeypatch.setattr(Path, "rename", locked_rename)
 
