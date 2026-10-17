@@ -365,6 +365,31 @@ instead of a periodic surprise (1.6, Phase 5).
 - Content index builds and deep passes are now the measured-cost operations:
   full index build is a background job; deep doctor ~10 projects in minutes.
 
+**2026-10-16 - Review Pack processed, Q3 built (Atlas 0.18.0)**
+- Tyler: approve, hold the gaps. 13 sets approved (01, 02, 10, 11, 13, 14, 15,
+  19, 21, 26, 90, 91, 92; approved/reviewed 2026-10-16, next_review 2027-04-16);
+  gap sets 16, 40-45 held at candidate with a Known issues line each (approve on
+  first issued deliverable as E1). 21 Floor Plans closes the 10-07 NEEDS WORK;
+  open item (no clean issued plan sheet) carried on the card. Library: 20
+  approved, 7 candidate; `refs doctor` 0 problems; README + gallery regenerated;
+  pack ticked 20/20.
+- Over-long paths: MPR `legacy-agent-sessions/260916-set-reorganization/
+  review-unaccepted/` - 21 PNGs renamed (dropped ` - 01 PHASE 2 - New
+  Construction - Sheet`), max path now 227, MPR deep pass 0 overlong. Manifest
+  beside the PNGs and `_tools\logs\mpr-overlong-rename-20261016.json`. Zipping
+  ruled out: run is 3,911 files / 10.4 GB over the mount. 64th Lane `.dicta`
+  cache path (275) left: run active (idle 1 day, referenced by CURRENT.md) -
+  revisit when the run closes.
+- Q3 answered (Tyler, via defaults): archive mapped read-only for search.
+  PR #7: name + content index walk `_Archived Projects` (63 projects, 26,807
+  entries), hits tagged archived, live first, `--no-archived`. Session name walk
+  2.5 s -> 17 s (background). Main CI had been red since 0.17.0 on a Linux-only
+  test artifact (fake WinError lacked `winerror`) - fixed in the test.
+- **Atlas 0.18.0 released and deployed** (backup `_tools\logs\atlas-0.18.0-deploy-
+  20261016-225204`, wheel sha256 recorded, `Atlas.bat --version` verified 0.18.0,
+  production map lint: no new findings, HOW-TO search/archive sections updated).
+  Archive content-index top-up (~1,646 files, ~50 min) started on this machine.
+
 - Recurring environment annoyance recorded: stale `.git/index.lock` files appear
   after long test runs (idle VS Code git watcher nearby); removed three times
   this session. If it recurs, the watcher is the suspect.

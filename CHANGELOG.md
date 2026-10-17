@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-16
+
+### Fixed
+
+- **Linux CI for the rename-lock tests** - the fake WinError 5 now sets `winerror`
+  explicitly; the 5-arg `OSError` form sets it on Windows only, so ubuntu CI
+  never retried and main had been red since 0.17.0. Production code unchanged.
+
 ### Added
 
 - **Atlas - search reaches the archive (plan Q3, ruled 2026-10-16).** The
@@ -508,7 +516,8 @@ First public release.
 - **3 hooks** — post-write disclaimer check, post-output metadata, pre-commit spec lint.
 - Marketplace install: `claude plugin marketplace add AlpacaLabsLLC/skills-for-architects`.
 
-[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/tyler-figureground/Atlas/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.18.0
 [0.17.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.17.0
 [0.16.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.16.0
 [0.15.0]: https://github.com/tyler-figureground/Atlas/releases/tag/v0.15.0
