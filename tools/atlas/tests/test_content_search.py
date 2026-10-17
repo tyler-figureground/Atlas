@@ -187,6 +187,36 @@ def test_search_content_json_names_its_fields(fixture_drive, capsys):
     assert "zoning variance" in hit["snippet"]
 
 
+def _archive(drive):
+    archived = drive / "_Archived Projects" / "260101_Old"
+    archived.mkdir(parents=True)
+    make_pdf(archived / "CD set.pdf", text="LEVEL ONE PLAN 2019")
+    return archived
+
+
+def test_search_content_tags_archived_hits(fixture_drive, capsys):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    build_index(fixture_drive)
+
+    status = main(["search", "level one plan", "--content", "--json",
+                   "--drive", str(fixture_drive)])
+    content = json.loads(capsys.readouterr().out)["content"]
+    assert status == 0
+    assert [(h["path"], h["archived"]) for h in content["results"]] == [
+        (PDF, False), ("_Archived Projects/260101_Old/CD set.pdf", True)]
+    assert content["archived"] == 1
+
+    main(["search", "level one plan", "--content", "--drive", str(fixture_drive)])
+    out = capsys.readouterr().out
+    assert "  pdf  [archived] _Archived Projects/260101_Old/CD set.pdf" in out
+
+    main(["search", "level one plan", "--content", "--no-archived", "--json",
+          "--drive", str(fixture_drive)])
+    content = json.loads(capsys.readouterr().out)["content"]
+    assert [h["archived"] for h in content["results"]] == [False]
+
+
 def test_search_content_json_is_null_without_an_index(fixture_drive, capsys):
     _drive(fixture_drive)
     status = main(["search", "zoning", "--content", "--json",

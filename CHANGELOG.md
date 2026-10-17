@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Atlas - search reaches the archive (plan Q3, ruled 2026-10-16).** The
+  Name Index and the Content Index now also walk the Archived Projects: each
+  folder directly under the map's `controlPlane.archiveRoot` (default
+  `_Archived Projects`), read-only, by the same `core.scan.walk` rules - no
+  links followed, `long_path` at every level, unreadable folders recorded.
+  Loose files at the archive root and every other `_`-root stay out. Every hit
+  carries `archived` and its archived project's name; the path keeps the
+  archive prefix. Live hits always rank first, so the cap fills with current
+  work. `atlas search` tags archived rows `[archived]`, counts them, and emits
+  `archived` per result and per result set in `--json`; `--no-archived` leaves
+  the archive out. In the console, archived rows carry the word `archived`;
+  Enter on one moves nothing and names the hit on the operation line (`U`
+  unarchives, `o` opens in place). The archive stays out of the project list,
+  doctor, conform, runs and the tree (ADR 0019). The Content Index stays
+  incremental: an existing index tops up with the archive's files alone, and
+  `atlas index build --no-archived` defers that first archive extraction while
+  keeping any archived entries already stored. Measured on the live drive
+  2026-10-16 (name walk only, read-only): 63 archived projects, 26,807 entries
+  (18,972 files, 1,646 of them PDF/Markdown/text content candidates); the
+  session name walk went from 2.5 s to 17 s, still on the background worker.
+
 ## [0.17.0] - 2026-10-13
 
 ### Fixed

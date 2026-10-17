@@ -179,7 +179,7 @@ Compositions; only what is on screen differs.
 
 **Name Index**
 The session's drive-wide index of every folder and file name below the project
-roots, plus the project roots themselves. Built from exactly one walk of the
+roots and the Archived Projects, plus the project roots themselves. Built from exactly one walk of the
 drive - measured at 4.24 seconds on the live drive (ticket 12) - on a background
 worker at session start and on `r`, never blocking, never reading a file's
 content. Junctions are never followed; a folder the walk cannot open is recorded
@@ -203,7 +203,8 @@ already loaded and never reads more.
 _Avoid_: global filter, spotlight, command palette.
 
 **Content Index**
-The per-machine index of PDF text and Markdown under the project roots that
+The per-machine index of PDF text and Markdown under the project roots and the
+Archived Projects that
 makes content search possible without a Drive API credential story (ADR 0020,
 ticket 34). Lives in the machine's user cache via `platformdirs`, keyed per
 drive root - never on the shared drive, where it would be shared mutable state
@@ -467,7 +468,19 @@ volume is what eats the cap (ADR 0011). Robustness plan 1.6.
 The map-named folder (`controlPlane.archiveRoot`, default `_Archived Projects`) that
 archived projects move under. Its first segment must start with `_` - the prefix is
 what keeps archived projects out of the scan, making them invisible to doctor, the
-tree and the console with no further work. ADR 0019.
+tree and the console with no further work. ADR 0019. Search is the one exception
+(plan Q3, 2026-10-16): see Archived Project.
+
+**Archived Project**
+A folder directly under the Archive Root. Out of the project list, doctor,
+conform, runs and the tree (ADR 0019), but searched read-only by the Name Index
+and the Content Index (plan Q3, 2026-10-16). Every search hit in one carries
+`archived`, names the archived project as its `project`, keeps the Archive Root
+prefix in its path, and ranks after every live hit so the archive never buries
+current work. Loose files at the Archive Root are not Archived Projects and are
+not results. In the console an archived hit cannot be revealed - there is no
+node for it - so Enter names it on the operation line; `U` brings it back.
+_Avoid_: dead project, old project (use the folder's real state).
 
 **Archive Precondition**
 What `atlas archive` / `unarchive` refuse at plan build: a name that is not one

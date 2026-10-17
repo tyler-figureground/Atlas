@@ -149,7 +149,7 @@ two `00` folders.
 |---|---|---|
 | Q1 | ~~Global search scope (ticket 08)~~ **Answered 2026-10-07: everything, including PDF text.** This pulls ticket 11 (Drive API read path) forward - it becomes a prerequisite investigation for content search, not an optional grill | - |
 | Q2 | ~~Legacy Coleman/Huckleberry/Dekalb: conform or freeze?~~ **Answered 2026-10-07: conform anyway; archive all dormant projects except Coleman (stays live, conforms)** | - |
-| Q3 | `_Archived Projects`: leave outside the map forever, or map read-only so search (4.1) can reach them | Map read-only once search exists; leave alone until then |
+| Q3 | ~~`_Archived Projects`: leave outside the map forever, or map read-only so search (4.1) can reach them~~ **Answered 2026-10-16: map read-only; search reaches archived projects** | - |
 | Q4 | ~~Drawing-set approval gate: wait for Pyvoid rule ids (3.1)?~~ **Answered 2026-10-07: approve on Tyler's review alone; dangling rule ids go in Known issues** | - |
 | Q5 | ~~Automate the weekly sweep and monthly prune?~~ **Default adopted 2026-10-07: human-triggered for one quarter, automate after the dry-runs stay boring** | - |
 

@@ -55,6 +55,12 @@ Decisions taken where the ticket was silent:
 - **The index walks project roots only** (`is_project_dir`): `_`-roots are
   invisible to the console on purpose (ADR 0019), and the overlay is a
   console surface. `_Archived Projects` and `_tools` are not findable.
+  **Superseded 2026-10-16 (plan Q3: map read-only, search reaches the
+  archive):** the index also walks each folder under the map's
+  `archiveRoot`, read-only; hits carry `archived` and rank after every live
+  hit; Enter on one names it on the operation line instead of revealing
+  (the archive is still outside the list and tree, ADR 0019). `_tools` and
+  other `_`-roots stay out.
 - **Dossier facts are not read this ticket.** Ticket 08 lists "the project
   dossier facts Atlas already parses" and "zero content reads" in the same
   sentence; nothing parses dossiers in a session today (the dossier mode is

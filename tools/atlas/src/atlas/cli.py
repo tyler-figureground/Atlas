@@ -1328,6 +1328,10 @@ def cmd_search(args: argparse.Namespace) -> int:
     read off the drive. Exit 0 with matches, 1 with none, 2 on error, like
     every fact producer. An absent index is said aloud and name matches are
     still served; a silent zero is never the answer (ADR 0004).
+
+    Archived projects are searched too (plan Q3), read-only, tagged
+    ``[archived]`` and ranked after every live hit; ``--no-archived`` leaves
+    them out.
     """
     root = _resolve_drive(args.drive)
     if not args.query.strip():
@@ -1338,15 +1342,23 @@ def cmd_search(args: argparse.Namespace) -> int:
     except MapError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    index = build_name_index(root)
+    include_archived = not args.no_archived
+    index = build_name_index(root, archive_root=drive_map.archive_root,
+                             archived=include_archived)
     result = search_names(index, args.query)
     content_index = None
     content_result = None
     if args.content:
         content_index = load_index(root)
         if content_index is not None:
-            content_result = query_index(content_index, args.query)
+            content_result = query_index(content_index, args.query,
+                                         archived=include_archived)
     content_hits = content_result.hits if content_result is not None else ()
+
+    def tag(hit) -> str:
+        return "[archived] " if hit.archived else ""
+
+    archived_note = f" ({result.archived} archived)" if result.archived else ""
     if args.json:
         payload: dict[str, object] = {
             "drive": drive_map.drive,
@@ -1354,8 +1366,10 @@ def cmd_search(args: argparse.Namespace) -> int:
             "total": result.total,
             "shown": len(result.hits),
             "cap": RESULT_CAP,
+            "archived": result.archived,
             "results": [{"project": hit.project, "path": hit.path,
-                         "name": hit.name, "kind": hit.kind}
+                         "name": hit.name, "kind": hit.kind,
+                         "archived": hit.archived}
                         for hit in result.hits],
             "unreadable": [{"path": path, "error": why}
                            for path, why in index.unreadable],
@@ -1369,23 +1383,26 @@ def cmd_search(args: argparse.Namespace) -> int:
                 "shown": len(content_result.hits),
                 "cap": RESULT_CAP,
                 "stale": content_result.stale,
+                "archived": content_result.archived,
                 "results": [{"project": hit.project, "path": hit.path,
-                             "kind": hit.kind, "snippet": hit.snippet}
+                             "kind": hit.kind, "snippet": hit.snippet,
+                             "archived": hit.archived}
                             for hit in content_result.hits],
             }
         print(json.dumps(payload, indent=2))
     else:
         for hit in result.hits:
-            print(f"{hit.kind}  {hit.path}")
+            print(f"{hit.kind}  {tag(hit)}{hit.path}")
         if not result.hits and not content_hits:
             print(f"no matches for '{args.query}'")
         elif not result.hits:
             print("no name matches - the content matches below")
         elif result.overflow:
-            print(f"{result.total} matches - showing the first {len(result.hits)}; "
-                  f"{result.overflow} more - refine the query")
+            print(f"{result.total} matches{archived_note} - showing the first "
+                  f"{len(result.hits)}; {result.overflow} more - refine the query")
         else:
-            print(f"{result.total} match" + ("es" if result.total != 1 else ""))
+            print(f"{result.total} match" + ("es" if result.total != 1 else "")
+                  + archived_note)
         if args.content:
             if content_result is None:
                 print("no content index for this drive - run `atlas index build` "
@@ -1395,7 +1412,7 @@ def cmd_search(args: argparse.Namespace) -> int:
                 print(f"content matches (indexed at {stamp}):")
                 for hit in content_hits:
                     snippet = f'  "{hit.snippet}"' if hit.snippet else ""
-                    print(f"  {hit.kind}  {hit.path}{snippet}")
+                    print(f"  {hit.kind}  {tag(hit)}{hit.path}{snippet}")
                 if not content_hits:
                     print("  (none)")
                 if content_result.stale:
@@ -1416,6 +1433,10 @@ def cmd_index_build(args: argparse.Namespace) -> int:
     Markdown file under the project roots; later runs re-read only what
     changed. Writes only to the local cache, never to the drive. Exit 0 on
     success, 2 on error - a build has no findings state.
+
+    The Archived Projects are walked too (plan Q3), read-only. Their first
+    extraction is the long one; ``--no-archived`` defers it, carrying the
+    archive's stored entries forward unread.
     """
     root = _resolve_drive(args.drive)
     read = {"count": 0}
@@ -1426,7 +1447,8 @@ def cmd_index_build(args: argparse.Namespace) -> int:
             # Progress goes to stderr so --json stdout stays clean.
             print(f"indexing {done}/{total} files...", file=sys.stderr)
 
-    index = build_index(root, progress=progress, save_every=50)
+    index = build_index(root, progress=progress, save_every=50,
+                        archived=not args.no_archived)
     skipped = len(index.skipped)
     unreadable = len(index.unreadable)
     if args.json:
@@ -1435,15 +1457,18 @@ def cmd_index_build(args: argparse.Namespace) -> int:
             "path": str(index_path(root)),
             "indexed_at": index.indexed_at,
             "files": len(index.files),
+            "archived": index.archived_files,
             "read": read["count"],
             "skipped": skipped,
             "unreadable": unreadable,
         }, indent=2))
     else:
         noun = "file" if len(index.files) == 1 else "files"
+        archived = (f", {index.archived_files} in archived projects"
+                    if index.archived_files else "")
         print(f"indexed {len(index.files)} {noun} "
               f"({read['count']} read, {len(index.files) - read['count']} unchanged, "
-              f"{skipped} skipped), indexed at {index.indexed_at}")
+              f"{skipped} skipped{archived}), indexed at {index.indexed_at}")
         if unreadable:
             print(f"note: {unreadable} folder(s) could not be read - "
                   "the index may be incomplete", file=sys.stderr)
@@ -1803,8 +1828,12 @@ def main(argv: list[str] | None = None) -> int:
         "--content", action="store_true",
         help="also search file contents via the local Content Index "
              "(`atlas index build` builds it; the Indexed-At Stamp is shown)")
+    sub.choices["search"].add_argument(
+        "--no-archived", action="store_true",
+        help="leave archived projects out (by default they are searched, tagged "
+             "[archived], and listed after every live match)")
 
-    contacts = sub.add_parser("contacts", help="list, add, and edit shared contacts")
+    contacts =sub.add_parser("contacts", help="list, add, and edit shared contacts")
     contact_commands = contacts.add_subparsers(dest="contacts_command", required=True)
     contacts_list = contact_commands.add_parser("list", help="list shared contacts")
     contacts_list.add_argument(
@@ -1862,6 +1891,10 @@ def main(argv: list[str] | None = None) -> int:
     index_build.add_argument(
         "--drive", help="drive root (default: walk up from cwd, else auto-discover)")
     index_build.add_argument("--json", action="store_true", help="machine-readable output")
+    index_build.add_argument(
+        "--no-archived", action="store_true",
+        help="skip the archived projects this run; their stored entries are kept "
+             "unread (the archive's first extraction is the long one)")
     index_build.set_defaults(fn=cmd_index_build)
     index_status = index_commands.add_parser(
         "status", help="report the index: Indexed-At Stamp and counts")

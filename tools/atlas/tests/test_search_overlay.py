@@ -272,6 +272,78 @@ async def test_o_opens_the_hit_without_touching_the_tree(fixture_drive, monkeypa
         assert app._focus_region == PROJECT_LIST, "open disturbs no focus"
 
 
+# ------------------------------------------------------------- archived hits
+
+
+def _archive(drive):
+    """An archived project whose name would be markup if it were a `str`."""
+    archived = drive / "_Archived Projects" / "[old] 250101_Gamma"
+    (archived / "01 Model").mkdir(parents=True)
+    (archived / "01 Model" / "gamma notes.txt").write_text("g", encoding="utf-8")
+    return archived
+
+
+async def test_archived_hits_are_labelled_and_rank_last(fixture_drive):
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        # The archive is searchable, never a project in the list (ADR 0019).
+        assert all("Gamma" not in row.key for row in app._visible_rows)
+        await pilot.press("g")
+        await pilot.press(*"notes")
+        await settle(app, pilot)
+        rows = _result_rows(_overlay(app))
+        assert rows[-1].startswith("file  archived  "), rows
+        assert "[old] 250101_Gamma" in rows[-1], "a Text label, never markup"
+        assert not any("archived" in row for row in rows[:-1]), rows
+
+
+async def test_enter_on_an_archived_hit_says_so_and_moves_nothing(fixture_drive):
+    """An archived project is not in the tree, so reveal cannot land there -
+    and must not land anywhere else. The operation line names the hit and
+    the way back: U unarchives, o opens."""
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        before = app._selected_row().key
+        await pilot.press("g")
+        await pilot.press(*"gamma notes")
+        await settle(app, pilot)
+        await pilot.press("enter")
+        await settle(app, pilot)
+
+        assert not isinstance(app.screen, SearchOverlay)
+        assert app._focus_region == PROJECT_LIST
+        assert app._selected_row().key == before
+        assert app._reveal_key is None
+        message = app._operation_text
+        assert "_Archived Projects/[old] 250101_Gamma/01 Model/gamma notes.txt" in message
+        assert "archived" in message and "U" in message
+
+
+async def test_o_opens_an_archived_hit(fixture_drive, monkeypatch):
+    opened = []
+    monkeypatch.setattr("atlas.tui.app.open_path", opened.append)
+    _drive(fixture_drive)
+    archived = _archive(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("g")
+        await pilot.press(*"gamma notes")
+        await settle(app, pilot)
+        await pilot.press("down", "o")
+        await settle(app, pilot)
+        assert opened == [archived / "01 Model" / "gamma notes.txt"]
+
+
 # ------------------------------------------------------------- the cap
 
 
