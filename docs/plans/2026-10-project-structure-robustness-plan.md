@@ -388,7 +388,9 @@ instead of a periodic surprise (1.6, Phase 5).
 - **Atlas 0.18.0 released and deployed** (backup `_tools\logs\atlas-0.18.0-deploy-
   20261016-225204`, wheel sha256 recorded, `Atlas.bat --version` verified 0.18.0,
   production map lint: no new findings, HOW-TO search/archive sections updated).
-  Archive content-index top-up (~1,646 files, ~50 min) started on this machine.
+  Archive content-index top-up done 2026-10-17: 4,751 files indexed (1,686 read,
+  3,065 unchanged, 67 skipped, 1,593 in archived projects); `search --content
+  Mosco` returns 17 archived hits.
 
 - Recurring environment annoyance recorded: stale `.git/index.lock` files appear
   after long test runs (idle VS Code git watcher nearby); removed three times
