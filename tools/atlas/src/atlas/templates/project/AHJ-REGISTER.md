@@ -8,8 +8,8 @@ status changes; the files sit in the stage folders beside this register.
 |---|---|
 | `01 Requirements & Pre-Application` | submittal checklists, agency requirements, pre-application notes, blank forms |
 | `02 Applications & Forms` | completed forms, owner authorisations, fee receipts |
-| `03 Submissions` | exactly what was filed, per round: `R0_YYMMDD_<Agency>_<what>.pdf` |
-| `04 Comments & Responses` | plan-check comments in, response letter and matrix out, per round |
+| `03 Submissions` | exactly what was filed, one `R<n>_YYMMDD` folder per round, agency in the file name |
+| `04 Comments & Responses` | plan-check comments in, response letter and matrix out, in the `R<n>_YYMMDD` folder of the round they answer |
 | `05 Correspondence` | letters, emails, records requests to and from agencies |
 | `06 Permits & Inspections` | issued permits, approved stamped sets, inspection records, final / CofO |
 

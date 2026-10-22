@@ -4,7 +4,7 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted
+Accepted. `13 AHJ` placement and round naming amended by ADR 0021 (`07 Correspondence/AHJ`).
 
 Map v3.0. Decided by Tyler on 2026-10-02 against the options in
 `docs/research/project-folder-usage-and-agent-output.md` section 5.

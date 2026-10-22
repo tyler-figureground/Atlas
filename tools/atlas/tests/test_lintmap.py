@@ -56,6 +56,17 @@ def test_duplicate_child_across_sections_warns(tmp_path):
     assert dup and dup[0].level == "warn"
 
 
+def test_same_leaf_under_two_parents_in_one_section_does_not_warn(tmp_path):
+    # ADR 0021: every party in 07 Correspondence has its own In and Out. One
+    # section is one home, however many parents repeat the leaf.
+    data = copy.deepcopy(FIXTURE_MAP)
+    data["sections"][2]["children"] += ["Client/In", "Owner/In"]
+    drive = tmp_path / "D"
+    write_map(drive, data)
+    findings = lint_map(load_map(find_map(drive)))
+    assert not [f for f in findings if f.code == "DUP-CHILD" and "'In'" in f.message]
+
+
 def test_relocation_target_must_be_blessed_root(tmp_path):
     data = copy.deepcopy(FIXTURE_MAP)
     data["relocations"]["Stuff"] = "97 Nowhere/Stuff"
