@@ -152,7 +152,9 @@ def lint_map(m: DriveMap) -> list[Finding]:
     for s in m.sections:
         for child in s.children:
             leaf = child.replace("\\", "/").split("/")[-1]
-            homes.setdefault(leaf, []).append(s.id)
+            in_sections = homes.setdefault(leaf, [])
+            if s.id not in in_sections:
+                in_sections.append(s.id)
     for leaf, in_sections in sorted(homes.items()):
         if len(in_sections) > 1:
             findings.append(
