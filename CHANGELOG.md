@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-22
+
+### Changed
+
+- **`07 Correspondence` replaces `07 IN`, `08 OUT` and `13 AHJ` (ADR 0021, drive map v4.0).** Exchange is filed by party, by role: Client, Owner, AHJ (ADR 0013 stages, rounds as `R<n>_YYMMDD` folders), Consultants by discipline, Contractor (Bids, RFIs, Submittals, Change Orders, Sketches & ASIs), Vendors, each with `In` / `Out` or process folders. The bundled `agents-rules.md`, `TYLER.md`, `TRANSMITTAL-LOG.md` and `AHJ-REGISTER.md` templates name the new paths, so this release ships with map v4.0 and the migration (`conform --only relocate --apply`, then `conform --apply`).
+
+### Fixed
+
+- **Map lint `DUP-CHILD`** no longer warns when one section repeats a leaf under several parents (`Client/In`, `Owner/In`); it counts sections, not parents.
+
 ## [0.18.0] - 2026-10-16
 
 ### Fixed
