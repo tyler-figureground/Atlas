@@ -17,7 +17,7 @@ block production are **not** here either - they are the `DECISION` lane in `TASK
 - IDs run Y-001, Y-002 ... and are never reused. Independent of the T-NNN series.
 - One line per task, verb first. Link the source (minutes, decision). Do not paste it.
 - If an agent can prepare the artifact, it does: draft email or letter to
-  `08 OUT/Drafts/`, package staged for transmittal. The item links it with `ready:`.
+  `07 Correspondence/_Outbox/`, package staged for transmittal. The item links it with `ready:`.
   Tyler sends; agents never send.
 - Done only when Tyler did it. Move to **Done** with the date.
 - This file is the source of truth. The drive-level digest copies from it; never

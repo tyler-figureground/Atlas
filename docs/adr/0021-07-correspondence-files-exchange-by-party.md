@@ -4,8 +4,9 @@ Date: 2026-10-22
 
 ## Status
 
-Accepted. Map v4.0 (not yet applied). Supersedes the `13 AHJ` placement in ADR 0013; its
-six stages, register and "Submissions, never Submittals" rule carry over unchanged.
+Accepted. Map v4.0 (not yet applied). Amends ADR 0013: `13 AHJ` moves to
+`07 Correspondence/AHJ` and AHJ rounds become folders instead of a file-name prefix. Its six
+stages, register and "Submissions, never Submittals" rule carry over.
 
 Decided by Tyler on 2026-10-22 against
 `docs/research/correspondence-folder-structure.md`.
@@ -55,14 +56,20 @@ Parties with a formal process get process folders; the rest get `In` / `Out`.
 files exactly as sent or received. A firm, vendor or agency name goes in that folder name
 (`261022_Henrybuilt_Kitchen shop drawings`), never as a folder level: the map has no
 free-text names (ADR 0013). This is why `Vendors` is `In` / `Out` and not one folder per
-trade.
+trade. The one exception is migration: a legacy vendor folder (`07 IN/Kitchen`) lands whole
+as `Vendors/In/Kitchen` rather than being split, so nothing is renamed without a person.
+
+**Transmittals:** one log, `07 Correspondence/TRANSMITTAL-LOG.md`, one row per package
+sent. The package as sent goes in `YYMMDD_T-NNN_<Description>/` in the recipient's `Out`.
 
 **Owner and Client are both seeded.** When they are the same person, file under `Client`
-and leave `Owner` empty. This rule goes into the AGENTS.md Atlas block.
+and leave `Owner` empty. This rule is in the AGENTS.md Atlas block.
 
-**AHJ rounds pair across stages.** `03 Submissions\R1_YYMMDD` and
+**AHJ rounds are folders that pair across stages.** `03 Submissions\R1_YYMMDD` and
 `04 Comments & Responses\R1_YYMMDD` share a prefix, so a resubmittal and the comments it
-answers sort side by side. The response letter goes in the round's `04` folder.
+answers sort side by side. The response letter goes in the round's `04` folder; the agency
+goes in the file name. This replaces ADR 0013's `R1_YYMMDD_` file prefix, because projects
+already file whole rounds (Pestoni `V1 Submission`, `V2 Submission`).
 
 **Boundaries that stay outside 07 Correspondence:**
 
@@ -80,7 +87,22 @@ answers sort side by side. The response letter goes in the round's `04` folder.
 
 ## Migration
 
-Relocations in the map, applied per project with per-folder confirmation:
+**Order matters.** Conform runs backfills before relocations. Run plainly against a project
+that still has `13 AHJ`, it would seed `07 Correspondence/AHJ` and a blank
+`AHJ-REGISTER.md` first, and the move of `13 AHJ` would then collide on every child. So
+each project migrates in two passes:
+
+1. `atlas conform --project P --only relocate --apply` - `07 Correspondence` does not exist
+   yet, so `13 AHJ` moves whole, register included, and nothing collides.
+2. `atlas conform --project P --apply` - backfills whatever the moves did not bring.
+
+Rehearsed on a mirror of all 10 projects (folder tree, placeholder files, real Markdown):
+pass 1 moved every row below with 0 conflicts; after pass 2 doctor reported 0 conform and
+0 drift on every project, and Pestoni's register arrived with its rows.
+
+Relocations in the map. **Entry order is load-bearing**: a child relocation must come before
+its parent's (`07 IN/Fabricator/Shop Drawings` before `07 IN/Fabricator`), or the parent
+carries the child away and the child's row is skipped as "source gone".
 
 | From | To |
 |---|---|
@@ -98,28 +120,36 @@ Relocations in the map, applied per project with per-folder confirmation:
 | `07 IN/Solar Vendor`, `07 IN/Kitchen`, `07 IN/Speaker Consul` | `07 Correspondence/Vendors/In/<same name>` |
 | `07 IN/County`, `07 IN/Napa County PBES`, `07 IN/AHJ` | `07 Correspondence/AHJ/05 Correspondence` |
 | `08 OUT/Drafts` | `07 Correspondence/_Outbox` |
-| `08 OUT/RFI` | `07 Correspondence/Contractor/RFIs` |
-| `08 OUT/Submittals` | `07 Correspondence/Contractor/Submittals` |
-| `08 OUT/Change Orders` | `07 Correspondence/Contractor/Change Orders` |
+| `08 OUT/RFI`, `08 OUT/3 RFI` | `07 Correspondence/Contractor/RFIs` |
+| `08 OUT/Submittals`, `08 OUT/4 Submittals` | `07 Correspondence/Contractor/Submittals` |
+| `08 OUT/Change Orders`, `08 OUT/change Orders` | `07 Correspondence/Contractor/Change Orders` |
 | `08 OUT/Sketches` | `07 Correspondence/Contractor/Sketches & ASIs` |
 | `08 OUT/Kitchen` | `07 Correspondence/Vendors/Out/Kitchen` |
 | `08 OUT/Resubmittal` | `07 Correspondence/AHJ/03 Submissions` |
-| `08 OUT/Transmittals/TRANSMITTAL-LOG.md` | `07 Correspondence/TRANSMITTAL-LOG.md` |
+| `10 Legal/Permits` | `07 Correspondence/AHJ/06 Permits & Inspections` |
 
-Not automatic, triaged by hand or by an agent run with Tyler approving each move:
+The v3 relocations `08 OUT/3 RFI`, `08 OUT/4 Submittals` and `08 OUT/change Orders` are
+retargeted above; `08 OUT/5 Transmittals` is dropped (its target section is retired).
 
-- `08 OUT/Transmittals/YYMMDD_*` packages - the recipient is not recorded; each goes to
-  the `Out` of the party it was sent to.
+Not automatic, triaged by hand or by an agent run with Tyler approving each move (about 60
+files on the mirror, 42 of them 64th Lane transmittals):
+
+- `08 OUT/Transmittals` - each `YYMMDD_*` package goes to the `Out` of the party it was
+  sent to; the old log's rows are copied into `07 Correspondence/TRANSMITTAL-LOG.md`. A
+  relocation can only move a folder, so the log is moved by hand.
 - `07 IN/Consultants` - split by discipline.
-- Loose `08 OUT` folders (Silverado `261108 - Property Feasibility Analysis`) - usually
-  `Client/Out`.
-- 64th Lane `08 OUT/Submittals` holds bid sets, not shop-drawing submittals - those go to
-  `Contractor/Bids`.
+- Loose files and folders at the `08 OUT` root (211 Centre bid sets and TPA brief,
+  Silverado `261108 - Property Feasibility Analysis`, Pestoni signage set) - usually
+  `Client/Out` or `Contractor/Bids`.
+- 64th Lane `08 OUT/Submittals` holds bid sets, not shop-drawing submittals. Move it to
+  `Contractor/Bids` by hand before pass 1.
 - AHJ material moved into `AHJ/05 Correspondence` - sorted into its stage folders.
+
+When `07 IN` and `08 OUT` hold no files, `atlas clean --project P --apply` removes them.
 
 ## Consequences
 
-Atlas creation and cleaning need no change: seeded children may contain slashes
+Atlas creation and cleaning need no code change: seeded children may contain slashes
 (`Client/In`), seeded paths are protected from `clean`, and `add` accepts
 `07 Correspondence/Consultants/Structural/In`. Adding a discipline takes two `add` requests
 (`In` and `Out`); a one-step discipline add is a follow-up, not a blocker.
@@ -130,7 +160,14 @@ section was "13 sections". It now counts sections. Every parent (`Client`, `AHJ`
 or relocations into it warn as unblessed. The discipline is `Surveyor`, not `Survey`, so it
 does not collide with `06 Research & Existing Conditions/Survey` (the survey itself).
 
-Unmapped agency folder names not listed above surface as Unfiled in doctor and are moved by
-hand. Project AGENTS.md notes that name `07 IN`, `08 OUT` or `13 AHJ` need updating when the
-relocation runs. Older Atlas versions that do not know map v4.0 will see `07 Correspondence`
-as an unknown section and must be upgraded first.
+The bundled templates change with this ADR: `agents-rules.md` (filing rules in every
+AGENTS.md Atlas block), `TYLER.md`, `TRANSMITTAL-LOG.md`, `AHJ-REGISTER.md`. They name
+`07 Correspondence` paths, so the Atlas release that carries them, map v4.0 and the
+migration ship together: an AGENTS.md rewritten from the new rules while the map is still
+v3.9 would send agents to folders that do not exist yet.
+
+A leftover agency folder under `07 IN` shows in doctor as `07 IN` Unfiled at the project
+root, not under its own name; find it by opening `07 IN`. Project notes in `AGENTS.md`
+and `PROJECT.md` that name `07 IN`, `08 OUT` or `13 AHJ` are updated by hand during
+migration. ADR 0016 (`08 OUT/Drafts`) and ADR 0009's example targets name retired paths;
+read them through this ADR.

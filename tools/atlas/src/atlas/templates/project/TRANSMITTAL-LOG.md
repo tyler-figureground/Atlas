@@ -7,7 +7,7 @@ updated: {{created}}
 
 Every package of documents sent out of the studio, one row per transmittal. Log the row
 when the package is sent, not when it is drafted. The package itself - cover sheet plus
-the files as sent - goes in `YYMMDD_Transmittal-T-NNN/` beside this log.
+the files as sent - goes in `YYMMDD_T-NNN_<Description>/` in the recipient's `Out` folder.
 
 **Rules**
 
