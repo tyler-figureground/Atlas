@@ -102,7 +102,10 @@ pass 1 moved every row below with 0 conflicts; after pass 2 doctor reported 0 co
 
 Relocations in the map. **Entry order is load-bearing**: a child relocation must come before
 its parent's (`07 IN/Fabricator/Shop Drawings` before `07 IN/Fabricator`), or the parent
-carries the child away and the child's row is skipped as "source gone".
+carries the child away and the child's row is skipped as "source gone". And `13 AHJ` comes
+before every row that targets `07 Correspondence/AHJ/...` (`07 IN/County`,
+`08 OUT/Resubmittal`, `10 Legal/Permits`), or that row creates `AHJ` first and `13 AHJ`
+collides with it. The map lists the rows in the order of this table, `13 AHJ` first.
 
 | From | To |
 |---|---|
