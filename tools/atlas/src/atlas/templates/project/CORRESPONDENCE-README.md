@@ -1,9 +1,3 @@
----
-title: "Where does it go? - {{project_name}}"
-date: 2026-10-22
-generated_by: skills-for-architects
----
-
 # Where does it go? - {{project_name}}
 
 Everything sent to or received from someone outside the studio lives in this folder,

@@ -127,7 +127,8 @@ def test_every_bundled_template_renders_without_leftover_placeholders():
     values = {"project_folder": "261002_1 Main St-Test", "project_name": "Test", "created": "2026-10-02"}
     names = sorted(p.name for p in template_dir().iterdir() if p.suffix == ".md")
     assert {"TASKS.md", "Task List Template.md", "AHJ-REGISTER.md", "RESEARCH-INDEX.md",
-            "RUN-TEMPLATE.md", "agents-rules.md", "INTAKE.md", "BRIEF.md"} <= set(names)
+            "RUN-TEMPLATE.md", "agents-rules.md", "INTAKE.md", "BRIEF.md",
+            "CORRESPONDENCE-README.md"} <= set(names)
     for name in names:
         text = "\n".join(render(read_template(name), values))
         assert "{{" not in text, name

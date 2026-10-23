@@ -1,9 +1,3 @@
----
-title: "22. Correspondence v4.1: Owner on demand, `05 Letters & Emails`, a staff filing card"
-date: 2026-10-22
-generated_by: skills-for-architects
----
-
 # 22. Correspondence v4.1: Owner on demand, `05 Letters & Emails`, a staff filing card
 
 Date: 2026-10-22
