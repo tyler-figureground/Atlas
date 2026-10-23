@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-10-22
+
+### Changed
+
+- **Correspondence v4.1 (ADR 0022, drive map v4.1).** `AHJ/05 Correspondence` is now `AHJ/05 Letters & Emails` (relocated, so nothing is seeded twice); `Owner` is created on demand, not seeded; new `07 Correspondence/README.md` template, a one-page filing card for staff. The bundled `AHJ-REGISTER.md` and `agents-rules.md` name the new folder and the Owner rule.
+
 ## [0.19.0] - 2026-10-22
 
 ### Changed
