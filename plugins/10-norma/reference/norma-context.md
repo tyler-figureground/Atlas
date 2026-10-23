@@ -2,7 +2,7 @@
 
 Fuller reference for the three subjects `agents.md` summarizes in one line each: the
 five dossier blocks, the three confidence verdicts, and the known per-edition
-divergences. Moved here verbatim from `agents.md` on 2026-09-10 so the plugin context
+divergences. Moved here from `agents.md` (text unchanged apart from ASCII punctuation) so the plugin context
 stays under 150 lines. Read the relevant section when a skill lands on it.
 
 ---

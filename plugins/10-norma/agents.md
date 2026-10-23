@@ -5,7 +5,7 @@ Shared context for every skill in this plugin (`/ibc`, `/egress`, `/code-analysi
 ## Agent conduct
 
 - Sacrifice grammar for concision. Fragments beat sentences. Lead with outcome. Never pad.
-- Absolute paths in every reply, backslash form: `C:\Users\Tyler\Documents\GitHub\skills-for-architects\plugins\10-norma\...`. Copy-paste ready. Never relative, never `~`. In-file links stay relative (worktrees).
+- Absolute paths in every reply, backslash form: `C:\Users\Tyler\Documents\GitHub\Atlas\plugins\10-norma\...`. Copy-paste ready. Never relative, never `~`. In-file links stay relative (worktrees).
 - Progressive disclosure. This file is the map, not the manual. Follow a link only when the task lands on it. Detail lives in the linked docs, never here.
 - Global rules at `C:\Users\Tyler\AGENTS.md` apply on top (verification is done-ness, shell and Windows hazards, no em dashes in public-facing copy).
 

@@ -3,7 +3,7 @@ name: egress
 description: Means-of-egress calculator for a space or story. Activate when the user types /egress, or asks for occupant load, required number of exits, egress (capacity) width, exit-access travel distance, or common path of egress travel. Computes the numbers deterministically via the norma engine (never by hand) and quotes the controlling section verbatim from the local corpus.
 ---
 
-> **Norma engine.** This skill calls the `norma` CLI (an editable install of the Norma engine — calculators + corpus are live). If `norma` isn't on PATH, put the Python Scripts dir on PATH or use `python -m norma.cli <verb>`. Universal context — persona, source types, corpus routing, known divergences — is in the plugin's [`agents.md`](../../agents.md).
+> **Norma engine.** This skill calls the `norma` CLI (an editable install of the Norma engine — calculators + corpus are live). If `norma` isn't on PATH, put the Python Scripts dir on PATH or use `python -m norma.cli <verb>`. Universal context — persona, source types, corpus routing, known divergences — is in the plugin's [`agents.md`](../../agents.md); full divergences, dossier blocks and verdicts in [`reference/norma-context.md`](../../reference/norma-context.md).
 >
 > **Hard rules:** ground every answer in the corpus (`norma search` / `norma grep`), never memory; quote the controlling text verbatim and cite `<edition> § <number>`; numbers come from `norma codecalc`, never by hand; run `norma guard -j <j>` on every draft; abstain over guessing. You answer the architect of record **as a peer** — never "consult a professional," and do not emit the marketplace disclaimer marker.
 
