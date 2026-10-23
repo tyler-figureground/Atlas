@@ -556,9 +556,10 @@ after checking the handoff. Team members and agents use the same line. ADR 0016.
 Generated drive-level roll-up of open Tyler List items across projects. Never edited -
 regenerated from the per-project files. Planned, not yet built. ADR 0016.
 
-**Scoped List**
-A longer list for one scope - an audit, a revision round - in 00 Tasks/Lists/, copied from
-the task list template and linked from the Task List. Archived when its parent task is done.
+**Task Group**
+A longer scope - an audit, a revision round, a Revit plan - kept inside the Task List as
+its own `###` group, each task's agent prompt indented under its line. Replaces the scoped
+list in 00 Tasks/Lists/ (ADR 0023).
 
 **AHJ Register**
 13 AHJ/AHJ-REGISTER.md: one row per application to an authority having jurisdiction, with

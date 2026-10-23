@@ -250,7 +250,7 @@ reaches the next agent without it digging through the register.
 To try a template change on the real drive before releasing, point `ATLAS_TEMPLATES` at a
 folder of templates.
 
-A child in the map may be `{"name": "Lists", "seed": true}`. Seeded children of a seeded
+A child in the map may be `{"name": "Archive", "seed": true}`. Seeded children of a seeded
 section are created with a new project, kept by clean, and backfilled by conform.
 
 ## Reference sets
