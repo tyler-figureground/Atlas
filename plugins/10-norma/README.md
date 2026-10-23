@@ -2,7 +2,7 @@
 
 Building-code analysis for the architect of record. Every answer is grounded in a **local code corpus** and cited verbatim — no code answers from memory.
 
-These skills are the **surface**; the calculators, corpus, and data are the **Norma engine**, installed editably and called as the `norma` CLI. Engine edits go live everywhere with no re-publish; only skill prose ships through the marketplace. See [`agents.md`](./agents.md) for the universal context (persona, source types, corpus routing, tool stack, known divergences).
+These skills are the **surface**; the calculators, corpus, and data are the **Norma engine**, installed editably and called as the `norma` CLI. Engine edits go live everywhere with no re-publish; only skill prose ships through the marketplace. See [`agents.md`](./agents.md) for the universal context (persona, source types, corpus routing, tool stack, known divergences); the full divergence list, dossier blocks and verdicts are in [`reference/norma-context.md`](./reference/norma-context.md).
 
 ## Prerequisite — the `norma` engine
 

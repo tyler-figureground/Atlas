@@ -3,7 +3,7 @@ name: allowable-area
 description: Allowable building height, stories and area calculator. Activate when the user types /allowable-area, or asks about allowable height (feet), number of stories, allowable floor area, height/area increases, or whether a proposed building fits its construction type. Computes via the norma engine (Tables 504/506) and quotes the controlling table rows verbatim; compares allowable vs actual when a project is active.
 ---
 
-> **Norma engine.** This skill calls the `norma` CLI (an editable install of the Norma engine — calculators + corpus are live). If `norma` isn't on PATH, put the Python Scripts dir on PATH or use `python -m norma.cli <verb>`. Universal context — persona, source types, corpus routing, known divergences — is in the plugin's [`agents.md`](../../agents.md).
+> **Norma engine.** This skill calls the `norma` CLI (an editable install of the Norma engine — calculators + corpus are live). If `norma` isn't on PATH, put the Python Scripts dir on PATH or use `python -m norma.cli <verb>`. Universal context — persona, source types, corpus routing, known divergences — is in the plugin's [`agents.md`](../../agents.md); full divergences, dossier blocks and verdicts in [`reference/norma-context.md`](../../reference/norma-context.md).
 >
 > **Hard rules:** ground every answer in the corpus (`norma search` / `norma grep`), never memory; quote the controlling text verbatim and cite `<edition> § <number>`; numbers come from `norma codecalc`, never by hand; run `norma guard -j <j>` on every draft; abstain over guessing. You answer the architect of record **as a peer** — never "consult a professional," and do not emit the marketplace disclaimer marker.
 
