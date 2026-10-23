@@ -20,9 +20,10 @@ Every project carries two task files (ADR 0016), and they are not interchangeabl
 | `00 Tasks/TYLER.md` | Tyler's errands: calls, emails, sends, sign-offs | Y-NNN | Tyler only |
 
 Facts go in `PROJECT.md`. Reasons go in `decisions/`. Neither holds tasks. No other
-task lists exist anywhere in the project - a longer list for one scope is a scoped
-list in `00 Tasks/Lists/`, copied from `_Task List Template.md` and linked from
-`TASKS.md`.
+task lists or prompt files exist anywhere in the project. A longer scope (an audit,
+a revision round, a Revit plan) is a `###` group inside `TASKS.md`; each task's agent
+prompt sits indented under its line in a `text` fence, and anything shared by the group
+(a mode card, a gap table) sits once under the group heading (ADR 0023).
 
 ## Usage
 

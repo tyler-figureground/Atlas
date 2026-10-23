@@ -9,8 +9,8 @@ The production task list for this project: model work, sheets, documentation,
 research, drafting - anything that moves the deliverable. Tyler and agents edit it
 in place. Tyler's personal errands (calls, emails, sends, sign-offs) live in
 `00 Tasks/TYLER.md`, never here. Facts -> `PROJECT.md`. Why -> `decisions/`.
-A longer list for one scope -> `00 Tasks/Lists/`, copied from
-`00 Tasks/_Task List Template.md` and linked below.
+A longer scope (an audit, a revision round, a Revit plan) stays in this file as its
+own `###` group under **Now** or **Next** - never a separate list or prompt file.
 
 **Lanes:** `AGENT` can run unattended - `MODEL` needs a live Revit session -
 `DECISION` only Tyler can call it; blocks production until he does - `WAIT`
@@ -22,8 +22,11 @@ someone outside, named in the task
 - One line per task, verb first. Detail goes indented below it.
 - Link the source (minutes, comment letter, decision). Do not paste it.
 - Done only with evidence: a file, an export, a receipt. Move it to **Done** with the date.
-- No other task lists anywhere in the project - only this file, `TYLER.md`, and
-  linked scoped lists in `00 Tasks/Lists/`.
+- No other task lists or prompt files anywhere in the project - only this file and
+  `TYLER.md`.
+- An agent prompt for a task sits indented under its line, in a `text` fence. A card,
+  gap table or other material shared by a group sits once under the group's `###`
+  heading.
 
 **Picking up work (agents)**
 
@@ -60,10 +63,6 @@ reclaimed - check `.agent/handoff/CURRENT.md` first.
 Research findings no sheet item needs. No further work; never on a sheet. Tyler reviews the list at issue-ready; a promoted item becomes a task with a requirement and a fresh time-box.
 
 <!-- One line each: finding - source path - why it may matter -->
-
-## Lists
-
-<!-- One line per list in 00 Tasks/Lists/: [YYMMDD-slug](Lists/YYMMDD-slug.md) - what it covers - parent T-NNN -->
 
 ## Done
 

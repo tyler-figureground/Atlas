@@ -40,7 +40,7 @@ V3_MAP["controlPlane"].update({
 })
 V3_MAP["sections"] = [
     {"id": "00 Tasks", "seed": True, "children": [
-        {"name": "Lists", "seed": True}, {"name": "Archive", "seed": True}]},
+        {"name": "Archive", "seed": True}]},
     *V3_MAP["sections"],
     {"id": "13 AHJ", "seed": True, "children": [
         {"name": "01 Requirements & Pre-Application", "seed": True},
@@ -49,7 +49,6 @@ V3_MAP["sections"] = [
 ]
 V3_MAP["templates"] = [
     {"path": "00 Tasks/TASKS.md", "template": "TASKS.md", "index": "Live task list"},
-    {"path": "00 Tasks/_Task List Template.md", "template": "Task List Template.md"},
     {"path": "13 AHJ/AHJ-REGISTER.md", "template": "AHJ-REGISTER.md", "index": "AHJ register"},
     {"path": ".agent/runs/_RUN-TEMPLATE.md", "template": "RUN-TEMPLATE.md"},
 ]
@@ -126,7 +125,8 @@ def test_the_same_template_path_twice_refuses_the_map(fixture_drive):
 def test_every_bundled_template_renders_without_leftover_placeholders():
     values = {"project_folder": "261002_1 Main St-Test", "project_name": "Test", "created": "2026-10-02"}
     names = sorted(p.name for p in template_dir().iterdir() if p.suffix == ".md")
-    assert {"TASKS.md", "Task List Template.md", "AHJ-REGISTER.md", "RESEARCH-INDEX.md",
+    assert "Task List Template.md" not in names   # ADR 0023: one task file
+    assert {"TASKS.md", "AHJ-REGISTER.md", "RESEARCH-INDEX.md",
             "RUN-TEMPLATE.md", "agents-rules.md", "INTAKE.md", "BRIEF.md",
             "CORRESPONDENCE-README.md"} <= set(names)
     for name in names:
@@ -146,7 +146,7 @@ def test_new_project_seeds_children_templates_and_agent_workspace(v3_drive):
                                                   street="295 West Lane",
                                                   created=date(2026, 10, 2)))
     project = result.path
-    for rel in ("00 Tasks/Lists", "00 Tasks/Archive", "13 AHJ/01 Requirements & Pre-Application",
+    for rel in ("00 Tasks/Archive", "13 AHJ/01 Requirements & Pre-Application",
                 "13 AHJ/03 Submissions", ".agent/runs", ".agent/backups", ".agent/archive",
                 ".agent/handoff"):
         assert (project / rel).is_dir(), rel
@@ -161,7 +161,8 @@ def test_new_project_seeds_children_templates_and_agent_workspace(v3_drive):
     assert "## Where agent work goes" in agents
     assert "| Live task list | `00 Tasks/TASKS.md` |" in agents
     assert "`.agent/runs/`" in agents
-    assert "_Task List Template.md` |" not in agents   # no index text, no row
+    assert "_Task List Template.md" not in agents and "00 Tasks/Lists" not in agents
+    assert "No other task lists or prompt files anywhere" in agents
     assert agents_block_current(agents, m)
     report = _report(project, m)
     assert report.missing_control_plane == () and report.unfiled == ()
@@ -199,7 +200,7 @@ def test_conform_backfills_templates_into_an_old_project_and_never_overwrites(v3
     assert (project / ".agent/runs/_RUN-TEMPLATE.md").is_file()
     assert (project / "13 AHJ/AHJ-REGISTER.md").read_text(encoding="utf-8") == "# ours\n"
     # One pass: the template made 00 Tasks, and its seeded folders came with it.
-    for rel in ("00 Tasks/Lists", "00 Tasks/Archive", "13 AHJ/03 Submissions"):
+    for rel in ("00 Tasks/Archive", "13 AHJ/03 Submissions"):
         assert (project / rel).is_dir(), rel
     assert not (project / "13 AHJ/07 Not Seeded").exists()
     # An absent seeded section with no template stays absent: 11 Meetings.
@@ -227,7 +228,9 @@ def test_research_and_asking_reaches_every_new_project(v3_drive):
     assert "| Day-1 intake questions - send to Tyler before research | `00 Tasks/INTAKE.md` |" in agents
     assert agents_block_current(agents, m)
     tasks = (project / "00 Tasks/TASKS.md").read_text(encoding="utf-8")
-    assert tasks.index("## Holds") < tasks.index("## Parked - outside sheet scope") < tasks.index("## Lists")
+    assert tasks.index("## Holds") < tasks.index("## Parked - outside sheet scope") < tasks.index("## Done")
+    assert "## Lists" not in tasks and "00 Tasks/Lists" not in tasks
+    assert "indented under its line" in tasks
     project_md = (project / "PROJECT.md").read_text(encoding="utf-8").splitlines()
     assert "basis: []" in project_md
     assert project_md.index("basis: []") < project_md.index("---", 1)

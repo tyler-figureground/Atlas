@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **One task file per project (ADR 0023).** Scoped lists in `00 Tasks/Lists/` and the `_Task List Template.md` template are retired. A longer scope stays in `TASKS.md` as its own `###` group, and each task's agent prompt sits indented under its line. The bundled `TASKS.md` loses its Lists section; `agents-rules.md` and the `/tasks` skill say no other task lists or prompt files. Drive map v4.2: drop the `00 Tasks/_Task List Template.md` template entry and unseed `00 Tasks/Lists` so `clean` can remove the empty folders. Tyler 2026-10-22.
+
 ## [0.19.1] - 2026-10-22
 
 ### Changed

@@ -151,7 +151,7 @@ Not done until all six. A meeting whose minutes exist but whose brief and tasks 
 - Drawing runs fill the measurement block in `RUN.md` - rounds to acceptance, defects reaching Tyler.
 - File a result in a numbered folder only when a person will read it: minutes, a code memo, a draft to send, an issued set. Name it `YYMMDD_Title.md`, in the section its subject belongs to. Most runs file nothing there.
 - Everything filed for a person gets a PDF beside it: `atlas pdf "<file.md>"` (re-run after every edit; the Markdown stays the source). Write decisions, actions, findings and open questions as short labelled lists; keep tables for numeric grids - occupant loads, areas, allowable vs actual - never sentences in table cells.
-- Production tasks live in `00 Tasks/TASKS.md`; Tyler's personal errands live in `00 Tasks/TYLER.md`. No other task lists anywhere. A longer list for one scope goes in `00 Tasks/Lists/`, copied from `00 Tasks/_Task List Template.md` and linked from `TASKS.md`. Agents add to `TYLER.md` but never check its items off and never send its artifacts.
+- Production tasks live in `00 Tasks/TASKS.md`; Tyler's personal errands live in `00 Tasks/TYLER.md`. No other task lists or prompt files anywhere. A longer scope stays in `TASKS.md` as its own `###` group; each task's agent prompt sits indented under its line. Agents add to `TYLER.md` but never check its items off and never send its artifacts.
 - `PROJECT.md` holds facts only. Never a session log, never a task list.
 - Before editing `PROJECT.md`, `AGENTS.md` or `TASKS.md`, copy it to `.agent/backups/`. Never leave a backup at the project root.
 - Handoffs: keep `.agent/handoff/CURRENT.md` current; write a dated `HANDOFF-*.md` only at a stopping point. No artefacts in `handoff/`.

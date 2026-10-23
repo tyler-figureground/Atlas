@@ -5,6 +5,7 @@ Date: 2026-10-02
 ## Status
 
 Accepted. `13 AHJ` placement and round naming amended by ADR 0021 (`07 Correspondence/AHJ`).
+`Lists` and `_Task List Template.md` retired by ADR 0023: longer scopes live inside `TASKS.md`.
 
 Map v3.0. Decided by Tyler on 2026-10-02 against the options in
 `docs/research/project-folder-usage-and-agent-output.md` section 5.
