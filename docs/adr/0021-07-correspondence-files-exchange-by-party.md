@@ -4,7 +4,8 @@ Date: 2026-10-22
 
 ## Status
 
-Accepted. Map v4.0 (not yet applied). Amends ADR 0013: `13 AHJ` moves to
+Accepted. Map v4.0. Amended by ADR 0022 (map v4.1): `AHJ/05 Correspondence` is now
+`AHJ/05 Letters & Emails`, and `Owner` is created on demand, not seeded. Amends ADR 0013: `13 AHJ` moves to
 `07 Correspondence/AHJ` and AHJ rounds become folders instead of a file-name prefix. Its six
 stages, register and "Submissions, never Submittals" rule carry over.
 

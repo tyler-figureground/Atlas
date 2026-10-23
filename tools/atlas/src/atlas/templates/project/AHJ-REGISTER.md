@@ -10,7 +10,7 @@ status changes; the files sit in the stage folders beside this register.
 | `02 Applications & Forms` | completed forms, owner authorisations, fee receipts |
 | `03 Submissions` | exactly what was filed, one `R<n>_YYMMDD` folder per round, agency in the file name |
 | `04 Comments & Responses` | plan-check comments in, response letter and matrix out, in the `R<n>_YYMMDD` folder of the round they answer |
-| `05 Correspondence` | letters, emails, records requests to and from agencies |
+| `05 Letters & Emails` | letters, emails, records requests to and from agencies |
 | `06 Permits & Inspections` | issued permits, approved stamped sets, inspection records, final / CofO |
 
 What the code *says* stays in `06 Research & Existing Conditions/Code`. What *this agency
