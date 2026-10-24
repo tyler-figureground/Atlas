@@ -564,6 +564,8 @@ def cmd_new(args: argparse.Namespace) -> int:
                     "use_case_category": result.intake.project_use_case.category,
                     "billing_contact_id": result.intake.billing_contact.id,
                     "client_contact_id": result.intake.client_contact.id,
+                    "mcp": ({"status": result.mcp.status, "note": result.mcp.note}
+                            if result.mcp else None),
                 }
             )
         )
@@ -580,6 +582,8 @@ def cmd_new(args: argparse.Namespace) -> int:
         agents = f"{drive_map.agents_file}, " if drive_map.agents_file else ""
         print(f"control: {drive_map.project_file}, {drive_map.decisions_dir}\\, "
               f"{agents}{drive_map.claude_file}, {drive_map.analysis_dir}\\")
+        if result.mcp:
+            print(f"mcp:     {result.mcp.status}: {result.mcp.note}")
     return 0
 
 

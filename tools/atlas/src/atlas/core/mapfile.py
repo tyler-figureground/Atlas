@@ -172,6 +172,15 @@ class DriveMap:
         return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 14
 
     @property
+    def mcp_file(self) -> str:
+        """The project-root `.mcp.json` Atlas writes Pyvoid's unpinned
+        dossier-pointer block into (Pyvoid #1545, PRD-220 REQ-024). Empty: no
+        `.mcp.json` work at all. Atlas writes it only when this machine also
+        names its Pyvoid `mcp_server` (core/mcpjson.py); never a map key."""
+        value = self.control_plane.get("mcpFile", "")
+        return value if isinstance(value, str) else ""
+
+    @property
     def agents_rules(self) -> str:
         """Template whose words go into the AGENTS.md Atlas block, after the
         working style. Empty: no rules section, as before map v3."""

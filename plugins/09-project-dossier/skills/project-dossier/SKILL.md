@@ -66,6 +66,7 @@ The YAML block at the top of `PROJECT.md` is the contract every architect skill 
 | `existing_exits` | integer | Code → Existing exits | exits serving the space today |
 | `place_of_assembly_strategy` | free text | Code → Place-of-assembly strategy | e.g. "stay under 75 occ" |
 | `tenancy` | `single` \| `multi` | Code → Tenancy | tenant configuration |
+| `revit` | block of six keys: `model`, `local`, `version`, `worksets`, `sheet_collection`, `library_containers` | - | **Pyvoid-owned** (Pyvoid PRD-220 §7.5; ADR 0001 addendum), not Atlas-owned. `model`: project-relative path, the central when workshared; `local`: optional local path; `version`: `2025` \| `2026` \| `2027`; `worksets`: `open_all` \| `close_all` \| `last_viewed`; `sheet_collection`: the collection JDP works in; `library_containers`: list of absolute paths. Atlas scaffolds it blank; blank means unknown. Keys bare, never an inline comment |
 | `basis` | list of rows | - | values an agent drew without confirmation; each row `{fact, value, source, requirement_row, printed: yes\|no, status: open\|confirmed}`. An open `printed: yes` row blocks a submittal export. Never printed on a sheet; a confirmed row folds into its plain fact |
 
 Rules for the block:
@@ -78,7 +79,7 @@ Rules for the block:
 
 Atlas (the studio drive tool) creates the dossier at project intake and edits the intake facts later, so it shares this file with you. It parses only its own keys and rows, carries every other line through untouched, and refuses — naming the problem — any shape below it cannot rewrite safely. Keep these shapes:
 
-- **Front-matter keys Atlas owns:** `project` (or its alias `name`), `address`, `address_street`, `address_unit`, `address_city`, `address_state`, `address_postal_code`, `description`, `project_use_case`, `project_use_case_category`, `billing_contact_*`, `client_contact_*`. Each is a **flat scalar on one line**: plain, `'single'`- or `"double"`-quoted, optionally followed by ` # comment`. Never a list, a block, or a value continued on the next line. Every other key (`occupancy_group: [B, "S-1"]`, block lists, anchors) is yours to shape freely.
+- **Front-matter keys Atlas owns:** `project` (or its alias `name`), `address`, `address_street`, `address_unit`, `address_city`, `address_state`, `address_postal_code`, `description`, `project_use_case`, `project_use_case_category`, `billing_contact_*`, `client_contact_*`. Each is a **flat scalar on one line**: plain, `'single'`- or `"double"`-quoted, optionally followed by ` # comment`. Never a list, a block, or a value continued on the next line. Every other key (`occupancy_group: [B, "S-1"]`, block lists, anchors) is yours to shape freely - except `revit:`, which Pyvoid owns: fill its six keys, never add a seventh or rename one.
 - **One address, three places.** `address`, the `address_*` components, and the Identity → Address / BBL row must agree. When you correct the site address, update all three in the same pass; Atlas refuses to edit a dossier whose `address` or Address / BBL row disagrees with the components rather than guess which is right.
 - **Contact names** (`*_contact_name`) are `First Last`. `*_contact_id` is the shared-directory UUID; never invent one.
 - **Identity rows Atlas owns:** Project, Address / BBL, Project Use Case, Client, Billing Contact / Email / Phone / Company / Address, Client Contact / Email / Phone / Company / Address, Descriptor, Created. Keep the shape `| Field | value (source, date) |`: **the value first**, provenance after it. When Atlas changes a value it replaces only that leading value and keeps the provenance; rows whose value did not change are left byte-for-byte. One row per field. Table padding is fine.
@@ -147,6 +148,14 @@ existing_co_occupant_load:   # occupant load on the existing Certificate of Occu
 existing_exits:              # number of existing exits serving the space, if known
 place_of_assembly_strategy:  # PA approach, e.g. "stay under 75 occ" or "file PA permit"
 tenancy:                     # single | multi  (tenant configuration)
+# revit: Pyvoid-owned project seat (PRD-220). Bare keys, no inline comments.
+revit:
+  model:
+  local:
+  version:
+  worksets:
+  sheet_collection:
+  library_containers:
 basis: []                    # unconfirmed drawn values: {fact, value, source, requirement_row, printed, status}
 ---
 

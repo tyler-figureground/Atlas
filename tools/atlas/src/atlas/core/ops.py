@@ -31,6 +31,7 @@ from .project_index import (
     append_project_index_row,
     preflight_project_index,
 )
+from .mcpjson import McpOutcome, write_mcp_json
 from .scan import walk
 from .projectmd import (
     agents_md_lines,
@@ -94,6 +95,8 @@ class NewProjectResult:
     seeded: tuple[str, ...]
     intake: ResolvedProjectIntake
     templates: tuple[str, ...] = ()
+    # The .mcp.json outcome (Pyvoid #1545); None when the map names no mcpFile.
+    mcp: McpOutcome | None = None
 
 
 def _contact_snapshot(contact: Contact) -> ContactSnapshot:
@@ -154,6 +157,8 @@ def new_project(drive_root: Path, m: DriveMap, request: ProjectIntake) -> NewPro
         planned_paths.append(m.agents_file)
     if m.analysis_dir:
         planned_paths.append(m.analysis_dir)
+    if m.mcp_file:
+        planned_paths.append(m.mcp_file)
     planned_paths.extend(section.id for section in m.sections if section.seed)
     planned_paths.extend(m.seed_child_paths())
     planned_paths.extend(m.agent_dirs)
@@ -214,6 +219,9 @@ def new_project(drive_root: Path, m: DriveMap, request: ProjectIntake) -> NewPro
             raise OpsError(f"{m.agents_file} appeared while creating the project; left unchanged")
         if not create_crlf_no_bom(project / m.claude_file, claude_md_lines(m)):
             raise OpsError(f"{m.claude_file} appeared while creating the project; left unchanged")
+        # Unpinned dossier pointer, only where this machine names its Pyvoid
+        # mcp_server; otherwise a reported skip, never a failure (#1545).
+        mcp = write_mcp_json(project, m.mcp_file) if m.mcp_file else None
         append_project_index_row(drive_root, m, folder_name, request)
         append_log(drive_root, f"[{folder_name}] new: seeded {', '.join(seeded)}; control plane written")
     except PartialProjectError:
@@ -226,6 +234,7 @@ def new_project(drive_root: Path, m: DriveMap, request: ProjectIntake) -> NewPro
         seeded=tuple(seeded),
         intake=resolved,
         templates=tuple(path for path, _lines in rendered),
+        mcp=mcp,
     )
 
 
