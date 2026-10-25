@@ -4,11 +4,9 @@ Architecture Studio: a Claude Code / Claude Desktop plugin marketplace of agents
 
 ## Agent conduct
 
-- Sacrifice grammar for concision. Fragments beat sentences. Lead with outcome. Never pad.
-- Absolute paths in every reply, backslash form: `C:\Users\Tyler\Documents\GitHub\Atlas\...`. Copy-paste ready. Never relative, never `~`. In-file links stay relative (worktrees).
+- Global rules: ~/.agents/AGENTS.md (loaded by every harness); this file adds repo specifics only.
 - Progressive disclosure. This file is the map, not the manual. Follow a link only when the task lands on it. Detail lives in the linked docs, never here.
-- Global rules at `C:\Users\Tyler\AGENTS.md` apply on top (verification is done-ness, shell and Windows hazards, no em dashes in public-facing copy).
-- Finish the job. Stop only when done or genuinely blocked (a decision only Tyler can make, a secret or login only he has, a destructive or outward-facing action). Ask every foreseeable question before the run, in one message. Stuck mid-run: exhaust this repo (`docs/adr/`, `docs/research/`, `.agent/handoff/`, `.scratch/`; for studio projects the brief, decisions and latest minutes), then the internet, then ask. A filling context window is not a reason to stop: keep the handoff current, let auto-compaction run. Studio projects get the same rule from `tools/atlas/src/atlas/templates/project/agents-rules.md`.
+- Local context to exhaust before asking: `docs/adr/`, `docs/research/`, `.agent/handoff/`, `.scratch/`; for studio projects the brief, decisions and latest minutes. Studio projects get their agent rules from `tools/atlas/src/atlas/templates/project/agents-rules.md`.
 
 ## New projects
 
