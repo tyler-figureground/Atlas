@@ -394,6 +394,61 @@ def test_conform_never_alters_an_existing_revit_block(fixture_drive, revit):
     assert (project / "PROJECT.md").read_bytes() == raw
 
 
+@pytest.mark.parametrize("front", [
+    b"{project: x, revit: {model: existing.rvt}}\r\n",            # flow root
+    b"  project: x\r\n  revit:\r\n    model: m\r\n",               # indented root
+    b'"rev\\x69t": {model: m}\r\nproject: x\r\n',                  # escaped key
+    b"- project\r\n",                                              # not a mapping
+])
+def test_front_matter_that_could_hide_a_revit_key_is_left_alone(fixture_drive, front):
+    raw = b"---\r\n" + front + b"---\r\nbody\r\n"
+    project = _write_dossier(fixture_drive, "230221_Odd Shape", raw)
+    report, _plan, _applied = _dossier_conform(fixture_drive, project.name)
+
+    assert "PROJECT.md" not in report.missing_control_plane
+    assert (project / "PROJECT.md").read_bytes() == raw
+
+
+def test_a_nested_revit_key_is_not_the_root_block(fixture_drive):
+    raw = OLD_DOSSIER.replace(b"basis: []\r\n", b"links:\r\n  revit: x\r\nbasis: []\r\n")
+    project = _write_dossier(fixture_drive, "230222_Nested", raw)
+    _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert _action(applied, "PROJECT.md").status == DONE
+    assert (project / "PROJECT.md").read_bytes().replace(REVIT_LINES, b"") == raw
+
+
+def test_a_dossier_that_is_not_utf8_is_never_planned_or_written(fixture_drive):
+    raw = OLD_DOSSIER.replace(b"Napa County", b"Napa \xff County")
+    project = _write_dossier(fixture_drive, "230223_Latin1", raw)
+    report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert "PROJECT.md" not in report.missing_control_plane
+    assert (project / "PROJECT.md").read_bytes() == raw
+    assert applied.actions                     # the rest of the plan still ran
+
+
+def test_a_non_utf8_prose_dossier_is_a_conflict_not_a_crash(fixture_drive):
+    raw = b"# Notes \xff\r\n"
+    project = _write_dossier(fixture_drive, "230224_Latin1 Prose", raw)
+    _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert _action(applied, "PROJECT.md").status == CONFLICT
+    assert (project / "PROJECT.md").read_bytes() == raw
+
+
+@pytest.mark.parametrize("ending", [b"\r", b"\n", b"\r\n"])
+def test_bare_cr_and_lf_dossiers_backfill_once(fixture_drive, ending):
+    raw = OLD_DOSSIER.replace(b"\r\n", ending)
+    project = _write_dossier(fixture_drive, "230225_Endings", raw)
+    _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert _action(applied, "PROJECT.md").status == DONE
+    assert (project / "PROJECT.md").read_bytes().replace(REVIT_LINES, b"") == OLD_DOSSIER
+    report2, _plan2, _applied2 = _dossier_conform(fixture_drive, project.name)
+    assert "PROJECT.md" not in report2.missing_control_plane
+
+
 def test_a_revit_line_in_the_body_is_not_the_block(fixture_drive):
     raw = OLD_DOSSIER + b"revit:\r\n  model: notes, not front matter\r\n"
     project = _write_dossier(fixture_drive, "230218_Body Revit", raw)

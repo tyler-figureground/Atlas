@@ -733,9 +733,11 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
             if create_crlf_no_bom(path, _conform_project_md_lines(m, project.name)):
                 return replace(action, status=DONE, note="created stub")
             return replace(action, status=SKIPPED, note="appeared during apply; rerun")
-        raw = path.read_text(encoding="utf-8-sig")
-        if _HAS_FRONT_MATTER.match(raw):
-            return _backfill_revit_block(path, action)
+        read = _read_utf8(path)
+        if read is None:
+            return replace(action, status=CONFLICT, note="not UTF-8; left unchanged")
+        if _HAS_FRONT_MATTER.match(read[1]):
+            return _backfill_revit_block(path, action, *read)
         return replace(
             action,
             status=CONFLICT,
@@ -772,13 +774,9 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
     return replace(action, status=SKIPPED, note=f"unknown control-plane item '{target}'")
 
 
-def _backfill_revit_block(path: Path, action: Action) -> Action:
+def _backfill_revit_block(path: Path, action: Action, raw: bytes, text: str) -> Action:
     """Insert the blank `revit:` block into a dossier that has none (Pyvoid
     #1546). An existing block, of any shape, is Pyvoid's and stays untouched."""
-    read = _read_utf8(path)
-    if read is None:
-        return replace(action, status=CONFLICT, note="not UTF-8; left unchanged")
-    raw, text = read
     lines = with_revit_block(text)
     if lines is None:
         return replace(action, status=SKIPPED, note="machine contract already present")
