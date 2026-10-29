@@ -458,14 +458,27 @@ def test_a_revit_line_in_the_body_is_not_the_block(fixture_drive):
     assert (project / "PROJECT.md").read_bytes().count(REVIT_LINES + b"---\r\n") == 1
 
 
-def test_backfill_keeps_unicode_line_separators_inside_values(fixture_drive):
-    """Only real line breaks split lines: a U+2028 inside a value stays raw."""
-    raw = OLD_DOSSIER.replace(b"Napa County", "Napa\u2028County\x85".encode())
+def test_backfill_keeps_unicode_line_separators_in_the_body(fixture_drive):
+    """Only real line breaks split lines: a U+2028 in the prose stays raw."""
+    raw = OLD_DOSSIER.replace(b"Body prose", "Body\u2028prose\x85".encode())
     project = _write_dossier(fixture_drive, "230219_Unicode", raw)
     _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
 
     assert _action(applied, "PROJECT.md").status == DONE
     assert (project / "PROJECT.md").read_bytes().replace(REVIT_LINES, b"") == raw
+
+
+@pytest.mark.parametrize("sep", ["\x85", "\u2028", "\u2029"])
+def test_a_yaml_only_line_break_in_front_matter_is_left_alone(fixture_drive, sep):
+    """PyYAML breaks on these, so `project: x<sep>revit: {...}` holds a real
+    revit key this line reader cannot see; a second block would blank it."""
+    hidden = f"jurisdiction: x{sep}revit: {{model: existing.rvt}}".encode()
+    raw = OLD_DOSSIER.replace(b"jurisdiction: Napa County", hidden)
+    project = _write_dossier(fixture_drive, "230226_Hidden", raw)
+    report, _plan, _applied = _dossier_conform(fixture_drive, project.name)
+
+    assert "PROJECT.md" not in report.missing_control_plane
+    assert (project / "PROJECT.md").read_bytes() == raw
 
 
 def test_unclosed_front_matter_is_left_alone(fixture_drive):

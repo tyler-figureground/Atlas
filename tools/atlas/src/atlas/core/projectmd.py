@@ -48,6 +48,9 @@ _ROOT_KEY_LINE = re.compile(r"""^(?:"([^"\\]*)"|'([^']*)'|([A-Za-z0-9_][^:#]*?))
 # YAML's line breaks only. Never str.splitlines(): it also splits on U+2028,
 # U+2029 and U+0085, which a value may carry raw.
 _LINE_BREAK = re.compile(r"\r\n|\r|\n")
+# PyYAML also breaks lines on these, so a front matter line carrying one could
+# start a hidden `revit:` key; such front matter is left alone.
+_YAML_ONLY_BREAK = re.compile("[\x85  ]")
 
 FRONT_MATTER_KEYS = (
     "jurisdiction:",
@@ -111,6 +114,8 @@ def _block_root_keys(front: list[str]) -> list[str] | None:
     is a shape this reader cannot vouch for."""
     keys: list[str] = []
     for line in front:
+        if _YAML_ONLY_BREAK.search(line):
+            return None             # a break YAML sees and this reader does not
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
