@@ -244,6 +244,21 @@ def test_conform_adds_the_pointer_and_keeps_unrelated_servers(fixture_drive, mcp
     assert env == {"PYVOID_PROJECT_DOSSIER": project.as_posix()}
 
 
+def test_conform_keeps_unicode_line_separators_inside_existing_values(fixture_drive, mcp_server):
+    """Only JSON's structural newlines become CRLF: a U+2028 inside a kept
+    string value must not split that string and corrupt the file."""
+    m = _seat_map(fixture_drive)
+    other = {"command": "node", "env": {"NOTE": "a b c\x85d"}}
+    project = make_project(fixture_drive, "260408_Unicode Mcp", sections=["01 Model"],
+                           files={".mcp.json": json.dumps({"mcpServers": {"other-tool": other}})})
+    _report, _plan, applied = _conform(fixture_drive, m, project.name)
+    assert _action(applied).status == DONE
+    raw = (project / ".mcp.json").read_bytes()
+    assert raw.count(b"\n") == raw.count(b"\r\n")
+    document = json.loads(raw.decode("utf-8"))
+    assert document["mcpServers"]["other-tool"] == other
+
+
 def test_conform_never_touches_an_existing_pyvoid_entry(fixture_drive, mcp_server):
     """A pinned block `pyvoid-fleet ensure` wrote is not Atlas's to unpin."""
     m = _seat_map(fixture_drive)

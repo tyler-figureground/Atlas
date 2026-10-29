@@ -85,8 +85,11 @@ def has_pyvoid_server(text: str) -> bool:
 
 
 def _serialize(document: dict) -> bytes:
+    # json.dumps escapes "\n" inside strings, so every raw "\n" is structural.
+    # Never splitlines(): it also splits on U+2028/U+2029/U+0085, which
+    # ensure_ascii=False leaves raw inside string values.
     text = json.dumps(document, indent=2, ensure_ascii=False)
-    return ("\r\n".join(text.splitlines()) + "\r\n").encode("utf-8")
+    return (text.replace("\n", "\r\n") + "\r\n").encode("utf-8")
 
 
 def write_mcp_json(project: Path, mcp_file: str,
@@ -122,7 +125,15 @@ def write_mcp_json(project: Path, mcp_file: str,
 
 
 def _replace(path: Path, contents: bytes, expected: bytes, name: str) -> McpOutcome:
-    """Atomic replace, refused if the file changed since it was read."""
+    """Atomic replace, refused if the file changed since it was read.
+
+    The compare and the replace are two steps, so a writer landing between
+    them is overwritten. Known, accepted window: Pyvoid's own REQ-088 lock is a
+    machine-local sentinel, and a Google Drive shared folder offers no
+    cross-machine compare-and-swap, so Atlas has no lock it could share. The
+    window is the few microseconds after the re-read; losing it leaves the
+    unpinned block, the scaffold's normal state, which a rerun of
+    `pyvoid-fleet ensure` treats like any unpinned folder."""
 
     temporary: Path | None = None
     try:
