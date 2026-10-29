@@ -39,6 +39,12 @@ FRONT_MATTER_HEAD = (
 REVIT_KEY = "revit"
 REVIT_KEYS = ("model", "local", "version", "worksets", "sheet_collection", "library_containers")
 REVIT_BLOCK = (f"{REVIT_KEY}:", *(f"  {key}:" for key in REVIT_KEYS))
+# A top-level `revit` key in any YAML shape (block, flow, quoted): present means
+# Pyvoid's, and Atlas leaves it exactly as it is.
+_REVIT_KEY_LINE = re.compile(r"""^["']?revit["']?\s*:""")
+# Real line breaks only. Never str.splitlines(): it also splits on U+2028,
+# U+2029 and U+0085, which a value may carry raw.
+_LINE_BREAK = re.compile(r"\r\n|\n")
 
 FRONT_MATTER_KEYS = (
     "jurisdiction:",
@@ -80,6 +86,32 @@ def create_crlf_no_bom(path: Path, lines: list[str]) -> bool:
     except FileExistsError:
         return False
     return True
+
+
+def dossier_lines(text: str) -> list[str]:
+    """A dossier's lines, split on real line breaks only; no trailing empty."""
+    lines = _LINE_BREAK.split(text)
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def front_matter_close(lines: list[str]) -> int | None:
+    """Index of the closing `---`, or None when there is no closed front matter."""
+    if not lines or lines[0].strip() != "---":
+        return None
+    return next((i for i in range(1, len(lines)) if lines[i].rstrip() == "---"), None)
+
+
+def with_revit_block(text: str) -> list[str] | None:
+    """The dossier with the blank `revit:` block inserted before the closing
+    `---` (Pyvoid #1546), or None when it already has one or has no closed
+    front matter. Every other line is kept as it was."""
+    lines = dossier_lines(text)
+    close = front_matter_close(lines)
+    if close is None or any(_REVIT_KEY_LINE.match(line) for line in lines[1:close]):
+        return None
+    return lines[:close] + list(REVIT_BLOCK) + lines[close:]
 
 
 # json.dumps escapes C0 but writes these raw. Raw, U+2028/U+2029/U+0085 split a

@@ -299,3 +299,125 @@ def test_mcp_json_is_never_unfiled(fixture_drive, mcp_server):
     inventory = scan_drive(fixture_drive)
     inv = next(p for p in inventory.projects if p.name == project.name)
     assert ".mcp.json" not in report_project(inv, m).unfiled
+
+
+# ---- conform: backfill the revit block into an older PROJECT.md (#1546) ------
+#
+# Tyler's ruling 3 (Pyvoid #1546, 2026-10-29): a PROJECT.md whose front matter
+# has no `revit:` block gets the blank six-key block, inserted before the
+# closing `---`. An existing `revit:` block, of any shape, is never touched.
+
+REVIT_LINES = b"revit:\r\n" + b"".join(b"  " + k.encode() + b":\r\n" for k in REVIT_KEYS)
+OLD_DOSSIER = (
+    b"---\r\n"
+    b"# Machine contract - older scaffold, no revit block.\r\n"
+    b'project: "Old Job"\r\n'
+    b"jurisdiction: Napa County\r\n"
+    b"basis: []\r\n"
+    b"---\r\n"
+    b"\r\n"
+    b"# 230215_1221 Old Job\r\n"
+    b"\r\n"
+    b"Body prose stays put.\r\n"
+)
+
+
+def _write_dossier(drive: Path, name: str, raw: bytes) -> Path:
+    project = make_project(drive, name, sections=["01 Model"])
+    (project / "PROJECT.md").write_bytes(raw)
+    return project
+
+
+def _dossier_conform(drive: Path, name: str):
+    return _conform(drive, load_map(find_map(drive)), name)
+
+
+def test_conform_backfills_the_revit_block_into_an_older_dossier(fixture_drive):
+    project = _write_dossier(fixture_drive, "230215_Old Job", OLD_DOSSIER)
+    report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert "PROJECT.md" in report.missing_control_plane
+    assert _action(applied, "PROJECT.md").status == DONE
+    raw = (project / "PROJECT.md").read_bytes()
+    head, _, body = OLD_DOSSIER.partition(b"basis: []\r\n---\r\n")
+    # Every existing byte kept; the block lands right before the closing ---.
+    assert raw == head + b"basis: []\r\n" + REVIT_LINES + b"---\r\n" + body
+    assert tuple(_revit_block(_front_matter(raw))) == REVIT_KEYS
+    assert all(v == "" for v in _revit_block(_front_matter(raw)).values())
+
+    # Idempotent: the next plan has nothing to do for PROJECT.md.
+    report2, _plan2, _applied2 = _dossier_conform(fixture_drive, project.name)
+    assert "PROJECT.md" not in report2.missing_control_plane
+    assert (project / "PROJECT.md").read_bytes() == raw
+
+
+def test_backfilled_dossier_still_loads(fixture_drive):
+    m = load_map(find_map(fixture_drive))
+    result = new_project(fixture_drive, m, make_intake(fixture_drive, "Strip Me"))
+    dossier = result.path / "PROJECT.md"
+    dossier.write_bytes(dossier.read_bytes().replace(REVIT_LINES, b""))
+    assert b"revit:" not in dossier.read_bytes()
+
+    _report, _plan, applied = _dossier_conform(fixture_drive, result.folder_name)
+    assert _action(applied, "PROJECT.md").status == DONE
+    raw = dossier.read_bytes()
+    assert raw.count(b"\r\nrevit:\r\n") == 1
+    record = load_project_record(result.path, project_file=m.project_file)
+    assert record.intake.project_name == "Strip Me"
+
+
+def test_backfill_writes_the_byte_contract_from_lf_and_bom_input(fixture_drive):
+    lf = b"\xef\xbb\xbf" + OLD_DOSSIER.replace(b"\r\n", b"\n").rstrip(b"\n")
+    project = _write_dossier(fixture_drive, "230216_Lf Job", lf)
+    _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert _action(applied, "PROJECT.md").status == DONE
+    raw = (project / "PROJECT.md").read_bytes()
+    assert not raw.startswith(b"\xef\xbb\xbf")
+    assert b"\n" not in raw.replace(b"\r\n", b"")
+    assert raw.endswith(b"\r\n")
+    assert REVIT_LINES + b"---\r\n" in raw
+    assert raw.replace(REVIT_LINES, b"") == OLD_DOSSIER
+
+
+@pytest.mark.parametrize("revit", [
+    b"revit:\r\n  model: C:/Jobs/Old.rvt\r\n  version: 2025\r\n",
+    b"revit: {model: x}\r\n",
+    b"revit:\r\n",
+])
+def test_conform_never_alters_an_existing_revit_block(fixture_drive, revit):
+    raw = OLD_DOSSIER.replace(b"basis: []\r\n", revit + b"basis: []\r\n")
+    project = _write_dossier(fixture_drive, "230217_Has Revit", raw)
+    report, _plan, _applied = _dossier_conform(fixture_drive, project.name)
+
+    assert "PROJECT.md" not in report.missing_control_plane
+    assert (project / "PROJECT.md").read_bytes() == raw
+
+
+def test_a_revit_line_in_the_body_is_not_the_block(fixture_drive):
+    raw = OLD_DOSSIER + b"revit:\r\n  model: notes, not front matter\r\n"
+    project = _write_dossier(fixture_drive, "230218_Body Revit", raw)
+    _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert _action(applied, "PROJECT.md").status == DONE
+    assert (project / "PROJECT.md").read_bytes().count(REVIT_LINES + b"---\r\n") == 1
+
+
+def test_backfill_keeps_unicode_line_separators_inside_values(fixture_drive):
+    """Only real line breaks split lines: a U+2028 inside a value stays raw."""
+    raw = OLD_DOSSIER.replace(b"Napa County", "Napa\u2028County\x85".encode())
+    project = _write_dossier(fixture_drive, "230219_Unicode", raw)
+    _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert _action(applied, "PROJECT.md").status == DONE
+    assert (project / "PROJECT.md").read_bytes().replace(REVIT_LINES, b"") == raw
+
+
+def test_unclosed_front_matter_is_left_alone(fixture_drive):
+    raw = b"---\r\nproject: x\r\nno closing fence\r\n"
+    project = _write_dossier(fixture_drive, "230220_Unclosed", raw)
+    report, _plan, applied = _dossier_conform(fixture_drive, project.name)
+
+    assert (project / "PROJECT.md").read_bytes() == raw
+    if "PROJECT.md" in report.missing_control_plane:
+        assert _action(applied, "PROJECT.md").status == CONFLICT

@@ -13,7 +13,7 @@ def project_report(drive, name):
 
 def full_control_plane(drive, files=None):
     base = {
-        "PROJECT.md": "---\nproject: x\n---\n",
+        "PROJECT.md": "---\nproject: x\nrevit:\n---\n",
         "decisions/README.md": "# Decisions\n",
         "06 Research/Code/.keep": "",
     }

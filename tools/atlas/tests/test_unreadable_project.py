@@ -52,7 +52,7 @@ def _locked(drive: Path) -> Path:
     return make_project(
         drive, "260902_Locked",
         sections=["01 Model", "06 Research/Code", "06 Research/Zoning", "11 Meetings"],
-        files={"PROJECT.md": "---\nproject: x\n---\n# x\n", "decisions/README.md": "x",
+        files={"PROJECT.md": "---\nproject: x\nrevit:\n---\n# x\n", "decisions/README.md": "x",
                **agent_files(drive)},
     )
 

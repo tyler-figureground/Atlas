@@ -34,7 +34,7 @@ LOGS = {"name": "Logs", "target": ".agent/backups", "match": {"nameRegex": r"\.l
 
 SECTIONS = ["01 Model", "06 Research", "08 OUT", "11 Meetings"]
 CONTROL_PLANE = {
-    "PROJECT.md": "---\nproject: x\n---\n",
+    "PROJECT.md": "---\nproject: x\nrevit:\n---\n",
     "CLAUDE.md": "# workspace\n",
     "decisions/README.md": "# Decisions\n",
     "06 Research/Code/.keep": "",
