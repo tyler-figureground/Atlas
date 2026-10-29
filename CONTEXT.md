@@ -518,6 +518,21 @@ words move into AGENTS.md first, and CLAUDE.md becomes the Pointer only once eve
 non-blank line of it is provably present there, or it is stock generator output.
 Anything else is left in place as a conflict for a person to merge.
 
+**Seat Orientation**
+The "Pyvoid project seat" section of the Atlas Block: six topics, in order, that
+orient any agent doing Pyvoid work from a job folder - $PYVOID_HOME, `pyvoid-fleet
+ensure` before live-model work, /jdp and /maestro beside Norma, PROJECT.md as the
+only source of facts, the handoff folder, and the sync rule. Lives in every job
+folder's block, never in a drive-root file (Pyvoid #1541, Tyler 2026-10-07).
+
+**Dossier Pointer**
+The `pyvoid-revit` entry Atlas writes into a project's `.mcp.json` (map key
+`controlPlane.mcpFile`). Unpinned: its env holds only PYVOID_PROJECT_DOSSIER, the
+job folder. Written only on a machine whose ATLAS_PYVOID_MCP_SERVER names its
+Pyvoid mcp_server folder; elsewhere Atlas reports the skip. An existing
+`pyvoid-revit` entry - a pin `pyvoid-fleet ensure` wrote - is never touched
+(Pyvoid #1545).
+
 ## Atlas Project Templates
 
 **Template File**

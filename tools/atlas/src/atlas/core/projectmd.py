@@ -31,6 +31,15 @@ FRONT_MATTER_HEAD = (
     "# occupancy_group / edition are real. Run /project-dossier to fill it in, and",
     "# keep it in sync with the Identity + Code tables (the human mirror).",
 )
+# Pyvoid's project-seat block (PRD-220 section 7.5, REQ-014/REQ-022; Pyvoid
+# #1545). Pyvoid owns and reads it; Atlas only scaffolds it blank and never
+# rewrites it (project_data parses Atlas keys only and carries this through).
+# Exactly the six whitelisted keys, bare: blank means unknown, and an inline
+# comment would be read as the value by a fallback parser.
+REVIT_KEY = "revit"
+REVIT_KEYS = ("model", "local", "version", "worksets", "sheet_collection", "library_containers")
+REVIT_BLOCK = (f"{REVIT_KEY}:", *(f"  {key}:" for key in REVIT_KEYS))
+
 FRONT_MATTER_KEYS = (
     "jurisdiction:",
     "edition:",
@@ -44,6 +53,7 @@ FRONT_MATTER_KEYS = (
     "existing_exits:",
     "place_of_assembly_strategy:",
     "tenancy:",
+    *REVIT_BLOCK,
     "# basis: values an agent drew without confirmation, one row each -",
     "# {fact, value, source, requirement_row, printed: yes|no, status: open|confirmed}.",
     "# An open row with printed: yes blocks a submittal export. Never printed on a sheet.",

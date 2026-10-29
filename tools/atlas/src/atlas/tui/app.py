@@ -2531,6 +2531,7 @@ class AtlasApp(App):
                         f"Created: {created.path}",
                         f"Seeded: {', '.join(created.seeded)}",
                         *((f"Templates: {', '.join(created.templates)}",) if created.templates else ()),
+                        *((f"MCP: {created.mcp.note}",) if created.mcp else ()),
                         "Next: run /project-dossier in the new project folder.",
                     ),
                 )

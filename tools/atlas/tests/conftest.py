@@ -28,6 +28,17 @@ def _bundled_templates(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_machine_pyvoid(monkeypatch):
+    """Tests never see this machine's Pyvoid mcp_server setting.
+
+    ATLAS_PYVOID_MCP_SERVER is per-machine (Pyvoid #1545). A machine that has
+    it set must not make every scaffold in the suite grow a .mcp.json; a test
+    that wants one sets it to a tmp folder itself.
+    """
+    monkeypatch.delenv("ATLAS_PYVOID_MCP_SERVER", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _local_cache(monkeypatch, tmp_path):
     """Tests never touch the machine's real Content Index cache.
 

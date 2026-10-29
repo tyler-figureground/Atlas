@@ -51,6 +51,17 @@ Precedence: Tyler's current words > project rules below this block > this block 
 - No set for this type: say so in the receipt's asks, name the nearest set you used, and ask Tyler for one example. That question is always allowed.
 - Never copy from `REF-` packages or `Precedent Sets` into a deliverable. Never start from another project's file of the same type.
 
+## Pyvoid project seat
+
+Orientation for Pyvoid work from this folder (Pyvoid PRD-220). Six topics, in this order.
+
+1. **Pyvoid home.** `$PYVOID_HOME` is this machine's Pyvoid checkout, set by Pyvoid's `scripts/dev/install_project_seat.ps1`. Reach Pyvoid skills, standards, policy and glossary through it, never through a typed checkout path. Unset: Pyvoid is not installed on this machine - say so; JDP and Maestro work cannot run here.
+2. **Seat before live-model work.** Before the first live-model call, run `pyvoid-fleet ensure` from this folder. Exit 0: the seat is ready. Any non-zero exit stops the run - relay the printed code and remedy verbatim and call nothing further. While `ensure` is absent from the installed seat: `ping_revit`, then `get_document_info`, and stop if the open document is not the model `PROJECT.md` names under `revit:` `model`. The first session in a folder with `.mcp.json` shows Claude Code's project-MCP approval prompt once; it is expected, not a failure.
+3. **Skills.** `/jdp` (ledgered production runs) and `/maestro` (live Revit through the Pyvoid bridge) are available here alongside the Norma code skills (`/code-analysis`, `/egress`, `/ibc` and the rest). Tool detail stays in those skills.
+4. **Project facts.** `PROJECT.md` is the only source of project facts, its `revit:` block (model, local, version, worksets, sheet collection, library containers) included. Blank means unknown; never take a fact from another project, a handoff or memory.
+5. **Handoffs.** Run and session handoffs go in this folder's `.agent/handoff/`, never in the Pyvoid repo.
+6. **Sync.** Agents never sync on their own initiative (ADR-022). A sync the user explicitly asks for in this session is honoured at once and recorded (`$PYVOID_HOME/.agent/policy/user-authority.md` rule 1). Terms: the glossary at `$PYVOID_HOME/.agent/CONTEXT.md`.
+
 ## Working in the Revit model
 
 - One writer per model, not one Revit process per machine. Before inventories or writes, identify this project's intended local by title and full path, central-model lineage when workshared, and the target instance's process ID. Never infer identity from title, GUID or process count alone; models born from one template can share a GUID. A second live writer on the same model blocks writes, even through a different local path. Document already modified at session start: treat it as in-progress work and stay offline until its ownership is resolved.

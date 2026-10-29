@@ -16,6 +16,7 @@ from . import deep
 from .deep import ItemCount, OverlongPath, ReceiptHit, scan_deep
 from .filerules import first_match
 from .mapfile import DriveMap
+from .mcpjson import has_pyvoid_server
 from .projectmd import agents_block_current, is_claude_pointer
 from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
@@ -108,6 +109,8 @@ def _control_plane_paths(m: DriveMap) -> dict[str, str]:
         paths[m.agents_file] = m.agents_file
     if m.analysis_dir:
         paths[m.analysis_dir] = m.analysis_dir
+    if m.mcp_file:
+        paths[m.mcp_file] = m.mcp_file
     return paths
 
 
@@ -155,6 +158,13 @@ def _claude_file_current(project: Path, m: DriveMap, root_names: set[str]) -> bo
         return True     # no agents file configured: any CLAUDE.md will do, as before
     text = _read_control_file(project / m.claude_file)
     return text is not None and is_claude_pointer(text, m)
+
+
+def _mcp_file_current(project: Path, m: DriveMap, root_names: set[str]) -> bool:
+    if m.mcp_file not in root_names:
+        return False
+    text = _read_control_file(project / m.mcp_file)
+    return text is not None and has_pyvoid_server(text)
 
 
 def _dir_exists_exact(base: Path, rel: str) -> bool:
@@ -245,6 +255,16 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         try:
             if not current(inv.path, m, root_names):
                 missing.append(name)
+        except _CannotRead as error:
+            unreadable.append(str(error))
+    # The project-root .mcp.json must name Pyvoid's server (Pyvoid #1545). Any
+    # entry by that name counts - a pinned one is `pyvoid-fleet ensure`'s, and
+    # conform never rewrites it. Reported whatever this machine's setting: on a
+    # machine without its Pyvoid mcp_server path, conform says it skipped.
+    if m.mcp_file:
+        try:
+            if not _mcp_file_current(inv.path, m, root_names):
+                missing.append(m.mcp_file)
         except _CannotRead as error:
             unreadable.append(str(error))
     if m.analysis_dir and not (inv.path / m.analysis_dir).exists():

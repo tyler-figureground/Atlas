@@ -196,6 +196,18 @@ def lint_map(m: DriveMap) -> list[Finding]:
             findings.append(
                 Finding(ERROR, "TEMPLATE-MISSING", f"template '{t.template}' is not in {template_path(t.template).parent}")
             )
+    # -- controlPlane.mcpFile: one JSON file at the project root ---------------
+    raw_mcp = m.control_plane.get("mcpFile")
+    if raw_mcp is not None and not (
+        isinstance(raw_mcp, str)
+        and raw_mcp.endswith(".json")
+        and re.fullmatch(r"[^\\/:*?\"<>|]+", raw_mcp)
+        and raw_mcp not in (".", "..")
+    ):
+        findings.append(
+            Finding(ERROR, "MCP-FILE", f"controlPlane.mcpFile {raw_mcp!r}: must be a .json file name at the project root (e.g. '.mcp.json'), no folder")
+        )
+
     if m.agents_rules and not template_path(m.agents_rules).is_file():
         findings.append(
             Finding(ERROR, "TEMPLATE-MISSING", f"controlPlane.agentsRules '{m.agents_rules}' is not in {template_path(m.agents_rules).parent}")

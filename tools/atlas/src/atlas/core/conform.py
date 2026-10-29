@@ -27,6 +27,7 @@ from pathlib import Path
 from .doctor import ProjectReport, report_project
 from .mapfile import DriveMap, TemplateFile, find_map, load_map
 from .templates import TemplateError, render_template, template_values
+from .mcpjson import machine_mcp_server, write_mcp_json
 from .ops import OpsError, append_log, mkdir_below
 from .projectmd import (
     FRONT_MATTER_HEAD,
@@ -193,7 +194,11 @@ def build_plan(report: ProjectReport, m: DriveMap, project: Path | None = None) 
     """
     actions: list[Action] = []
     for item in report.missing_control_plane:
-        actions.append(Action(kind=BACKFILL, src="", dst=item))
+        note = ""
+        if m.mcp_file and item == m.mcp_file:
+            # The dry run says up front what apply will do on this machine.
+            _server, note = machine_mcp_server()
+        actions.append(Action(kind=BACKFILL, src="", dst=item, note=note))
     for found, canonical in report.drift:
         actions.append(Action(kind=RENAME, src=found, dst=canonical))
     for hit in report.relocations:
@@ -744,6 +749,9 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
         return _backfill_agents(project, m, action)
     if target == m.claude_file:
         return _backfill_claude(project, m, action)
+    if m.mcp_file and target == m.mcp_file:
+        outcome = write_mcp_json(project, m.mcp_file)
+        return replace(action, status=outcome.status, note=outcome.note)
     if target == m.analysis_dir:
         mkdir_below(project, m.analysis_dir)
         return replace(action, status=DONE)

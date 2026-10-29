@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Pyvoid project seat orientation (Pyvoid #1541).** The bundled `agents-rules.md` gains a "Pyvoid project seat" section: six topics, in PRD-220 §8.6 order - `$PYVOID_HOME`, `pyvoid-fleet ensure` before live-model work, `/jdp` and `/maestro` beside Norma, `PROJECT.md` as the only source of facts, the handoff folder, the sync rule with the glossary pointer. It ships in every job folder's AGENTS.md block, never a drive-root file (Tyler 2026-10-07); `conform --apply` backfills existing folders.
+- **Seat-ready scaffold (Pyvoid #1545).** `PROJECT.md` (intake and conform stub) carries a blank, Pyvoid-owned `revit:` block of six bare keys (ADR 0001 addendum; `/project-dossier` key table). New map key `controlPlane.mcpFile` (`.mcp.json`, map lint `MCP-FILE`): `atlas new` and `conform` write an unpinned `pyvoid-revit` entry whose `env` holds only `PYVOID_PROJECT_DOSSIER`, when this machine's `ATLAS_PYVOID_MCP_SERVER` names its Pyvoid `mcp_server` folder; unset, Atlas skips and says so. Existing `pyvoid-revit` entries and other servers are never touched. Upgrade note: add `"mcpFile": ".mcp.json"` to the drive map's `controlPlane` to turn it on.
+
 ## [0.20.0] - 2026-10-22
 
 ### Changed
