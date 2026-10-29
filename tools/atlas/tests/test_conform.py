@@ -62,7 +62,7 @@ def test_backfill_leaves_existing_prose_as_conflict(fixture_drive):
 
 
 def test_backfill_leaves_existing_contract_alone(fixture_drive):
-    original = "---\nproject: x\n---\nbody\n"
+    original = "---\nproject: x\nrevit:\n  model: m\n---\nbody\n"
     make_project(
         fixture_drive, "260203_HasFM", sections=["01 Model"],
         files={"PROJECT.md": original, "CLAUDE.md": "keep me"},

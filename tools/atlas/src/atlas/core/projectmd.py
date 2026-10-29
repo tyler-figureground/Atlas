@@ -39,6 +39,18 @@ FRONT_MATTER_HEAD = (
 REVIT_KEY = "revit"
 REVIT_KEYS = ("model", "local", "version", "worksets", "sheet_collection", "library_containers")
 REVIT_BLOCK = (f"{REVIT_KEY}:", *(f"  {key}:" for key in REVIT_KEYS))
+# A root key line of a block-mapping front matter: plain, or quoted without
+# escapes. Atlas has no YAML parser, so it inserts the revit block only into
+# front matter made of these lines plus indented (or `- `) continuations; any
+# other shape - a flow mapping, an indented root, an escaped key - might hide a
+# `revit` key, and is left alone.
+_ROOT_KEY_LINE = re.compile(r"""^(?:"([^"\\]*)"|'([^']*)'|([A-Za-z0-9_][^:#]*?))[ \t]*:(?:[ \t]|$)""")
+# YAML's line breaks only. Never str.splitlines(): it also splits on U+2028,
+# U+2029 and U+0085, which a value may carry raw.
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
+# PyYAML also breaks lines on these, so a front matter line carrying one could
+# start a hidden `revit:` key; such front matter is left alone.
+_YAML_ONLY_BREAK = re.compile("[\x85  ]")
 
 FRONT_MATTER_KEYS = (
     "jurisdiction:",
@@ -80,6 +92,57 @@ def create_crlf_no_bom(path: Path, lines: list[str]) -> bool:
     except FileExistsError:
         return False
     return True
+
+
+def dossier_lines(text: str) -> list[str]:
+    """A dossier's lines, split on real line breaks only; no trailing empty."""
+    lines = _LINE_BREAK.split(text)
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def front_matter_close(lines: list[str]) -> int | None:
+    """Index of the closing `---`, or None when there is no closed front matter."""
+    if not lines or lines[0].strip() != "---":
+        return None
+    return next((i for i in range(1, len(lines)) if lines[i].rstrip() == "---"), None)
+
+
+def _block_root_keys(front: list[str]) -> list[str] | None:
+    """The root keys of a block-mapping front matter, or None when any line
+    is a shape this reader cannot vouch for."""
+    keys: list[str] = []
+    for line in front:
+        if _YAML_ONLY_BREAK.search(line):
+            return None             # a break YAML sees and this reader does not
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if line[0] in " \t" or line.startswith("- ") or line == "-":
+            if not keys:
+                return None         # an indented root, or a sequence root
+            continue
+        match = _ROOT_KEY_LINE.match(line)
+        if match is None:
+            return None
+        keys.append(next(g for g in match.groups() if g is not None))
+    return keys
+
+
+def with_revit_block(text: str) -> list[str] | None:
+    """The dossier with the blank `revit:` block inserted before the closing
+    `---` (Pyvoid #1546), or None when it already has one, has no closed
+    front matter, or has front matter whose shape could hide one. Every other
+    line is kept as it was."""
+    lines = dossier_lines(text)
+    close = front_matter_close(lines)
+    if close is None:
+        return None
+    keys = _block_root_keys(lines[1:close])
+    if keys is None or REVIT_KEY in keys:
+        return None
+    return lines[:close] + list(REVIT_BLOCK) + lines[close:]
 
 
 # json.dumps escapes C0 but writes these raw. Raw, U+2028/U+2029/U+0085 split a

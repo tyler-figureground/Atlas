@@ -9,7 +9,9 @@ every applied action is logged.
 
 Control-plane backfill is constructive, with two bounded exceptions (ADR 0010).
 Missing files are created exclusively. An existing PROJECT.md without the
-machine contract is reported as a conflict and left unchanged. AGENTS.md's
+machine contract is reported as a conflict and left unchanged; one whose
+front matter has no `revit:` block gains the blank one before its closing
+`---` (Pyvoid #1546), and an existing block is never touched. AGENTS.md's
 marker-wrapped Atlas block is refreshed in place and nothing outside the markers
 is touched. CLAUDE.md is rewritten to its one-line pointer only when its words
 are stock generator output or already present in AGENTS.md; otherwise it is a
@@ -43,6 +45,7 @@ from .projectmd import (
     is_legacy_claude,
     meaningful_lines,
     with_agents_block,
+    with_revit_block,
     write_crlf_no_bom,
 )
 from .scan import (
@@ -730,9 +733,11 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
             if create_crlf_no_bom(path, _conform_project_md_lines(m, project.name)):
                 return replace(action, status=DONE, note="created stub")
             return replace(action, status=SKIPPED, note="appeared during apply; rerun")
-        raw = path.read_text(encoding="utf-8-sig")
-        if _HAS_FRONT_MATTER.match(raw):
-            return replace(action, status=SKIPPED, note="machine contract already present")
+        read = _read_utf8(path)
+        if read is None:
+            return replace(action, status=CONFLICT, note="not UTF-8; left unchanged")
+        if _HAS_FRONT_MATTER.match(read[1]):
+            return _backfill_revit_block(path, action, *read)
         return replace(
             action,
             status=CONFLICT,
@@ -767,6 +772,18 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
         mkdir_below(project, target)
         return replace(action, status=DONE, note="seeded folder")
     return replace(action, status=SKIPPED, note=f"unknown control-plane item '{target}'")
+
+
+def _backfill_revit_block(path: Path, action: Action, raw: bytes, text: str) -> Action:
+    """Insert the blank `revit:` block into a dossier that has none (Pyvoid
+    #1546). An existing block, of any shape, is Pyvoid's and stays untouched."""
+    lines = with_revit_block(text)
+    if lines is None:
+        return replace(action, status=SKIPPED, note="machine contract already present")
+    if path.read_bytes() != raw:
+        return replace(action, status=SKIPPED, note="changed during apply; rerun")
+    write_crlf_no_bom(path, lines)
+    return replace(action, status=DONE, note="blank revit block added")
 
 
 def _backfill_template(project: Path, template: TemplateFile, action: Action) -> Action:

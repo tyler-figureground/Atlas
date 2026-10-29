@@ -106,7 +106,7 @@ def test_a_conforming_project_is_clean(fixture_drive, capsys):
                   "06 Research/Code", "08 OUT/Transmittals", "08 OUT/RFI",
                   "10 Legal/Invoices", "10 Legal/Proposals-Contracts",
                   "11 Meetings/Agendas", "11 Meetings/Minutes"],
-        files={"PROJECT.md": "---\nx: y\n---\n", "decisions/README.md": "x",
+        files={"PROJECT.md": "---\nx: y\nrevit:\n---\n", "decisions/README.md": "x",
                **agent_files(fixture_drive)},
     )
     assert main(["tree", "260911_Clean", "--drive", str(fixture_drive), "--json"]) == 0

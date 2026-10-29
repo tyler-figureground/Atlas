@@ -223,7 +223,7 @@ def test_unmet_expectations_sit_beside_the_tree_and_never_inside_it(fixture_driv
     an Expectation, listed in the Companion, never drawn as a node (ADR 0004)."""
     make_project(fixture_drive, "260409_Missing",
                  sections=["01 Model/01 Site Model", "06 Research"],
-                 files={"PROJECT.md": "---\nx: 1\n---\n"})
+                 files={"PROJECT.md": "---\nx: 1\nrevit:\n---\n"})
     tree = tree_for(fixture_drive, "260409_Missing")
 
     unmet = {e.path for e in tree.expectations()}

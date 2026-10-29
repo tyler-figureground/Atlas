@@ -131,7 +131,7 @@ def test_an_os_error_is_an_error_not_a_traceback(fixture_drive, capsys, monkeypa
 
 def _conformed_project(drive: Path, name: str, extra: dict[str, str] | None = None) -> Path:
     files = {
-        "PROJECT.md": "---\nproject: x\n---\n# x\n",
+        "PROJECT.md": "---\nproject: x\nrevit:\n---\n# x\n",
         "decisions/README.md": "x",
         **agent_files(drive),
         **(extra or {}),

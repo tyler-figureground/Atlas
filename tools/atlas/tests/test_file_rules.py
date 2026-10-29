@@ -43,7 +43,7 @@ FEES = {"name": "Fee sheets", "target": "10 Legal/Invoices", "match": {"extensio
 
 SECTIONS = ["01 Model", "06 Research", "08 OUT", "11 Meetings"]
 CONTROL_PLANE = {
-    "PROJECT.md": "---\nproject: x\n---\n",
+    "PROJECT.md": "---\nproject: x\nrevit:\n---\n",
     "CLAUDE.md": "# workspace\n",
     "decisions/README.md": "# Decisions\n",
     "06 Research/Code/.keep": "",

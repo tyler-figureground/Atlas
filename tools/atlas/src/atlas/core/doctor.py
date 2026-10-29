@@ -17,7 +17,7 @@ from .deep import ItemCount, OverlongPath, ReceiptHit, scan_deep
 from .filerules import first_match
 from .mapfile import DriveMap
 from .mcpjson import has_pyvoid_server
-from .projectmd import agents_block_current, is_claude_pointer
+from .projectmd import agents_block_current, is_claude_pointer, with_revit_block
 from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
 # Files tolerated at a project root without being flagged: OS noise plus the
@@ -227,7 +227,8 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
 
     # Control plane: report what Conform would backfill. PROJECT.md counts as
     # missing when absent OR present without the YAML machine contract - the
-    # prose-only file is exactly what Conform-Project.ps1 prepends into. A file
+    # prose-only file is exactly what Conform-Project.ps1 prepends into - OR
+    # with closed front matter that has no `revit:` block (Pyvoid #1546). A file
     # that is there and cannot be read is unreadable, never missing.
     missing: list[str] = []
     if m.project_file:
@@ -236,11 +237,19 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         else:
             path = inv.path / m.project_file
             try:
-                head = path.read_text(encoding="utf-8-sig", errors="replace")[:64]
+                raw = path.read_bytes()
             except OSError as exc:
                 unreadable.append(_reason(path, exc))
             else:
-                if not head.lstrip().startswith("---"):
+                # The same strict decode conform's apply uses: a file that is
+                # not UTF-8 is never planned for the revit backfill.
+                try:
+                    text = raw.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    text = None
+                head = raw.decode("utf-8-sig", errors="replace")[:64]
+                if (not head.lstrip().startswith("---")
+                        or (text is not None and with_revit_block(text) is not None)):
                     missing.append(m.project_file)
     if m.decisions_dir and m.decisions_dir not in root_names:
         missing.append(m.decisions_dir)
