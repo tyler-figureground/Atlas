@@ -36,7 +36,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 | `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
 | `atlas runs (--project NAME \| --all) [--days N] [--apply]` | List agent runs; zip the closed ones into `.agent/archive/` (ADR 0011). Preview by default |
 | `atlas archive NAME [--apply]` / `atlas unarchive [NAME] [--revert FILE] [--apply]` | Archive a project to the map's `archiveRoot` (default `_Archived Projects`), stamping its project-index row; bring one back by name, or undo from the JSON manifest (ADR 0019). Preview by default |
-| `atlas tyler [--write]` | Tyler digest: open errands from every project's `TYLER.md` + `DECISION` blockers from `TASKS.md` (ADR 0016). Prints; `--write` regenerates `_tools\TYLER-TODAY.md` |
+| `atlas tyler [--write]` | Tyler digest: open errands from every project's `TYLER.md` + `DECISION` blockers from `TASKS.md` (ADR 0016). Opens with the Action Queue (send now, decide ranked by tasks blocked, due, oldest; 15 lines). Prints; `--write` regenerates `_tools\TYLER-TODAY.md` |
 
 TUI keys:
 

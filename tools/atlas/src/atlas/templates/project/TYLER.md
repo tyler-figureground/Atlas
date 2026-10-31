@@ -16,6 +16,8 @@ block production are **not** here either - they are the `DECISION` lane in `TASK
   item off - only Tyler does.
 - IDs run Y-001, Y-002 ... and are never reused. Independent of the T-NNN series.
 - One line per task, verb first. Link the source (minutes, decision). Do not paste it.
+- End every new line with `added:YYYY-MM-DD`, and `due:YYYY-MM-DD` when the minutes or
+  the agency give a date. The digest's Action Queue ages and orders by them.
 - If an agent can prepare the artifact, it does: draft email or letter to
   `07 Correspondence/_Outbox/`, package staged for transmittal. The item links it with `ready:`.
   Tyler sends; agents never send.
@@ -25,7 +27,7 @@ block production are **not** here either - they are the `DECISION` lane in `TASK
 
 ## Now
 
-<!-- - [ ] Y-001 Call / email / send <thing> - from <minutes link>. ready: <draft link, if any> -->
+<!-- - [ ] Y-001 Call / email / send <thing> - from <minutes link>. added:YYYY-MM-DD due:YYYY-MM-DD ready: <draft link, if any> -->
 
 ## Next
 

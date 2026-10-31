@@ -21,6 +21,9 @@ someone outside, named in the task
 - IDs run T-001, T-002 ... and are never reused.
 - One line per task, verb first. Detail goes indented below it.
 - Link the source (minutes, comment letter, decision). Do not paste it.
+- End every new line with `added:YYYY-MM-DD`; add `due:YYYY-MM-DD` when there is a date.
+- A task a `DECISION` (or any task) holds up carries `after:T-NNN` naming it. The digest
+  ranks Tyler's decisions by how many open tasks name them.
 - Done only with evidence: a file, an export, a receipt. Move it to **Done** with the date.
 - No other task lists or prompt files anywhere in the project - only this file and
   `TYLER.md`.

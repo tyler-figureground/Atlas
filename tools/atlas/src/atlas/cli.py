@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import date
 from pathlib import Path
 
 from . import __version__
@@ -91,7 +92,9 @@ from .core.scan import (
 )
 from .core.search import RESULT_CAP, build_name_index, search_names
 from .core.tree import MAPPED, TreeNode, open_project_tree
-from .core.tyler import collect as collect_tyler, digest_path, render as render_tyler
+from .core.tyler import (
+    collect as collect_tyler, digest_path, item_dict, queue_dict, render as render_tyler,
+)
 from .tui.tokens import filing_style  # the Fault Words; pure data, no Textual
 from .tui.dossier import dossier_lines  # the Dossier Facts Table; pure strings
 
@@ -1213,12 +1216,13 @@ def cmd_tyler(args: argparse.Namespace) -> int:
             "drive": digest.drive,
             "errands": digest.errand_count,
             "decisions": digest.decision_count,
+            "queue": queue_dict(digest, date.today()),
             "projects": [
                 {"name": p.name,
                  "tyler_missing": p.tyler_missing,
                  "tasks_missing": p.tasks_missing,
-                 "errands": [i.__dict__ for i in p.errands],
-                 "decisions": [i.__dict__ for i in p.decisions]}
+                 "errands": [item_dict(i) for i in p.errands],
+                 "decisions": [{**item_dict(i), "blocks": p.blocks(i)} for i in p.decisions]}
                 for p in digest.projects
             ],
         }, indent=2))
