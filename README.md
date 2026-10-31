@@ -248,6 +248,13 @@ Event-driven automations — they ship with the [Dispatcher plugin](./plugins/08
 
 See the [hooks directory](./plugins/08-dispatcher/hooks) for details and customization.
 
+## California project references
+
+Atlas routes California permit research and drawing reviews to the shared Napa
+knowledge index when the reviewing agency applies. New projects inherit the agent
+instructions; existing projects get them on the next Atlas release via conform. Napa guidance
+is not statewide coverage. See [routing and deployment](docs/california-reference-routing.md).
+
 ## Contributing
 
 Want to add a skill for the built environment?
