@@ -375,3 +375,12 @@ console change, wheel to `_tools\atlas`, repin `Atlas.bat`, deploy log, HOW-TO u
 - 2026-10-30: plan written from a read-only drive measurement. Local `main` found diverged
   from `origin/main` (70 behind, 1 stranded commit `99a15cd`); plan written on
   `origin/main` in a worktree. Nothing built yet.
+- 2026-10-31: **Phase 0.1 done** (PR #18; old commit tagged `archive/ca-routing-99a15cd`).
+  **0.2 done**: Atlas 0.21.0 released (PR #20) and deployed; `Atlas.bat --version` 0.21.0;
+  backup and manifests in `_tools\logstlas-0.21.0-deploy-20261031-101021\`. Backfill conform
+  on 10 projects: California + Pyvoid seat sections in 10/10 AGENTS.md (additions only), blank
+  `revit:` block in 3 PROJECT.md; re-run idempotent. `.mcp.json` still pending - needs a run on a
+  PC with `ATLAS_PYVOID_MCP_SERVER` set. **0.4 done on the tower** (no override at User, Machine
+  or Process level); laptop unchecked. **0.3 open**: `21042 Entrada Rd` is an empty, hand-made
+  folder from 2026-10-26 - a new job, not dormant; needs Tyler's intake (name, address, contacts)
+  or a rename to `YYMMDD_` form before conform.
