@@ -252,7 +252,7 @@ See the [hooks directory](./plugins/08-dispatcher/hooks) for details and customi
 
 Atlas routes California permit research and drawing reviews to the shared Napa
 knowledge index when the reviewing agency applies. New projects inherit the agent
-instructions; existing projects receive a bounded, backed-up update. Napa guidance
+instructions; existing projects get them on the next Atlas release via conform. Napa guidance
 is not statewide coverage. See [routing and deployment](docs/california-reference-routing.md).
 
 ## Contributing
