@@ -101,3 +101,122 @@ def test_cli_prints_and_writes(fixture_drive, capsys):
     assert main(["tyler", "--drive", str(fixture_drive), "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["errands"] == 3 and data["decisions"] == 2
+
+
+# --- Action Queue (roadmap F1) and Blocks (F2) --------------------------------
+
+from datetime import date  # noqa: E402
+
+from atlas.core.tyler import QUEUE_CAPS, build_queue  # noqa: E402
+
+TODAY = date(2026, 10, 31)
+
+QUEUE_TYLER = """## Now
+
+- [ ] Y-001 Send the fee letter. ready: 07 Correspondence/_Outbox/261020_fee.md
+- [ ] Y-002 Call the engineer - added:2026-09-01
+- [ ] Y-003 Sign the permit form - due:2026-10-28 added:2026-10-25
+- [ ] Y-004 Book the survey - due:2026-11-20
+- [ ] Y-005 Undated errand.
+- [ ] Y-006 Send the lender pack - due:2026-11-02 ready: 07 Correspondence/_Outbox/x.md
+"""
+
+QUEUE_TASKS = """## Now
+
+- [ ] T-011 `DECISION` Pick the window supplier - added:2026-10-10
+- [ ] T-012 `AGENT` Draft the window schedule - after:T-011
+- [ ] T-013 `MODEL` Place the windows - after:T-011
+- [ ] T-014 `DECISION` Approve the allowance basis.
+- [ ] T-015 `MODEL` Price the allowance - after:T-014
+- [ ] T-016 `DECISION` Choose the nosing profile.
+"""
+
+BARE_TASKS = """## Now
+
+- [ ] T-021 `DECISION` Confirm the wind speed.
+- [ ] T-022 `MODEL` Print G000.
+"""
+
+
+def _queue(fixture_drive):
+    _project(fixture_drive, "261002_1 Main St-Test", tyler=QUEUE_TYLER, tasks=QUEUE_TASKS)
+    _project(fixture_drive, "261003_2 Oak Ave-Bare", tyler="## Now\n", tasks=BARE_TASKS)
+    return collect(scan_drive(fixture_drive))
+
+
+def test_queue_send_now_first_and_no_item_twice(fixture_drive):
+    queue = build_queue(_queue(fixture_drive), TODAY)
+    assert [e.item.id for e in queue.send_now.entries] == ["Y-001", "Y-006"]
+    shown = [(e.project, e.item.id) for s in queue.sections for e in s.entries]
+    assert len(shown) == len(set(shown))  # Y-006 is ready and due: listed once, under Send now
+
+
+def test_queue_decisions_ranked_by_what_they_block(fixture_drive):
+    queue = build_queue(_queue(fixture_drive), TODAY)
+    decide = [(e.item.id, e.blocks) for e in queue.decide.entries]
+    # Main St uses after:, so a decision nothing names blocks 0 there. Oak Ave never
+    # writes after:, so its decision blocks an unknown number - never a made-up 0.
+    assert decide == [("T-011", 2), ("T-014", 1), ("T-021", None), ("T-016", 0)]
+
+
+def test_queue_due_soonest_first_with_overdue_flag(fixture_drive):
+    queue = build_queue(_queue(fixture_drive), TODAY)
+    assert [e.item.id for e in queue.due.entries] == ["Y-003", "Y-004"]
+    assert queue.due.entries[0].overdue and not queue.due.entries[1].overdue
+
+
+def test_queue_oldest_only_dated_items(fixture_drive):
+    queue = build_queue(_queue(fixture_drive), TODAY)
+    assert [(e.item.id, e.age) for e in queue.oldest.entries] == [("Y-002", 60)]
+
+
+def test_queue_caps_and_overflow(fixture_drive):
+    many = "## Now\n" + "".join(
+        f"- [ ] Y-{n:03d} Send item {n}. ready: 07 Correspondence/_Outbox/2610{n:02d}_x.md\n"
+        for n in range(1, 10))
+    _project(fixture_drive, "261002_1 Main St-Test", tyler=many, tasks="## Now\n")
+    queue = build_queue(collect(scan_drive(fixture_drive)), TODAY)
+    assert len(queue.send_now.entries) == QUEUE_CAPS["send_now"]
+    assert queue.send_now.total == 9
+    assert queue.send_now.entries[0].item.id == "Y-001"  # oldest source first
+    assert sum(QUEUE_CAPS.values()) == 15
+
+
+def test_render_puts_the_queue_on_top(fixture_drive):
+    text = render(_queue(fixture_drive), generated=TODAY)
+    queue_at = text.index("## Action queue")
+    assert queue_at < text.index("## 261002_1 Main St-Test")
+    assert "**Send now** (2)" in text
+    assert "T-011" in text and "blocks 2" in text and "blocks ?" in text
+    assert "OVERDUE 3d" in text
+    assert "Age known for 3 of 6 errands" in text
+    assert "Errands by project: 1 Main St 6" in text
+    assert "- [ ] **1 Main St** (blocks 2, 21d old) T-011" in text
+    # Per-project detail stays below, unchanged in shape.
+    assert "**Blocked on your call:**" in text
+
+
+def test_render_empty_queue_says_so(fixture_drive):
+    _project(fixture_drive, "261002_1 Main St-Test", tyler="## Now\n", tasks="## Now\n")
+    text = render(collect(scan_drive(fixture_drive)), generated=TODAY)
+    assert "Nothing queued" in text
+
+
+def test_cli_json_carries_the_queue(fixture_drive, capsys):
+    _queue(fixture_drive)
+    assert main(["tyler", "--drive", str(fixture_drive), "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    sections = {s["name"]: s for s in data["queue"]}
+    assert [e["id"] for e in sections["send_now"]["entries"]] == ["Y-001", "Y-006"]
+    assert sections["decide"]["entries"][0]["blocks"] == 2
+    assert sections["decide"]["entries"][2]["blocks"] is None
+    first = data["projects"][0]["errands"][0]
+    assert first["ready"] and first["added"] is None  # dates as ISO strings or null
+
+
+def test_short_name_keeps_street_numbers():
+    from atlas.core.tyler import short_name
+    assert short_name("260301_80-23 64th Lane-Refactored Design") == "80-23 64th Lane"
+    assert short_name("260717_2267 Monticello - Mkean Residence-Addition") == "2267 Monticello"
+    assert short_name("260527_211 centre street ny-Montez Radio (MPR)") == "211 centre street ny"
+    assert short_name("21042 Entrada Rd") == "21042 Entrada Rd"

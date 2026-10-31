@@ -56,8 +56,11 @@ Before writing the minutes, look at a good one ([`rules/reference-sets.md`](../.
      `DECISION`.
    - Tyler's personal errand (call, email, send, sign-off) → `00 Tasks/TYLER.md`,
      next Y-NNN. If the artifact can be prepared now, draft it to
-     `08 OUT/Drafts/` and link it with `ready:`. Never send.
+     `07 Correspondence/_Outbox/` and link it with `ready:`. Never send.
    - Someone outside → `WAIT` in `TASKS.md`, naming who.
+   - Every new line ends with `added:YYYY-MM-DD` (the meeting date), plus
+     `due:YYYY-MM-DD` when a date was said. A task a new `DECISION` holds up
+     carries `after:T-NNN`. The digest's Action Queue reads all three.
 
    Close tasks the meeting finished - in both files. If either file does not exist,
    create it from the Atlas template (`00 Tasks/TASKS.md`, `00 Tasks/TYLER.md`)

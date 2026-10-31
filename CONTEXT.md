@@ -569,7 +569,19 @@ after checking the handoff. Team members and agents use the same line. ADR 0016.
 
 **Tyler Digest**
 Generated drive-level roll-up of open Tyler List items across projects. Never edited -
-regenerated from the per-project files. Planned, not yet built. ADR 0016.
+regenerated from the per-project files by `atlas tyler` (`--write` to
+`_tools/TYLER-TODAY.md`). Opens with the Action Queue. ADR 0016.
+
+**Action Queue**
+The top of the Tyler Digest: at most 15 lines of what to do first - Send now
+(errands with a `ready:` artifact), Decide (Decision Lane items ranked by Blocks),
+Due (soonest `due:` first, overdue flagged), Oldest (by `added:`, else the date of
+the linked source). An item shows once, in the first section that claims it. An
+undated item has no age; nothing is guessed.
+
+**Blocks**
+How many open tasks name a decision with `after:T-NNN`. Shown as `?` in a project
+whose Task List never uses `after:` - unknown, never zero.
 
 **Task Group**
 A longer scope - an audit, a revision round, a Revit plan - kept inside the Task List as

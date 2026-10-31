@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-31
+
+### Added
+
+- **Action Queue at the top of the Tyler digest (roadmap F1).** `atlas tyler` opens with at most 15 lines: **Send now** (errands with a `ready:` artifact, oldest first), **Decide** (`DECISION` items ranked by how many tasks they block), **Due** (soonest first, `OVERDUE Nd` flagged), **Oldest** (by `added:`, else the `YYMMDD` date of the linked minutes or draft). An item shows once; overflow says how many more sit below. Short project labels (`80-23 64th Lane`), errand load per project, and how many errands carry an age. The per-project detail is unchanged below. `--json` gains `queue`, and every item gains `lane`, `ready`, `after`, `added`, `due`, `source_date`; decisions gain `blocks`.
+- **Decision blocks (roadmap F2).** A task carrying `after:T-NNN` counts against that decision. In a project that never writes `after:`, a decision blocks `?` - unknown, never zero.
+- **Optional task-line tokens:** `added:YYYY-MM-DD`, `due:YYYY-MM-DD`, `after:T-NNN`. Old lines parse unchanged; malformed dates are ignored, never guessed. Documented in the `TASKS.md` and `TYLER.md` templates and `agents-rules.md`; `/tasks` and `/meeting-closeout` (09-project-dossier `1.5.0`) write them.
+- **`core/tasks.py`** - one task-line parser shared by the digest, the queue and the archive preview.
+
+### Fixed
+
+- `/tasks` and `/meeting-closeout` drafted `ready:` artifacts to `08 OUT/Drafts/`, a folder ADR 0021 retired; they now name `07 Correspondence/_Outbox/`.
+
 ## [0.21.0] - 2026-10-31
 
 ### Added

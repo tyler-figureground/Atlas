@@ -46,10 +46,14 @@ prompt sits indented under its line in a `text` fence, and anything shared by th
    date and the evidence link. "Should be done" is not done.
 4. **TYLER.md is add-only for agents.** Never check off, never reorder Tyler's
    items, never send anything. Where the artifact can be prepared, prepare it
-   (draft to `08 OUT/Drafts/`, package staged) and link it with `ready:`.
+   (draft to `07 Correspondence/_Outbox/`, package staged) and link it with `ready:`.
 5. **DECISION and WAIT are never started.** They block; they are not work. If every
    actionable item is blocked, report the blockers instead of inventing work.
-6. **Edit in place, back up first:** copy the file to `.agent/backups/` before
+6. **Date and link every new line.** End it with `added:YYYY-MM-DD`; add
+   `due:YYYY-MM-DD` when there is a date. A task a decision (or another task)
+   holds up carries `after:T-NNN`. `atlas tyler` ages, orders and ranks by these -
+   an undated item has no age, and a decision nothing names blocks `?`.
+7. **Edit in place, back up first:** copy the file to `.agent/backups/` before
    rewriting a list. Never leave the backup at the project root.
 
 ## Picking up work (`/tasks next`)
@@ -77,5 +81,7 @@ Each action item goes to exactly one list, linked to the minutes:
 - Tyler's own errand (call, email, send, sign-off) → `TYLER.md`; pre-draft the
   artifact if possible and link `ready:`.
 - Someone outside → `WAIT`, naming who.
+- Every new line: `added:` today; `due:` if the minutes give a date; `after:T-NNN`
+  on each task the new `DECISION` holds up.
 
 Also close whatever the meeting finished, in both files.
