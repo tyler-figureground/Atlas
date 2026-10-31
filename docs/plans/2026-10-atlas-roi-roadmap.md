@@ -26,14 +26,14 @@ Ranked by value per build-week:
 | 0 | Housekeeping: push the stranded commit, release 0.21.0, conform Entrada Rd | Work exists that no PC and no colleague has | Hours |
 | 1 | **Tyler action queue** - the digest becomes a ranked, aged, top-15 list | 115 errands + 23 blocking decisions on one flat wall; 0 carry a date | 2-3 days |
 | 2 | **Decision unblocker** - each blocking decision shows what it holds up, with a pre-drafted ask | 23 decisions gate the 77 MODEL + 27 AGENT tasks | 2 days |
-| 3 | **Permit tracker** - AHJ registers filled from the folders, permits in the digest | 10 of 10 registers effectively empty while round folders exist | 1 week |
+| 3 | **Permit tracker** - AHJ registers filled from the folders, permits in the digest | 6 of 10 registers are the bare template, the other 4 hold 2-4 rows, while round folders exist | 1 week |
 | 4 | **Meeting inbox** - transcripts with no minutes surface and queue closeout | 64th Lane: 10 transcripts, 7 minutes | 2-3 days |
 | 5 | **Cross-project production queue** - `atlas tasks`, stale claims, a nightshift feed | 27 AGENT tasks sit until someone opens the project | 1 week |
 | 6 | **Control-file budget** - doctor flags bloated `PROJECT.md`, agent splits it | MPR `PROJECT.md` 1,333 lines; rule says ~400; every agent session reads it | 2 days |
 | 7 | **California site due diligence** - parcel, zoning, permit history for CA jobs | Due-diligence and zoning plugins are NYC-only; most active jobs are California | 2-3 weeks |
 | 8 | **Transmittals** - generate the transmittal and log row from an `Out` folder | Template exists; every issue to client/AHJ/consultant is hand-built | 1 week |
 
-Do 0-2 first (one week, mostly `core/tyler.py`). They change what Tyler does every morning
+Do 0-2 first (one week: `core/tyler.py` plus the shared task parser in `core/tasks.py`). They change what Tyler does every morning
 and cost almost nothing. 3-6 are the next month. 7-8 after that.
 
 ---
@@ -98,10 +98,10 @@ ROI = (hours saved per week across Tyler + staff + agents) x (how often it bites
 
 | # | Work | Done when |
 |---|---|---|
-| 0.1 | Rebase `99a15cd` (California routing) onto `origin/main`, PR, merge. It touches `docs/california-reference-routing.md` and templates; check against ADR 0021 renames (`13 AHJ` is now `07 Correspondence/AHJ`) | Commit on `origin/main`; local `main` fast-forwards |
+| 0.1 | ~~Re-land `99a15cd` (California routing)~~ **Done by PR #18**: section in the packaged `agents-rules.md`, AHJ path per ADR 0021, override scripts not carried over. Local `main` still holds the old commit; reset it to `origin/main` once #18 merges | Section on `origin/main`; 0.2's conform restores it in projects |
 | 0.2 | Release Atlas 0.21.0 (seat-ready scaffold, `.mcp.json`, `revit:` backfill), deploy per `tools/atlas/README.md`, repin `Atlas.bat`, conform `--all` dry run then apply | `Atlas.bat --version` = 0.21.0; deploy backup under `_tools\logs\` |
 | 0.3 | Conform `21042 Entrada Rd` (or archive it if dormant - Tyler's call, see Q1) | Digest no longer says "TYLER.md missing" |
-| 0.4 | `ATLAS_TEMPLATES` override: confirm it still matches packaged templates after 0.19-0.21 (the California handoff says the override must be refreshed on upgrade) | `atlas lint` and a new-project smoke run on a fixture show no template drift |
+| 0.4 | Confirm no `ATLAS_TEMPLATES` override is set on any studio PC (retired 2026-10-07; it masked newer templates) | Env var absent at User and Machine level; `atlas new` on a fixture uses the packaged templates |
 
 ---
 
@@ -184,7 +184,8 @@ thing a client asks about. The register is empty while the evidence sits in fold
    anything at the AHJ longer than a threshold (default 30 days - Q3).
 4. **Write, through a Plan.** `atlas permits --sync --apply` proposes register rows that the
    folders prove and the register lacks. Only appends rows; never edits a human-written row;
-   preview shows each row. Create-only in the spirit of ADR 0012.
+   preview shows each row. This is an edit to an existing file, so it is an explicit
+   exception to ADR 0012's create-only rule, and ADR 0024 must say so.
 5. **Console.** A `permits` Companion Mode beside unmet Expectations / health / dossier
    (`d` cycles). No new layout.
 
