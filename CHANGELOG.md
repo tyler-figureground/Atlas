@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-31
+
 ### Added
 
 - **California permit requirements in the packaged `agents-rules.md`.** Jurisdiction-first routing to the shared Napa permit-guidance collection (City, County, NapaSan), never a statewide claim, kept apart from Norma's code corpus; reviews file in `07 Correspondence/AHJ/01 Requirements & Pre-Application/`. First shipped 2026-10-06 through a template override that was retired the next day, which left 0 of 11 projects carrying it; now in the wheel, restored by the next release and `conform --all --only backfill`. Guide: `docs/california-reference-routing.md`.
