@@ -384,3 +384,12 @@ console change, wheel to `_tools\atlas`, repin `Atlas.bat`, deploy log, HOW-TO u
   or Process level); laptop unchecked. **0.3 open**: `21042 Entrada Rd` is an empty, hand-made
   folder from 2026-10-26 - a new job, not dormant; needs Tyler's intake (name, address, contacts)
   or a rename to `YYMMDD_` form before conform.
+- 2026-10-31: **0.3 settled** - Tyler creates `21042 Entrada Rd` through `atlas new` once he
+  has the intake; no conform or archive. **F1 + F2 done** (PR #22, Atlas 0.22.0, deployed:
+  `_tools\logs\atlas-0.22.0-deploy-20261031-105352\`). `core/tasks.py` is the shared parser;
+  the digest opens with the Action Queue (13 send-now, 23 decide, 22 oldest on the live drive).
+  Every decision reads `blocks ?` until agents write `after:`; age known for 35 of 113 errands
+  until they write `added:`. Token rule refreshed into 10/10 AGENTS.md blocks (2 lines each);
+  drive HOW-TO tasks section rewritten (it still described retired scoped lists).
+  Review round fixed before deploy: `ready:` stopping at tokens, angle-bracket links, file-name
+  dates, one section per item. **Next: F4 meeting inbox + F6 control-file budget (week 2).**
