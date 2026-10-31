@@ -220,3 +220,16 @@ def test_short_name_keeps_street_numbers():
     assert short_name("260717_2267 Monticello - Mkean Residence-Addition") == "2267 Monticello"
     assert short_name("260527_211 centre street ny-Montez Radio (MPR)") == "211 centre street ny"
     assert short_name("21042 Entrada Rd") == "21042 Entrada Rd"
+
+
+def test_queue_item_belongs_to_one_section_and_overdue_everywhere(fixture_drive):
+    tyler = "## Now\n" + "".join(
+        f"- [ ] Y-{n:03d} Send item {n}. ready: 07 Correspondence/_Outbox/2610{n:02d}_x.md\n"
+        for n in range(1, 7)) + "- [ ] Y-020 Overdue send - due:2026-10-20 ready: 07 Correspondence/_Outbox/x.md\n"
+    tasks = "## Now\n- [ ] T-007 `DECISION` Pick it - due:2026-10-29\n- [ ] T-008 `MODEL` Do it - after:T-7\n"
+    _project(fixture_drive, "261002_1 Main St-Test", tyler=tyler, tasks=tasks)
+    queue = build_queue(collect(scan_drive(fixture_drive)), TODAY)
+    assert queue.send_now.total == 7 and queue.oldest.total == 0  # ready errands never fall into Oldest
+    assert queue.due.total == 0  # due items already claimed by Send now / Decide
+    assert all(e.overdue for e in queue.send_now.entries if e.item.id == "Y-020")
+    assert queue.decide.entries[0].overdue and queue.decide.entries[0].blocks == 1

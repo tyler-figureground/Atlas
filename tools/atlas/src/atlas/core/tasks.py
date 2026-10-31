@@ -29,14 +29,19 @@ _CHECKBOX = re.compile(r"^\s*- \[ \] (?P<body>.+)$")
 _HEADING = re.compile(r"^## (?P<name>.+?)\s*$")
 _ID = re.compile(r"(?:\*\*)?(?P<id>[YT]-\d+)")
 _LANE = re.compile(r"`(?P<lane>AGENT|MODEL|DECISION|WAIT)`")
-_CLAIM = re.compile(r"claimed \d{4}-\d{2}-\d{2} by [^.*]+")
+# A token starts where the free text ends: ready: values and claims stop before one.
+_TOKEN_AHEAD = r"(?=\s+(?:added|due|after|ready|claimed):|\s*$)"
+_CLAIM = re.compile(r"claimed \d{4}-\d{2}-\d{2} by [^.*]+?(?=[.*]|\s+(?:added|due|after|ready):|\s*$)")
 _ISO = r"(\d{4})-(\d{2})-(\d{2})"
 _ADDED = re.compile(r"\badded:\s*" + _ISO)
 _DUE = re.compile(r"\bdue:\s*" + _ISO)
 _AFTER = re.compile(r"\bafter:\s*(?P<ids>T-\d+(?:\s*,\s*T-\d+)*)")
 _TASK_ID = re.compile(r"T-\d+")
-_READY = re.compile(r"\bready:\s*(?P<value>.+)$")
-_LINK = re.compile(r"\]\((?P<target>[^)\s]+)\)")
+_READY = re.compile(r"\bready:\s*(?P<value>.+?)" + _TOKEN_AHEAD)
+# Markdown link target, plain or CommonMark angle-bracketed (spaces allowed inside <>).
+_LINK = re.compile(r"\]\((?:<(?P<angle>[^>]+)>|(?P<target>[^)\s]+))\)")
+# A ready: value is an artifact only if it looks like a path: a separator or an extension.
+_PATHLIKE = re.compile(r"[/\\]|\.[A-Za-z0-9]{1,5}$")
 _TICKS = re.compile(r"`(?P<path>[^`]+)`")
 _YYMMDD = re.compile(r"^(\d{2})(\d{2})(\d{2})(?=[ _\-.]|$)")
 
@@ -65,7 +70,10 @@ class TaskItem:
 
     def age_days(self, today: date) -> int | None:
         since = self.since
-        return None if since is None else (today - since).days
+        # A date in the future is a typo, not a negative age: unknown, never guessed.
+        if since is None or since > today:
+            return None
+        return (today - since).days
 
 
 def clip(text: str) -> str:
@@ -89,20 +97,33 @@ def _ready(body: str) -> str:
     value = match.group("value").strip()
     link = _LINK.search(value)
     if link:
-        return unquote(link.group("target"))
+        return _link_target(link)
     ticks = _TICKS.match(value)
     if ticks:
         return ticks.group("path")
-    return value.rstrip(".;, ")
+    value = value.rstrip(".;, ")
+    return value if _PATHLIKE.search(value) else ""
+
+
+def _link_target(match: re.Match[str]) -> str:
+    return match.group("angle") or unquote(match.group("target"))
+
+
+def normalize_id(ident: str) -> str:
+    """``T-7`` and ``T-007`` name the same task; compare in the three-digit form."""
+    prefix, _, number = ident.partition("-")
+    return f"{prefix}-{int(number):03d}" if number.isdigit() else ident
 
 
 def _source_date(body: str, ready: str) -> date | None:
-    paths = [unquote(m.group("target")) for m in _LINK.finditer(body)]
+    paths = [_link_target(m) for m in _LINK.finditer(body)]
     paths += [m.group("path") for m in _TICKS.finditer(body)]
     if ready:
         paths.append(ready)
     for path in paths:
-        for segment in path.replace("\\", "/").split("/"):
+        # From the file name up: a dated project folder higher in the path is not
+        # the source's date.
+        for segment in reversed(path.replace("\\", "/").split("/")):
             match = _YYMMDD.match(segment)
             if not match:
                 continue
@@ -119,7 +140,10 @@ def _item(body: str, section: str) -> TaskItem:
     claim = _CLAIM.search(body)
     after: list[str] = []
     for match in _AFTER.finditer(body):
-        after += [i for i in _TASK_ID.findall(match.group("ids")) if i not in after]
+        for blocker in _TASK_ID.findall(match.group("ids")):
+            blocker = normalize_id(blocker)
+            if blocker not in after:
+                after.append(blocker)
     ready = _ready(body)
     return TaskItem(
         id=ident.group("id") if ident else "",

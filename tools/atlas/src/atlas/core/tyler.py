@@ -24,7 +24,7 @@ from datetime import date
 from pathlib import Path
 
 from .scan import DriveInventory
-from .tasks import TaskItem, parse_open
+from .tasks import TaskItem, normalize_id, parse_open
 
 TYLER_PATH = "00 Tasks/TYLER.md"
 TASKS_PATH = "00 Tasks/TASKS.md"
@@ -59,7 +59,7 @@ class ProjectDigest:
     def blocks(self, decision: TaskItem) -> int | None:
         if not decision.id:
             return None
-        count = self.blocked_by.get(decision.id, 0)
+        count = self.blocked_by.get(normalize_id(decision.id), 0)
         return count if (count or self.tracks_blocks) else None
 
 
@@ -145,7 +145,8 @@ def _project(name: str, tyler_text: str | None, tasks_text: str | None) -> Proje
     return ProjectDigest(
         name=name,
         errands=parse_open(tyler_text) if tyler_text is not None else (),
-        decisions=tuple(t for t in tasks if t.lane == "DECISION"),
+        # Same rule as before the queue: a `DECISION` tag anywhere on the line.
+        decisions=parse_open(tasks_text, lane="DECISION") if tasks_text is not None else (),
         tyler_missing=tyler_text is None,
         tasks_missing=tasks_text is None,
         blocked_by=blocked_by,
@@ -182,38 +183,34 @@ def _section(name: str, entries: list[QueueEntry]) -> QueueSection:
     return QueueSection(name=name, entries=tuple(entries[: QUEUE_CAPS[name]]), total=len(entries))
 
 
+def _overdue(item: TaskItem, today: date) -> bool:
+    return item.due is not None and item.due < today
+
+
 def build_queue(digest: Digest, today: date) -> Queue:
-    """Rank open work into the four Action Queue sections. An item appears once,
-    in the first section that claims it; each section shows at most its cap."""
+    """Rank open work into the four Action Queue sections. Every item belongs to
+    exactly one section - the first that claims it, cap or no cap - so totals never
+    double count: ready errands are Send now, decisions are Decide, other errands
+    with a due date are Due, the rest with a known age are Oldest. Overdue items
+    lead Send now and Decide."""
     errands: list[QueueEntry] = []
     decisions: list[QueueEntry] = []
     for project in digest.projects:
         for item in project.errands:
-            errands.append(QueueEntry(project.name, item, "errand", age=item.age_days(today)))
+            errands.append(QueueEntry(project.name, item, "errand", age=item.age_days(today),
+                                      overdue=_overdue(item, today)))
         for item in project.decisions:
             decisions.append(QueueEntry(project.name, item, "decision",
-                                        age=item.age_days(today), blocks=project.blocks(item)))
+                                        age=item.age_days(today), blocks=project.blocks(item),
+                                        overdue=_overdue(item, today)))
 
-    send_now = sorted((e for e in errands if e.item.ready), key=_undated_last)
-    shown = {id(e) for e in send_now[: QUEUE_CAPS["send_now"]]}
-    decide = sorted(decisions, key=_decision_rank)
-    shown |= {id(e) for e in decide[: QUEUE_CAPS["decide"]]}
-
-    due = []
-    for entry in errands + decisions:
-        if entry.item.due is None or id(entry) in shown:
-            continue
-        due.append(QueueEntry(entry.project, entry.item, entry.kind, age=entry.age,
-                              blocks=entry.blocks, overdue=entry.item.due < today))
-    due.sort(key=lambda e: e.item.due)
-    shown |= {id(e) for e in due[: QUEUE_CAPS["due"]]}
-    shown_items = {(e.project, e.item) for e in due[: QUEUE_CAPS["due"]]}
-
-    oldest = sorted(
-        (e for e in errands
-         if e.age is not None and id(e) not in shown and (e.project, e.item) not in shown_items),
-        key=_undated_last,
-    )
+    send_now = sorted((e for e in errands if e.item.ready),
+                      key=lambda e: (not e.overdue, *_undated_last(e)))
+    decide = sorted(decisions, key=lambda e: (not e.overdue, *_decision_rank(e)))
+    rest = [e for e in errands if not e.item.ready]
+    due = sorted((e for e in rest if e.item.due is not None), key=lambda e: e.item.due)
+    oldest = sorted((e for e in rest if e.item.due is None and e.age is not None),
+                    key=_undated_last)
     return Queue(sections=(
         _section("send_now", send_now),
         _section("decide", decide),

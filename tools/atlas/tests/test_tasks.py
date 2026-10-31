@@ -76,3 +76,33 @@ def test_text_is_clipped_but_tokens_read_from_the_full_line():
     item = parse_open("## Now\n" + long + "\n")[0]
     assert len(item.text) <= 160 and item.text.endswith("…")
     assert item.due == date(2026, 11, 1)
+
+
+def test_review_round_parser_edges():
+    lines = "\n".join([
+        "## Now",
+        # ready: as a bare path followed by tokens stops before the tokens
+        "- [ ] Y-010 Send the letter. ready: 07 Correspondence/_Outbox/261001_letter.md added:2026-10-02 due:2026-11-01",
+        # angle-bracket CommonMark link, spaces unencoded
+        "- [ ] Y-011 Send the request. ready: [draft](<../08 OUT/Drafts/261008_Request.md>).",
+        # the file's own date wins over a dated project folder higher in the path
+        "- [ ] Y-012 Review - [m](G:/Drive/250101_Foo/11%20Meetings/261015%20-%20Minutes.md)",
+        # prose 'ready:' is not an artifact
+        "- [ ] Y-013 Check whether the permit is ready: call DOB.",
+        # claim stops before tokens
+        "- [ ] T-020 `AGENT` Draft memo - claimed 2026-10-30 by codex added:2026-10-02",
+        # a future added: date is a typo, not a negative age
+        "- [ ] Y-014 Call back - added:2026-12-25",
+        # after: ids normalise, so T-7 names T-007
+        "- [ ] T-021 `MODEL` Place it - after:T-7",
+    ])
+    items = {i.id: i for i in parse_open(lines)}
+    assert items["Y-010"].ready == "07 Correspondence/_Outbox/261001_letter.md"
+    assert items["Y-010"].added == date(2026, 10, 2) and items["Y-010"].due == date(2026, 11, 1)
+    assert items["Y-011"].ready == "../08 OUT/Drafts/261008_Request.md"
+    assert items["Y-011"].source_date == date(2026, 10, 8)
+    assert items["Y-012"].source_date == date(2026, 10, 15)
+    assert items["Y-013"].ready == ""
+    assert items["T-020"].claim == "claimed 2026-10-30 by codex"
+    assert items["Y-014"].age_days(date(2026, 10, 31)) is None
+    assert items["T-021"].after == ("T-007",)
