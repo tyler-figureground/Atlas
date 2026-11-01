@@ -393,3 +393,15 @@ console change, wheel to `_tools\atlas`, repin `Atlas.bat`, deploy log, HOW-TO u
   drive HOW-TO tasks section rewritten (it still described retired scoped lists).
   Review round fixed before deploy: `ready:` stopping at tokens, angle-bracket links, file-name
   dates, one section per item. **Next: F4 meeting inbox + F6 control-file budget (week 2).**
+- 2026-10-31: **F4 + F6 done** (PR #24, Atlas 0.23.0, map v4.3 with `meetings` and
+  `fileBudgets`, deployed: `_tools\logs\atlas-0.23.0-deploy-20261031-180116\`). Pairing is by
+  leading `YYMMDD` date (same day, then named minutes, then nearest within 3 days), because
+  drive naming varies too much for name matching. Live: 16 meetings in 4 projects, all closed -
+  the 64th Lane gap in section 1 was closed out by hand before this shipped, so the "lists 64th
+  Lane's gap" check had nothing to find; fixtures cover it. Budgets flag `PROJECT.md` in MPR
+  1,334, Silverado 578, Monte Vista 542, 64th Lane 457, San Vicente 403 (5, not the 4 the plan
+  guessed), and stale Done in 64th Lane (19), West Ln (6), Silverado (5). Two review rounds:
+  an older meeting could take a newer one's minutes; folder-check failures read as absent.
+  Still open from F4/F6 "done when": one supervised nightshift closeout, one supervised MPR
+  split (both need a real pending meeting / Tyler's go). **Next: F3 permit tracker (ADR 0024
+  first).**
