@@ -59,6 +59,9 @@ from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.meetings import meeting_dict, scan_dict, scan_meetings
 from .core.permits import describe, scan_permits
+from .core.taskqueue import PARKED, TASKS_PATH, next_task, task_dict
+from .core.taskqueue import STATES as QUEUE_STATES
+from .core.taskqueue import collect as collect_queue
 from .core.permits import scan_dict as permit_scan_dict
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
 from .core.pdfexport import PdfError, export_pdf
@@ -1367,6 +1370,94 @@ def cmd_permits(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tasks(args: argparse.Namespace) -> int:
+    """The cross-project production queue (roadmap F5): every open task and
+    its state, or with ``--next`` the one task an agent should pick up.
+    Read-only: claiming is an edit to the project's TASKS.md and stays with
+    the agent through ``/tasks``. ``--next`` exits 1 when nothing is pickable."""
+    if args.with_prompt and not args.next:
+        raise UsageError("--with-prompt only applies with --next")
+    if args.next and args.lane in ("DECISION", "WAIT"):
+        raise UsageError(f"--next picks AGENT or MODEL work; a {args.lane} task is never "
+                         "picked up by an agent")
+    root = _resolve_drive(args.drive)
+    inventory = _scan(root)
+    today = date.today()
+    queues = collect_queue(inventory, today)
+    if args.project:
+        _resolve_project(root, args.project)
+        queues = tuple(q for q in queues if q.project == args.project)
+    # Work in a TASKS.md Atlas could not read is unknown, never absent: every
+    # mode names those projects on stderr (ADR 0004).
+    for q in queues:
+        if not q.tasks_readable:
+            print(f"warning: cannot read {q.project}/{TASKS_PATH} ({q.error}); "
+                  "its tasks are unknown", file=sys.stderr)
+    if args.next:
+        lane = args.lane or "AGENT"
+        task = next_task(queues, lane, today, with_prompt=args.with_prompt)
+        path = next((q.path for q in queues if task and q.project == task.project), None)
+        if args.json:
+            print(json.dumps(task_dict(task, today, path) if task else None, indent=2))
+        elif task is None:
+            print(f"no pickable {lane} task")
+        else:
+            print(f"{task.project}\n    {task.item.text}")
+            print(f"    file: {path / TASKS_PATH}")
+            print("    claim it first: move it to In progress and append "
+                  f"'claimed {today.isoformat()} by <name>'")
+        return 0 if task else 1
+
+    def keep(t) -> bool:
+        if args.lane and t.item.lane != args.lane:
+            return False
+        return args.all or t.state not in (PARKED,)
+
+    if args.json:
+        print(json.dumps([
+            {"project": q.project, "tasks_present": q.tasks_present,
+             "tasks_readable": q.tasks_readable, "error": q.error or None,
+             "revit_ready": q.revit_ready,
+             "newest_run": q.newest_run.isoformat() if q.newest_run else None,
+             "tasks": [task_dict(t, today) for t in q.tasks if keep(t)]}
+            for q in queues
+        ], indent=2))
+        return 0
+    counts = {s: 0 for s in QUEUE_STATES}
+    for q in queues:
+        shown = [t for t in q.tasks if keep(t)]
+        if not q.tasks_readable:
+            print(f"\n{q.project}\n    cannot read {TASKS_PATH}: {q.error} - its work is unknown")
+            continue
+        if not q.tasks_present:
+            # doctor names a missing control file; say it here only when asked.
+            if args.project:
+                print(f"\n{q.project}\n    {TASKS_PATH} missing")
+            continue
+        if not shown:
+            continue
+        print(f"\n{q.project}")
+        for t in shown:
+            counts[t.state] += 1
+            extra = []
+            if t.blockers:
+                extra.append("after " + ", ".join(t.blockers))
+            if t.item.claim:
+                age = t.claim_age(today)
+                extra.append(t.item.claim + (f", {age}d" if age is not None else ""))
+            if t.item.prompt:
+                extra.append("prompt")
+            tail = f"  ({'; '.join(extra)})" if extra else ""
+            # The text is the whole line, ID and lane included.
+            print(f"    [{t.state:11}] {t.item.text[:120]}{tail}")
+    summary = ", ".join(f"{n} {s}" for s, n in counts.items() if n)
+    unknown = sum(1 for q in queues if not q.tasks_readable)
+    if unknown:
+        summary = f"{summary or 'no open tasks read'}; {unknown} project(s) unreadable"
+    print(f"\n{summary or 'no open tasks'}")
+    return 0
+
+
 def cmd_pdf(args: argparse.Namespace) -> int:
     """Print a Markdown deliverable to a PDF beside it, for reading and sending."""
     result = export_pdf(Path(args.source), Path(args.out) if args.out else None, force=args.force)
@@ -1941,6 +2032,8 @@ def main(argv: list[str] | None = None) -> int:
                              "(read-only; --write regenerates _tools/TYLER-TODAY.md)"),
         ("meetings", cmd_meetings, "Meeting Inbox: recorded meetings and whether each has "
                                    "minutes (read-only; --pending for the ones that do not)"),
+        ("tasks", cmd_tasks, "production queue: open tasks across projects and their state; "
+                             "--next gives the task an agent should pick up (read-only)"),
         ("permits", cmd_permits, "permit tracker: each AHJ register application, whose court "
                                  "the ball is in and for how long (read-only)"),
         ("search", cmd_search, "drive-wide search: projects, folders and files by name, "
@@ -1963,6 +2056,18 @@ def main(argv: list[str] | None = None) -> int:
         "--pending", action="store_true",
         help="only meetings with no minutes yet - the /meeting-closeout queue")
 
+    sub.choices["tasks"].add_argument("project", nargs="?",
+                                      help="one project folder name (default: every project)")
+    sub.choices["tasks"].add_argument("--lane", choices=["AGENT", "MODEL", "DECISION", "WAIT"],
+                                      help="only this lane (--next defaults to AGENT)")
+    sub.choices["tasks"].add_argument("--all", action="store_true",
+                                      help="also list parked tasks (outside Now and Next)")
+    sub.choices["tasks"].add_argument(
+        "--next", action="store_true",
+        help="print the top pickable task: Now before Next, soonest due, prompt first, "
+             "oldest; MODEL only where PROJECT.md names a Revit model. Exit 1 if none")
+    sub.choices["tasks"].add_argument("--with-prompt", action="store_true",
+                                      help="with --next: only tasks carrying an agent prompt")
     sub.choices["permits"].add_argument("project", nargs="?",
                                         help="one project folder name (default: every project)")
 

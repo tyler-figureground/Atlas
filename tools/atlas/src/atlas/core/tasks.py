@@ -21,7 +21,7 @@ source. Bare digits outside a link never date a line: part numbers look like dat
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from urllib.parse import unquote
 
@@ -44,6 +44,12 @@ _LINK = re.compile(r"\]\((?:<(?P<angle>[^>]+)>|(?P<target>[^)\s]+))\)")
 _PATHLIKE = re.compile(r"[/\\]|\.[A-Za-z0-9]{1,5}$")
 _TICKS = re.compile(r"`(?P<path>[^`]+)`")
 _YYMMDD = re.compile(r"^(\d{2})(\d{2})(\d{2})(?=[ _\-.]|$)")
+# CommonMark-ish fences: optional list/number/quote markers, then ``` or ~~~.
+# A backtick fence's info string has no backtick (else it is inline code); a
+# tilde fence's may.
+_FENCE_OPEN = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+|>\s*)*"
+                         r"(?:(?P<tick>`{3,})(?P<tinfo>[^`]*)|(?P<tilde>~{3,})(?P<info>.*))$")
+_FENCE_CLOSE = re.compile(r"^\s*(?:(?:[-*+]\s+)|>\s*)*(?P<run>`{3,}|~{3,})\s*$")
 
 # Item text runs long on real lists (211 Centre lines carry full audit detail);
 # views scan, they do not replace the list, so bodies are clipped.
@@ -62,6 +68,13 @@ class TaskItem:
     after: tuple[str, ...] = ()
     ready: str = ""
     source_date: date | None = None
+    # An agent prompt sits indented under the line in a ```text fence (ADR 0023).
+    prompt: bool = False
+
+    @property
+    def claimed_on(self) -> date | None:
+        """The date in ``claimed YYYY-MM-DD by <name>``, when there is a claim."""
+        return _iso(re.search(_ISO, self.claim)) if self.claim else None
 
     @property
     def since(self) -> date | None:
@@ -159,22 +172,88 @@ def _item(body: str, section: str) -> TaskItem:
     )
 
 
+def fences(lines: list[str]) -> tuple[set[int], dict[int, str]]:
+    """Closed code fences, CommonMark-style: the line numbers inside them
+    (opener and closer included) and each opener's info string.
+
+    An opener is three or more backticks or tildes, after optional list,
+    number or quote markers, whose info string has no backtick (so inline
+    ```code``` is not a fence). It closes on a bare run of the same character
+    at least as long. A fence that never closes is not a fence: nothing
+    below it is hidden, so a typo can never swallow the rest of a list.
+    """
+    inside: set[int] = set()
+    openers: dict[int, str] = {}
+    # Per fence character, the shortest run already shown to have no closer
+    # anywhere below: a later, at-least-as-long opener cannot close either.
+    dead: dict[str, int] = {}
+    n = 0
+    while n < len(lines):
+        opened = _FENCE_OPEN.match(lines[n])
+        if opened:
+            run = opened.group("tick") or opened.group("tilde")
+            info = opened.group("tinfo") if opened.group("tick") else opened.group("info")
+            indent = len(lines[n]) - len(lines[n].lstrip())
+            if len(run) < dead.get(run[0], len(run) + 1):
+                bounded = False
+                for close in range(n + 1, len(lines)):
+                    line = lines[close]
+                    # An indented fence lives inside its list item: a
+                    # less-indented line ends the item, and the fence with it.
+                    if indent and line.strip() and len(line) - len(line.lstrip()) < indent:
+                        bounded = True
+                        break
+                    closed = _FENCE_CLOSE.match(line)
+                    if (closed and closed.group("run")[0] == run[0]
+                            and len(closed.group("run")) >= len(run)):
+                        openers[n] = (info or "").strip()
+                        inside.update(range(n, close + 1))
+                        n = close
+                        break
+                else:
+                    if not bounded:
+                        dead[run[0]] = min(dead.get(run[0], len(run)), len(run))
+        n += 1
+    return inside, openers
+
+
 def parse_open(text: str, *, lane: str | None = None) -> tuple[TaskItem, ...]:
     """Open checkbox items before ``## Done``; ``lane`` keeps only that lane tag."""
     items: list[TaskItem] = []
     section = ""
-    for line in text.splitlines():
+    # The last item kept, while the lines below it are still its own (indented
+    # or blank); an indented ```text fence there is its prompt.
+    under: int | None = None
+    lines = text.splitlines()
+    inside, openers = fences(lines)
+    for n, line in enumerate(lines):
+        # Inside a closed code fence nothing is a task or a heading: a prompt
+        # may quote "- [ ]" lines of its own.
+        if n in openers:
+            if (under is not None and line[:1] in (" ", "\t")
+                    and openers[n].split()[:1] == ["text"]):
+                items[under] = replace(items[under], prompt=True)
+            continue
+        if n in inside:
+            continue
         heading = _HEADING.match(line)
         if heading:
+            under = None
             section = heading.group("name")
             if section.lower().startswith("done"):
                 break
             continue
         checkbox = _CHECKBOX.match(line)
         if not checkbox:
+            if not line.strip():
+                continue
+            if line[:1] not in (" ", "\t"):
+                under = None
             continue
         body = checkbox.group("body").strip()
         if lane and f"`{lane}`" not in body:
+            under = None
             continue
         items.append(_item(body, section))
+        under = len(items) - 1
     return tuple(items)

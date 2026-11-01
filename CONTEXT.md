@@ -592,6 +592,15 @@ leading `YYMMDD` date - same day, then the nearest minutes up to `windowDays` la
 never by matching file names. `atlas meetings --pending`, a `doctor --deep` warning and
 a Tyler Digest block. Report-only.
 
+**Pickable**
+A task an agent may start now: `AGENT` or `MODEL` lane, in Now or Next, unclaimed, every
+`after:` blocker closed - the template's picking rule. `atlas tasks --next` names the top
+one across projects; `MODEL` only where the dossier names a Revit model.
+
+**Stale Claim**
+A claim (`claimed YYYY-MM-DD by <name>`) more than 7 days old with no dated run folder in
+`.agent/runs/` since. Reported by `atlas tasks`; reclaiming is an edit through `/tasks`.
+
 **Ball In Court**
 Whose move an application is, read from the first word of its AHJ register Status cell
 (ADR 0024): `US` (researching, preparing, comments, approved), `AHJ` (submitted, in

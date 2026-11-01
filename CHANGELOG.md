@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-31
+
+### Added
+
+- **Production queue (roadmap F5).** `atlas tasks [NAME] [--lane L] [--all] [--json]` lists every open task in every project's `TASKS.md` with its state: `pickable` (Now or Next, unclaimed, every `after:` blocker closed), `blocked`, `claimed`, `stale-claim` (claimed more than 7 days ago with no `YYMMDD` run folder since - the template's reclaim rule; reported, never released), `decision`, `waiting`, `parked` (outside Now and Next; shown with `--all`). A missing or unreadable `TASKS.md` is named, never read as no work.
+- `atlas tasks --next [--lane AGENT|MODEL] [--with-prompt] [--json]` gives the one task the template's picking rule would choose across all projects: Now before Next, soonest due, a task with an agent prompt, oldest, then project and line order. `MODEL` only where `PROJECT.md`'s `revit:` block names a model. Exit 1 when nothing is pickable.
+- The task parser detects an agent prompt (an indented ` ```text ` fence under a task, ADR 0023) and the claim date; checkbox lines quoted inside a fence are no longer read as tasks.
+- `/tasks` (09-project-dossier `1.7.0`) points cross-project picking at `atlas tasks --next`.
+
 ## [0.24.0] - 2026-10-31
 
 ### Added
