@@ -585,6 +585,18 @@ typo and has none either. Nothing is guessed.
 How many open tasks name a decision with `after:T-NNN`. Shown as `?` in a project
 whose Task List never uses `after:` - unknown, never zero.
 
+**Meeting Inbox**
+The meetings in a project's meetings folder (map key `meetings`) that have a recording
+or transcript but no minutes: meetings `/meeting-closeout` never ran on. Paired by the
+leading `YYMMDD` date - same day, then the nearest minutes up to `windowDays` later -
+never by matching file names. `atlas meetings --pending`, a `doctor --deep` warning and
+a Tyler Digest block. Report-only.
+
+**File Budget**
+A control file's limit (map key `fileBudgets`): a line count, or an age past which
+`## Done` items are due for pruning, plus the skill that fixes a breach. A `doctor --deep`
+warning; never a status change.
+
 **Task Group**
 A longer scope - an audit, a revision round, a Revit plan - kept inside the Task List as
 its own `###` group, each task's agent prompt indented under its line. Replaces the scoped

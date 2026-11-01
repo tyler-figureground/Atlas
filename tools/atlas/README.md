@@ -17,7 +17,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 |---|---|
 | `atlas [--drive D]` | Interactive operations console: inspect, filter, sort, create, clean, and conform. `--drive` skips the drive picker |
 | `atlas doctor [--drive D] [--json]` | Drive-wide read-only conformance report |
-| `atlas doctor --deep NAME [--json]` | The opt-in deep pass: walk below one project's root. One enumeration per folder gathers Receipt Rule matches, over-long paths already on disk (Win32's 260 - dirs flag at 259, the enumeration suffix needs the extra room), deep unreadable folders, and the item count against the 400,000 shared-drive cap. Enumeration only, depth-guarded; `--deep --all` pays the full drive walk by flag, never by default |
+| `atlas doctor --deep NAME [--json]` | The opt-in deep pass: walk below one project's root. One enumeration per folder gathers Receipt Rule matches, over-long paths already on disk (Win32's 260 - dirs flag at 259, the enumeration suffix needs the extra room), deep unreadable folders, and the item count against the 400,000 shared-drive cap. Enumeration only, depth-guarded; `--deep --all` pays the full drive walk by flag, never by default. With the map's `meetings` and `fileBudgets` keys it also warns on meetings with no minutes and on control files past their budget (reading only the budgeted files); warnings never change the status or the exit code |
 | `atlas lint [--drive D] [--json]` | Validate the map file itself |
 | `atlas new --name NAME --street STREET --city CITY --state ST --zip ZIP --use-case USE_CASE --billing-contact ID_OR_EMAIL [...]` | Create a complete mapped project |
 | `atlas contacts list [--drive D] [--json]` | List reusable drive contacts |
@@ -36,7 +36,8 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 | `atlas conform --revert FILE [--apply]` | Preview or undo an applied conform from the `--json` manifest it printed; refuses a manifest from another drive or one whose paths leave the project |
 | `atlas runs (--project NAME \| --all) [--days N] [--apply]` | List agent runs; zip the closed ones into `.agent/archive/` (ADR 0011). Preview by default |
 | `atlas archive NAME [--apply]` / `atlas unarchive [NAME] [--revert FILE] [--apply]` | Archive a project to the map's `archiveRoot` (default `_Archived Projects`), stamping its project-index row; bring one back by name, or undo from the JSON manifest (ADR 0019). Preview by default |
-| `atlas tyler [--write]` | Tyler digest: open errands from every project's `TYLER.md` + `DECISION` blockers from `TASKS.md` (ADR 0016). Opens with the Action Queue (send now, decide ranked by tasks blocked, due, oldest; 15 lines). Prints; `--write` regenerates `_tools\TYLER-TODAY.md` |
+| `atlas tyler [--write]` | Tyler digest: open errands from every project's `TYLER.md` + `DECISION` blockers from `TASKS.md` (ADR 0016). Opens with the Action Queue (send now, decide ranked by tasks blocked, due, oldest; 15 lines), then meetings not closed out when the map has a `meetings` rule. Prints; `--write` regenerates `_tools\TYLER-TODAY.md` |
+| `atlas meetings [NAME] [--pending] [--json]` | Meeting Inbox (map key `meetings`): each project's recorded meetings and the minutes that close them, paired by the leading `YYMMDD` date (same day, then up to `windowDays` later). `--pending` lists only meetings with no minutes - the queue a scheduled `/meeting-closeout` works from. Read-only; exit 0 whatever it finds, 2 when the map has no rule |
 
 TUI keys:
 

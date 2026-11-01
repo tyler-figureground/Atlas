@@ -19,10 +19,11 @@ decision in a project that never writes ``after:`` blocks ``?``, never ``0``.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 
+from .meetings import MeetingScan, scan_meetings
 from .scan import DriveInventory
 from .tasks import TaskItem, normalize_id, parse_open
 
@@ -55,6 +56,8 @@ class ProjectDigest:
     # Whether this project's TASKS.md uses ``after:`` at all; without it a
     # decision's blocked count is unknown rather than zero.
     tracks_blocks: bool = False
+    # The Meeting Inbox (roadmap F4): None when the map has no meetings rule.
+    meetings: MeetingScan | None = None
 
     def blocks(self, decision: TaskItem) -> int | None:
         if not decision.id:
@@ -67,6 +70,7 @@ class ProjectDigest:
 class Digest:
     drive: str
     projects: tuple[ProjectDigest, ...] = ()
+    meetings_tracked: bool = False
 
     @property
     def errand_count(self) -> int:
@@ -156,11 +160,16 @@ def _project(name: str, tyler_text: str | None, tasks_text: str | None) -> Proje
 
 def collect(inventory: DriveInventory) -> Digest:
     # Sorted by name: scan order is the filesystem's, which differs by OS.
-    projects = [
-        _project(inv.name, _read(inv.path / TYLER_PATH), _read(inv.path / TASKS_PATH))
-        for inv in sorted(inventory.projects, key=lambda p: p.name)
-    ]
-    return Digest(drive=inventory.map.drive, projects=tuple(projects))
+    rule = inventory.map.meetings
+    projects = []
+    for inv in sorted(inventory.projects, key=lambda p: p.name):
+        project = _project(inv.name, _read(inv.path / TYLER_PATH),
+                           _read(inv.path / TASKS_PATH))
+        if rule is not None:
+            project = replace(project, meetings=scan_meetings(inv.path, rule))
+        projects.append(project)
+    return Digest(drive=inventory.map.drive, projects=tuple(projects),
+                  meetings_tracked=rule is not None)
 
 
 def _undated_last(entry: QueueEntry) -> tuple[int, int]:
@@ -275,6 +284,45 @@ def _render_queue(digest: Digest, today: date) -> list[str]:
     return lines
 
 
+def meeting_line(project: ProjectDigest) -> str | None:
+    """``64th Lane: 2 meetings not closed out (1 not transcribed) - oldest
+    2026-10-14``, or None when there is nothing to say."""
+    scan = project.meetings
+    if scan is None:
+        return None
+    parts = []
+    pending = scan.pending
+    if pending:
+        noun = "meeting" if len(pending) == 1 else "meetings"
+        text = f"{len(pending)} {noun} not closed out"
+        untranscribed = sum(1 for m in pending if not m.transcribed)
+        if untranscribed:
+            text += f" ({untranscribed} not transcribed)"
+        oldest = scan.oldest_pending()
+        if oldest is not None:
+            text += f" - oldest {oldest.isoformat()}"
+        parts.append(text)
+    if scan.unreadable:
+        parts.append(f"{len(scan.unreadable)} meetings folder(s) could not be read")
+    if not parts:
+        return None
+    return f"**{short_name(project.name)}**: " + "; ".join(parts)
+
+
+def _render_meetings(digest: Digest) -> list[str]:
+    if not digest.meetings_tracked:
+        return []
+    lines = ["", "## Meetings not closed out", ""]
+    found = [line for p in digest.projects if (line := meeting_line(p))]
+    if not found:
+        lines.append("Every recorded meeting has minutes.")
+        return lines
+    lines += [f"- {line}" for line in found]
+    lines += ["", "Run `/meeting-closeout` on each (or queue it for nightshift); "
+                  "`atlas meetings --pending` lists the files."]
+    return lines
+
+
 def render(digest: Digest, *, generated: date | None = None) -> str:
     generated = generated or date.today()
     lines = [
@@ -287,6 +335,7 @@ def render(digest: Digest, *, generated: date | None = None) -> str:
         f"**{digest.errand_count} errands / {digest.decision_count} decisions blocking production**",
     ]
     lines += _render_queue(digest, generated)
+    lines += _render_meetings(digest)
     for project in digest.projects:
         lines += ["", f"## {project.name}"]
         if project.tyler_missing:

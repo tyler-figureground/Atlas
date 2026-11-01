@@ -88,6 +88,38 @@ class ReceiptRule:
 
 
 @dataclass(frozen=True)
+class MeetingRule:
+    """How the Meeting Inbox finds meetings and their minutes (roadmap F4).
+
+    ``dir`` is the project-relative meetings folder, walked to ``max_depth``
+    levels. A file matching ``transcripts`` or ``recordings`` (fnmatch globs,
+    case-insensitive) is part of a meeting; one matching ``minutes`` is its
+    closeout. Meetings and minutes pair by the leading YYMMDD date: same day
+    first, then the nearest minutes up to ``window_days`` later. Report-only:
+    the finding is a warning and never changes a Filing State or status.
+    """
+
+    dir: str
+    transcripts: tuple[str, ...]
+    recordings: tuple[str, ...]
+    minutes: tuple[str, ...]
+    window_days: int = 3
+    max_depth: int = 3
+
+
+@dataclass(frozen=True)
+class FileBudget:
+    """One control-file budget (roadmap F6): a project-relative file with a
+    line ceiling, a Done-section age ceiling, or both, and the skill that
+    fixes a breach. Report-only, deep pass only, never a status change."""
+
+    file: str
+    fix: str
+    max_lines: int | None = None
+    done_max_age_days: int | None = None
+
+
+@dataclass(frozen=True)
 class DriveMap:
     path: Path
     drive: str
@@ -107,6 +139,10 @@ class DriveMap:
     # Machine-receipt rules for the opt-in deep pass (ticket 31). Inert in the
     # default root-only report; see ReceiptRule.
     receipt_rules: tuple[ReceiptRule, ...] = ()
+    # Report-only deep-pass checks (roadmap F4, F6). Absent from the map means
+    # the check is off: no folder name or limit is hard-coded here.
+    meetings: MeetingRule | None = None
+    file_budgets: tuple[FileBudget, ...] = ()
 
     @property
     def section_ids(self) -> tuple[str, ...]:
@@ -272,7 +308,75 @@ def load_map(path: Path) -> DriveMap:
         templates=_parse_templates(raw.get("templates", []), path),
         tolerated=_parse_tolerated(raw.get("tolerated", []), path),
         receipt_rules=_parse_receipt_rules(raw.get("receiptRules", []), path, workspace),
+        meetings=_parse_meetings(raw.get("meetings"), path),
+        file_budgets=_parse_file_budgets(raw.get("fileBudgets", []), path),
     )
+
+
+_MEETING_KEYS = ("note", "dir", "transcripts", "recordings", "minutes",
+                 "windowDays", "maxDepth")
+_BUDGET_KEYS = ("note", "file", "fix", "maxLines", "doneMaxAgeDays")
+
+
+def _positive_int(value: object, where: str, path: Path) -> int:
+    # bool is an int subclass; `true` is never a count.
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise MapError(f"{where} must be a positive whole number: {path}")
+    return value
+
+
+def _parse_meetings(raw: object, path: Path) -> MeetingRule | None:
+    """Strictly: a malformed rule refuses the map rather than silently
+    reporting every meeting closed (or none)."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise MapError(f"meetings must be an object: {path}")
+    unknown = sorted(set(raw) - set(_MEETING_KEYS))
+    if unknown:
+        raise MapError(f"meetings: unknown key {', '.join(repr(k) for k in unknown)}: {path}")
+    folder = _safe_target(raw.get("dir"), "meetings 'dir'", path).replace("\\", "/").strip("/")
+    globs = {key: _string_list(raw.get(key), f"meetings {key}", path)
+             for key in ("transcripts", "minutes")}
+    recordings = (_string_list(raw["recordings"], "meetings recordings", path)
+                  if "recordings" in raw else ())
+    return MeetingRule(
+        dir=folder,
+        transcripts=globs["transcripts"],
+        recordings=recordings,
+        minutes=globs["minutes"],
+        window_days=(_positive_int(raw["windowDays"], "meetings windowDays", path)
+                     if "windowDays" in raw else 3),
+        max_depth=(_positive_int(raw["maxDepth"], "meetings maxDepth", path)
+                   if "maxDepth" in raw else 3),
+    )
+
+
+def _parse_file_budgets(raw: object, path: Path) -> tuple[FileBudget, ...]:
+    if not isinstance(raw, list):
+        raise MapError(f"fileBudgets must be a list: {path}")
+    out: list[FileBudget] = []
+    for index, entry in enumerate(raw):
+        where = f"fileBudgets[{index}]"
+        if not isinstance(entry, dict):
+            raise MapError(f"{where} is not an object: {path}")
+        unknown = sorted(set(entry) - set(_BUDGET_KEYS))
+        if unknown:
+            raise MapError(f"{where}: unknown key {', '.join(repr(k) for k in unknown)}: {path}")
+        file = _safe_target(entry.get("file"), f"{where} 'file'", path).replace("\\", "/").strip("/")
+        fix = entry.get("fix")
+        if not isinstance(fix, str) or not fix.strip():
+            raise MapError(f"{where} needs a 'fix' naming the skill that repairs it: {path}")
+        max_lines = (_positive_int(entry["maxLines"], f"{where} maxLines", path)
+                     if "maxLines" in entry else None)
+        done_age = (_positive_int(entry["doneMaxAgeDays"], f"{where} doneMaxAgeDays", path)
+                    if "doneMaxAgeDays" in entry else None)
+        if max_lines is None and done_age is None:
+            raise MapError(f"{where} needs maxLines or doneMaxAgeDays - a budget "
+                           f"with no limit checks nothing: {path}")
+        out.append(FileBudget(file=file, fix=fix, max_lines=max_lines,
+                              done_max_age_days=done_age))
+    return tuple(out)
 
 
 def _archive_root(value: object, path: Path) -> str:

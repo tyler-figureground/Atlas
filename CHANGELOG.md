@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-10-31
+
+### Added
+
+- **Meeting Inbox (roadmap F4).** A recording or transcript in the meetings folder with no minutes is a meeting `/meeting-closeout` never ran on. `atlas meetings [NAME] [--pending] [--json]` lists every meeting and whether it is closed; `doctor --deep` warns per pending meeting; the Tyler digest gains a **Meetings not closed out** block (`64th Lane: 2 meetings not closed out (1 not transcribed) - oldest 2026-10-14`) and `--json` gains `meetings_pending`. Pairing goes by the leading `YYMMDD` date, not the file name: same day first, then the nearest minutes up to `windowDays` later; one minutes document in .md, .docx and .pdf closes one meeting; Dicta's raw transcript and its renamed copy are one meeting; dot folders (`.dicta`) are skipped; an undated meeting pairs only by name and is never given a guessed date.
+- **Control-file budgets (roadmap F6).** `doctor --deep` warns when a control file passes its line budget or its `## Done` section holds items older than the age limit (the first `YYYY-MM-DD` on the item's line), naming the skill that fixes it. A missing file is skipped (that is the control-plane finding); an unreadable one is reported.
+- **Map keys `meetings` and `fileBudgets`** (both optional; absent means off), parsed strictly - a malformed rule refuses the map. Map lint: `MEETINGS-DIR` (the folder is not under a canonical section), `DUP-BUDGET`. Upgrade note: add both keys to the drive map to turn the checks on.
+
+Both checks are report-only: never a Filing State, a status, `actionable`, or doctor's exit code. Doctor's `--json` gains `meetings` and `budgets` per project, null when the deep pass did not run.
+
 ## [0.22.0] - 2026-10-31
 
 ### Added
