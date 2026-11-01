@@ -296,7 +296,8 @@ def test_search_json_names_its_fields(fixture_drive, capsys):
     assert payload["unreadable"] == []
     hit = next(r for r in payload["results"] if r["path"] == "260813_Alpha/01 Model")
     assert hit == {"project": "260813_Alpha", "path": "260813_Alpha/01 Model",
-                   "name": "01 Model", "kind": "folder", "archived": False}
+                   "name": "01 Model", "kind": "folder", "archived": False,
+                   "crm_id": None}
     kinds = {r["kind"] for r in payload["results"]}
     assert kinds <= {"folder", "file"}
 

@@ -35,6 +35,9 @@ Required Contact representing the client relationship on a Project. Defaults to 
 **Contact Snapshot**  
 Copy of a Contact's details stored in the Project dossier at creation or explicit Project edit. Preserves project history when the shared Contact later changes. Shared Contact edits never rewrite snapshots automatically.
 
+**CRM Id**  
+The CRM's stable Project id, kept in `PROJECT.md` as `crm_id`. Links one Project to one CRM Project. Written once by `atlas project link` or `atlas new --crm-id`; never changed by a retry. Blank means unlinked.
+
 **Project Update**  
 Explicit correction of an existing Project's intake fields. Address or Description changes may derive a new folder name; Atlas previews and confirms that rename, rejects collisions, and updates the dossier and project index together.
 

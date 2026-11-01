@@ -234,7 +234,9 @@ def _contact_front_matter(role: str, contact: ContactSnapshot) -> list[str]:
     ]
 
 
-def project_md_lines(m: DriveMap, folder_name: str, intake: ResolvedProjectIntake) -> list[str]:
+def project_md_lines(
+    m: DriveMap, folder_name: str, intake: ResolvedProjectIntake, *, crm_id: str = ""
+) -> list[str]:
     name = intake.project_name
     desc = intake.description
     created = intake.request.created
@@ -255,6 +257,10 @@ def project_md_lines(m: DriveMap, folder_name: str, intake: ResolvedProjectIntak
     ]
     lines += _contact_front_matter("billing", intake.billing_contact)
     lines += _contact_front_matter("client", intake.client_contact)
+    if crm_id:
+        # Only a project the CRM created carries the key; blank means unknown,
+        # so an unlinked project has no line rather than an empty one.
+        lines.append(f"crm_id: {_yaml(crm_id)}")
     lines += FRONT_MATTER_KEYS
     lines += [
         "",

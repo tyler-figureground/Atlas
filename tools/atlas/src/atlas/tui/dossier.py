@@ -50,6 +50,8 @@ def dossier_lines(record: ProjectRecord) -> list[str]:
     if intake.description:
         lines.append(f"  Descriptor  {intake.description}")
     lines.append(f"  Created     {intake.created:%Y-%m-%d}")
+    if record.crm_id:
+        lines.append(f"  CRM id      {record.crm_id}")
     lines.append("")
     lines.extend(_contact_lines("Billing", record.billing_contact))
     lines.append("")

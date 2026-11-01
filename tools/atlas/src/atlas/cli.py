@@ -8,8 +8,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from . import __version__
@@ -63,7 +64,9 @@ from .core.taskqueue import PARKED, TASKS_PATH, next_task, task_dict
 from .core.taskqueue import STATES as QUEUE_STATES
 from .core.taskqueue import collect as collect_queue
 from .core.permits import scan_dict as permit_scan_dict
-from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
+from .core.ops import (
+    OpsError, add_sections, append_log, find_empty_dirs, new_project, remove_empty_dirs,
+)
 from .core.pdfexport import PdfError, export_pdf
 from .core.deep import BUDGET_WARN_FRACTION, scan_deep
 from .core.refsets import (
@@ -81,9 +84,13 @@ from .core.project_data import (
     ProjectDataError,
     ProjectUpdatePlan,
     ProjectUpdateResult,
+    apply_crm_link,
     apply_project_update,
+    check_crm_id,
     load_project_record,
+    plan_crm_link,
     preview_project_update,
+    read_crm_id,
 )
 from .core.scan import (
     DEFAULT_MOUNT_ROOT,
@@ -553,9 +560,28 @@ def cmd_contacts_edit(args: argparse.Namespace) -> int:
     return 0
 
 
+def _created_date(value: str | None) -> date:
+    """``--date YYMMDD`` as a date; today when absent. A bad date is an error."""
+    if value is None:
+        return date.today()
+    if re.fullmatch(r"\d{6}", value) is None:
+        raise UsageError(f"--date must be YYMMDD (six digits), got {value!r}")
+    try:
+        parsed = datetime.strptime(value, "%y%m%d").date()
+    except ValueError:
+        raise UsageError(f"--date {value!r} is not a real calendar date (YYMMDD)") from None
+    if parsed.year < 2000:
+        # strptime reads 69-99 as 19xx; no studio project predates 2000.
+        raise UsageError(f"--date {value!r} reads as {parsed.year}; use a date from 2000 on")
+    return parsed
+
+
 def cmd_new(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
     drive_map = load_map(find_map(root))
+    created = _created_date(args.date)
+    if args.crm_id is not None:
+        check_crm_id(args.crm_id)   # an empty --crm-id is an error, not "unlinked"
     try:
         directory = load_contacts(root)
         billing = find_contact(directory, args.billing_contact)
@@ -578,8 +604,9 @@ def cmd_new(args: argparse.Namespace) -> int:
             billing_contact_id=billing.id,
             client_contact_id=client.id,
             description=args.desc or "",
+            created=created,
         )
-        result = new_project(root, drive_map, intake)
+        result = new_project(root, drive_map, intake, crm_id=args.crm_id or "")
     except (ContactError, IntakeError, OpsError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -598,6 +625,8 @@ def cmd_new(args: argparse.Namespace) -> int:
                     "use_case_category": result.intake.project_use_case.category,
                     "billing_contact_id": result.intake.billing_contact.id,
                     "client_contact_id": result.intake.client_contact.id,
+                    "created_date": created.isoformat(),
+                    "crm_id": args.crm_id or None,
                     "mcp": ({"status": result.mcp.status, "note": result.mcp.note}
                             if result.mcp else None),
                 }
@@ -610,6 +639,8 @@ def cmd_new(args: argparse.Namespace) -> int:
         print(f"use case: {result.intake.project_use_case.display}")
         print(f"billing: {result.intake.billing_contact.full_name}")
         print(f"client:  {result.intake.client_contact.full_name}")
+        if args.crm_id:
+            print(f"crm id:  {args.crm_id}")
         print(f"seed:    {', '.join(result.seeded)}")
         if result.templates:
             print(f"files:   {', '.join(result.templates)}")
@@ -836,6 +867,58 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         print(f"use case: {result.record.intake.project_use_case.display}")
         print(f"billing: {result.record.billing_contact.full_name}")
         print(f"client:  {result.record.client_contact.full_name}")
+    return 0
+
+
+def cmd_project_link(args: argparse.Namespace) -> int:
+    """Link a project to its CRM Project by writing ``crm_id`` (ADR 0001).
+
+    Idempotent: the same id again changes nothing and exits 0. A different
+    existing id exits 2 - relinking is a person's call, never a retry's.
+    """
+    root = _resolve_drive(args.drive)
+    drive_map = load_map(find_map(root))
+    project = _resolve_project(root, args.folder)
+    plan = plan_crm_link(project, args.crm_id, project_file=drive_map.project_file)
+
+    def payload(applied: bool) -> dict[str, object]:
+        return {
+            "folder": project.name,
+            "path": str(project),
+            "crm_id": plan.crm_id,
+            "previous_crm_id": plan.previous or None,
+            "changed": plan.changed,
+            "applied": applied,
+        }
+
+    if not plan.changed or args.dry_run:
+        if args.json:
+            print(json.dumps(payload(False), ensure_ascii=False))
+        elif not plan.changed:
+            print(f"already linked: {project.name} -> {plan.crm_id}")
+        else:
+            print("dry run: no changes made")
+            print(f"link:    {project.name} -> {plan.crm_id}")
+        return 0
+    if not args.yes:
+        if args.json or not sys.stdin.isatty():
+            print("error: project link requires --yes in non-interactive mode; "
+                  "no changes made", file=sys.stderr)
+            return 2
+        print(f"link: {project.name} -> {plan.crm_id}")
+        if input("Type yes to write crm_id (anything else cancels): ").strip().casefold() != "yes":
+            print("cancelled: no changes made")
+            return 1
+    apply_crm_link(plan)
+    try:
+        append_log(root, f"[{project.name}] project link: crm_id {plan.crm_id}")
+    except OSError as error:
+        print(f"warning: linked, but the Atlas log could not be written: {error}",
+              file=sys.stderr)
+    if args.json:
+        print(json.dumps(payload(True), ensure_ascii=False))
+    else:
+        print(f"linked: {project.name} -> {plan.crm_id}")
     return 0
 
 
@@ -1588,6 +1671,17 @@ def cmd_search(args: argparse.Namespace) -> int:
 
     archived_note = f" ({result.archived} archived)" if result.archived else ""
     if args.json:
+        # Each hit's project crm_id, read once per project and only for the
+        # projects with hits - never a read of every dossier on the drive.
+        crm_ids: dict[str, str | None] = {}
+
+        def crm_id_of(hit) -> str | None:
+            folder = hit.root or hit.project
+            if folder not in crm_ids:
+                crm_ids[folder] = read_crm_id(
+                    root / folder, project_file=drive_map.project_file) or None
+            return crm_ids[folder]
+
         payload: dict[str, object] = {
             "drive": drive_map.drive,
             "query": args.query,
@@ -1597,7 +1691,8 @@ def cmd_search(args: argparse.Namespace) -> int:
             "archived": result.archived,
             "results": [{"project": hit.project, "path": hit.path,
                          "name": hit.name, "kind": hit.kind,
-                         "archived": hit.archived}
+                         "archived": hit.archived,
+                         "crm_id": crm_id_of(hit)}
                         for hit in result.hits],
             "unreadable": [{"path": path, "error": why}
                            for path, why in index.unreadable],
@@ -1767,6 +1862,7 @@ def cmd_dossier(args: argparse.Namespace) -> int:
             "use_case_category": intake.project_use_case.category,
             "description": intake.description,
             "created": intake.created.isoformat(),
+            "crm_id": record.crm_id or None,
             "billing_contact": snapshot_dict(record.billing_contact),
             "client_contact": snapshot_dict(record.client_contact),
             "decisions": {"count": record.decisions.count,
@@ -2202,6 +2298,19 @@ def main(argv: list[str] | None = None) -> int:
         help="short descriptor; use an empty value to clear",
     )
     project_edit.set_defaults(fn=cmd_project_edit)
+    project_link = project_commands.add_parser(
+        "link", help="link a project to its CRM Project (writes crm_id)")
+    project_link.add_argument("folder", help="project folder name")
+    project_link.add_argument("--crm-id", required=True, help="the CRM's Project id")
+    project_link.add_argument(
+        "--drive", help="drive root (default: walk up from cwd, else auto-discover)")
+    project_link.add_argument(
+        "--json", action="store_true", help="machine-readable output; never prompts")
+    project_link.add_argument("--yes", action="store_true",
+                              help="confirm a non-interactive link")
+    project_link.add_argument("--dry-run", action="store_true",
+                              help="report what would change without writing")
+    project_link.set_defaults(fn=cmd_project_link)
 
     refs = sub.add_parser("refs", help="reference sets: list them, check a draft for leaks (read-only)")
     refs.add_argument("--root", help="reference sets folder (default: $ATLAS_REFERENCE_SETS, "
@@ -2268,6 +2377,13 @@ def main(argv: list[str] | None = None) -> int:
         "--client-contact", help="contact ID or email (default: billing contact)"
     )
     sub.choices["new"].add_argument("--desc", default="", help="short descriptor (e.g. ADU, Renovation)")
+    sub.choices["new"].add_argument(
+        "--date", help="creation date YYMMDD for the folder prefix and Created (default: today)")
+    sub.choices["new"].add_argument(
+        "--crm-id", help="the CRM Project id to record as crm_id in PROJECT.md")
+    sub.choices["new"].add_argument(
+        "--yes", action="store_true",
+        help="accepted for scripted callers; new never prompts")
     sub.choices["add"].add_argument("--project", required=True, help="project folder name")
     sub.choices["add"].add_argument("--section", action="append", required=True,
                                     help="'NN Section' or 'NN Section/Child' (repeatable)")

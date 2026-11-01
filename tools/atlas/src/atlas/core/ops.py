@@ -139,7 +139,18 @@ def _resolve_intake(drive_root: Path, request: ProjectIntake) -> ResolvedProject
         raise OpsError(str(error)) from error
 
 
-def new_project(drive_root: Path, m: DriveMap, request: ProjectIntake) -> NewProjectResult:
+def new_project(
+    drive_root: Path, m: DriveMap, request: ProjectIntake, *, crm_id: str = ""
+) -> NewProjectResult:
+    """Create one project. ``crm_id`` links it to the CRM Project that asked
+    for it (ADR 0001 amendment); validated before anything is created."""
+    if crm_id:
+        from .project_data import ProjectDataError, check_crm_id
+
+        try:
+            check_crm_id(crm_id)
+        except ProjectDataError as error:
+            raise OpsError(str(error)) from error
     resolved = _resolve_intake(drive_root, request)
     name = clean_name_part(resolved.project_name)
     desc = clean_name_part(resolved.description)
@@ -206,7 +217,7 @@ def new_project(drive_root: Path, m: DriveMap, request: ProjectIntake) -> NewPro
 
         if not create_crlf_no_bom(
             project / m.project_file,
-            project_md_lines(m, folder_name, resolved),
+            project_md_lines(m, folder_name, resolved, crm_id=crm_id),
         ):
             raise OpsError(f"{m.project_file} appeared while creating the project; left unchanged")
         mkdir_below(project, m.decisions_dir)
