@@ -72,6 +72,12 @@ prompt sits indented under its line in a `text` fence, and anything shared by th
 7. Close with evidence: move to **Done** with date + receipt link, update
    `.agent/handoff/CURRENT.md`, bump the file's `updated:`.
 
+Across every project at once (a scheduled run, or "what's next anywhere"):
+`atlas tasks --next --lane AGENT --json` names the same task this rule would pick, with
+its project and `tasks_file`; then claim it in that file as in step 3. `atlas tasks`
+lists every open task's state (`pickable`, `blocked`, `claimed`, `stale-claim`,
+`decision`, `waiting`); a `stale-claim` is reported there, never released by Atlas.
+
 ## Adding from meeting minutes
 
 Each action item goes to exactly one list, linked to the minutes:

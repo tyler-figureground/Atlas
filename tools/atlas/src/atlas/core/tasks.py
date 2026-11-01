@@ -21,7 +21,7 @@ source. Bare digits outside a link never date a line: part numbers look like dat
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from urllib.parse import unquote
 
@@ -44,6 +44,9 @@ _LINK = re.compile(r"\]\((?:<(?P<angle>[^>]+)>|(?P<target>[^)\s]+))\)")
 _PATHLIKE = re.compile(r"[/\\]|\.[A-Za-z0-9]{1,5}$")
 _TICKS = re.compile(r"`(?P<path>[^`]+)`")
 _YYMMDD = re.compile(r"^(\d{2})(\d{2})(\d{2})(?=[ _\-.]|$)")
+_FENCE = re.compile(r"^\s*(?:[-*]\s+)?```")
+# An indented ```text fence opening under a task line is its prompt.
+_PROMPT = re.compile(r"^\s+(?:[-*]\s+)?```text\b")
 
 # Item text runs long on real lists (211 Centre lines carry full audit detail);
 # views scan, they do not replace the list, so bodies are clipped.
@@ -62,6 +65,13 @@ class TaskItem:
     after: tuple[str, ...] = ()
     ready: str = ""
     source_date: date | None = None
+    # An agent prompt sits indented under the line in a ```text fence (ADR 0023).
+    prompt: bool = False
+
+    @property
+    def claimed_on(self) -> date | None:
+        """The date in ``claimed YYYY-MM-DD by <name>``, when there is a claim."""
+        return _iso(re.search(_ISO, self.claim)) if self.claim else None
 
     @property
     def since(self) -> date | None:
@@ -163,18 +173,38 @@ def parse_open(text: str, *, lane: str | None = None) -> tuple[TaskItem, ...]:
     """Open checkbox items before ``## Done``; ``lane`` keeps only that lane tag."""
     items: list[TaskItem] = []
     section = ""
+    # The last item kept, while the lines below it are still its own (indented
+    # or blank); an indented ```text fence there is its prompt.
+    under: int | None = None
+    fenced = False
     for line in text.splitlines():
+        # Inside a code fence nothing is a task or a heading: a prompt may quote
+        # "- [ ]" lines of its own.
+        if _FENCE.match(line):
+            if not fenced and under is not None and _PROMPT.match(line):
+                items[under] = replace(items[under], prompt=True)
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
         heading = _HEADING.match(line)
         if heading:
+            under = None
             section = heading.group("name")
             if section.lower().startswith("done"):
                 break
             continue
         checkbox = _CHECKBOX.match(line)
         if not checkbox:
+            if not line.strip():
+                continue
+            if line[:1] not in (" ", "\t"):
+                under = None
             continue
         body = checkbox.group("body").strip()
         if lane and f"`{lane}`" not in body:
+            under = None
             continue
         items.append(_item(body, section))
+        under = len(items) - 1
     return tuple(items)
