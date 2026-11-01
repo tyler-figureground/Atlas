@@ -230,6 +230,7 @@ def test_header_variants_and_subtables():
                    "status": "submitted 2026-10-01", "round": "Round 2"}
     assert build_application(row, {}, {}).round == 2
     assert build_application({"status": "x", "round": "4th"}, {}, {}).round == 4
+    assert build_application({"status": "x", "round": "2026-09-01"}, {}, {}).round is None
 
 
 def test_a_future_date_in_status_never_hides_the_age():

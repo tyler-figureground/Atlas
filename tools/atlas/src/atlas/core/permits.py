@@ -50,7 +50,9 @@ COURT = {
 _TERMS = sorted(COURT, key=len, reverse=True)
 
 ROUND_FOLDER = re.compile(r"^R(\d+)_(\d{6})(?!\d)")
-_ROUND_CELL = re.compile(r"^(?:round\s*)?R?(\d+)", re.IGNORECASE)
+# Up to three digits, never followed by another digit or "-": a date typed
+# into the Round cell is not round 2026.
+_ROUND_CELL = re.compile(r"^(?:round\s*)?R?(\d{1,3})(?![\d-])", re.IGNORECASE)
 # A folder name that is trying to be a round (R2 ..., V1 Submission); other
 # folders (Working, Archive) are not round folders and are not flagged.
 _ROUND_LIKE = re.compile(r"^[RV]\d", re.IGNORECASE)
