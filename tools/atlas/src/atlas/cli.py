@@ -1336,7 +1336,7 @@ def cmd_permits(args: argparse.Namespace) -> int:
         _resolve_project(root, args.project)
         projects = [p for p in projects if p.name == args.project]
     today = date.today()
-    rows = [(inv, scan_permits(inv.path, rule)) for inv in projects]
+    rows = [(inv, scan_permits(inv.path, rule, today)) for inv in projects]
     if args.json:
         print(json.dumps([{"project": inv.name, **permit_scan_dict(scan, today)}
                           for inv, scan in rows], indent=2))
@@ -1349,6 +1349,8 @@ def cmd_permits(args: argparse.Namespace) -> int:
         print(f"\n{inv.name}")
         if not scan.register_present:
             print(f"    register missing: {scan.register}")
+        elif not scan.register_readable:
+            print(f"    register unreadable - applications unknown: {scan.register}")
         for a in scan.applications:
             label = " ".join(x for x in (a.agency, a.number) if x and x != "-")
             print(f"    [{a.court:6}] {label}: {describe(a, today)}")

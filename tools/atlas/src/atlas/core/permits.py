@@ -50,14 +50,20 @@ COURT = {
 _TERMS = sorted(COURT, key=len, reverse=True)
 
 ROUND_FOLDER = re.compile(r"^R(\d+)_(\d{6})(?!\d)")
-_ROUND_CELL = re.compile(r"^R?(\d+)\b", re.IGNORECASE)
+_ROUND_CELL = re.compile(r"^(?:round\s*)?R?(\d+)", re.IGNORECASE)
+# A folder name that is trying to be a round (R2 ..., V1 Submission); other
+# folders (Working, Archive) are not round folders and are not flagged.
+_ROUND_LIKE = re.compile(r"^[RV]\d", re.IGNORECASE)
 _ISO = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
 _APPLICATIONS = re.compile(r"^##\s+Applications\b", re.IGNORECASE)
-_HEADING = re.compile(r"^#{1,2}\s")
+# Any heading ends the Applications table: a ### subtable (contacts per
+# agency, say) is never read as applications.
+_HEADING = re.compile(r"^#+\s")
 _SEPARATOR = re.compile(r"^\|?\s*:?-{3,}")
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 
-# Header text (casefolded prefix) -> field.
+# Header text (casefolded prefix) -> field. "type" is tested first, so
+# "Permit type" is the type, never the number.
 _COLUMNS = (
     ("agency", "agency"),
     ("application", "number"),
@@ -102,6 +108,9 @@ class Round:
 class PermitScan:
     register: str
     register_present: bool = True
+    # False when the register exists but could not be read: its applications
+    # are unknown, never an empty list (ADR 0004).
+    register_readable: bool = True
     applications: tuple[Application, ...] = ()
     submissions: tuple[Round, ...] = ()
     comments: tuple[Round, ...] = ()
@@ -121,13 +130,17 @@ def _date6(digits: str) -> date | None:
         return None
 
 
-def latest_iso(text: str) -> date | None:
+def latest_iso(text: str, today: date | None = None) -> date | None:
+    """The latest ISO date in ``text``, ignoring any after ``today`` - a due
+    date in a status cell is not when the state began."""
     found: list[date] = []
     for match in _ISO.finditer(text):
         try:
-            found.append(date(int(match.group(1)), int(match.group(2)), int(match.group(3))))
+            when = date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
         except ValueError:
             continue
+        if today is None or when <= today:
+            found.append(when)
     return max(found) if found else None
 
 
@@ -166,8 +179,12 @@ def parse_register(text: str) -> list[dict[str, str]]:
             columns = []
             for header in _cells(line):
                 folded = header.casefold()
-                columns.append(next((f for prefix, f in _COLUMNS if folded.startswith(prefix)),
-                                    None))
+                if "type" in folded:
+                    name: str | None = "type"
+                else:
+                    name = next((f for prefix, f in _COLUMNS if folded.startswith(prefix)), None)
+                # Each field from one column only: the first claims it.
+                columns.append(name if name not in columns else None)
             continue
         if _SEPARATOR.match(line.strip()):
             continue
@@ -184,7 +201,7 @@ def _round_number(cell: str) -> int | None:
 
 
 def build_application(row: dict[str, str], submissions: dict[int, date],
-                      comments: dict[int, date]) -> Application:
+                      comments: dict[int, date], today: date | None = None) -> Application:
     status = row.get("status", "")
     word = status_word(status)
     court = COURT.get(word, UNKNOWN) if word else UNKNOWN
@@ -195,10 +212,10 @@ def build_application(row: dict[str, str], submissions: dict[int, date],
     elif number is not None and word == "comments" and number in comments:
         since, source = comments[number], "folder"
     if since is None:
-        since = latest_iso(status)
+        since = latest_iso(status, today)
         source = "status" if since else ""
     if since is None:
-        since = latest_iso(row.get("submitted", ""))
+        since = latest_iso(row.get("submitted", ""), today)
         source = "submitted" if since else ""
     return Application(
         agency=row.get("agency", ""), number=row.get("number", ""), type=row.get("type", ""),
@@ -234,7 +251,7 @@ def _list_rounds(base: Path, rel: str) -> tuple[list[Round], list[str], list[str
         if match and when is not None:
             rounds.append(Round(number=int(match.group(1)), date=when,
                                 folder=f"{rel}/{entry.name}"))
-        else:
+        elif _ROUND_LIKE.match(entry.name):
             misnamed.append(f"{rel}/{entry.name}")
     return rounds, misnamed, [], anything
 
@@ -247,7 +264,8 @@ def _by_round(rounds: list[Round]) -> dict[int, date]:
     return out
 
 
-def scan_permits(project: Path, rule: PermitRule) -> PermitScan:
+def scan_permits(project: Path, rule: PermitRule, today: date | None = None) -> PermitScan:
+    today = today or date.today()
     unreadable: list[str] = []
     try:
         raw = Path(long_path(project / rule.register)).read_bytes()
@@ -255,7 +273,7 @@ def scan_permits(project: Path, rule: PermitRule) -> PermitScan:
     except FileNotFoundError:
         text = None
     except OSError as exc:
-        return PermitScan(register=rule.register, unreadable=(
+        return PermitScan(register=rule.register, register_readable=False, unreadable=(
             f"{rule.register}  {type(exc).__name__}: {exc.strerror or exc}",))
 
     subs, sub_bad, sub_err, sub_any = _list_rounds(project, rule.submissions)
@@ -265,15 +283,20 @@ def scan_permits(project: Path, rule: PermitRule) -> PermitScan:
 
     rows = parse_register(text) if text is not None else []
     # Round folders carry no agency, so they can only date an application when
-    # exactly one row has a round: with two, R1 could be either one's.
-    with_round = [r for r in rows if (_round_number(r.get("round", "")) or 0) >= 1]
+    # exactly one row has a round (R0 included): with two, R1 could be either
+    # one's.
+    with_round = [r for r in rows if _round_number(r.get("round", "")) is not None]
     if len(with_round) != 1:
         sub_dates, com_dates = {}, {}
-    apps = tuple(build_application(r, sub_dates, com_dates) for r in rows)
+    apps = tuple(build_application(r, sub_dates, com_dates, today) for r in rows)
 
     # A missing register is not a finding here: doctor's control-plane check
     # already names it, and register_present carries it in every report.
     findings: list[str] = []
+    if text is None:
+        return PermitScan(register=rule.register, register_present=False,
+                          submissions=tuple(subs), comments=tuple(coms),
+                          misnamed=tuple(sub_bad + com_bad), unreadable=tuple(unreadable))
     folder_rounds = subs + coms
     if folder_rounds:
         newest = max(folder_rounds, key=lambda r: (r.number, r.date))
@@ -309,6 +332,7 @@ def scan_dict(scan: PermitScan, today: date) -> dict[str, object]:
     return {
         "register": scan.register,
         "register_present": scan.register_present,
+        "register_readable": scan.register_readable,
         "applications": [application_dict(a, today) for a in scan.applications],
         "submissions": [{"round": r.number, "date": r.date.isoformat(), "folder": r.folder}
                         for r in scan.submissions],

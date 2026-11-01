@@ -185,7 +185,8 @@ def test_round_folders_beside_an_empty_register_is_a_finding(tmp_path):
 def test_misnamed_round_folders_are_named_and_underscore_dot_skipped(tmp_path):
     scan = scan_permits(_project(tmp_path, folders=(
         "03 Submissions/V1 Submission", "03 Submissions/R2_261399",
-        "03 Submissions/_Working", "04 Comments & Responses/V1")), RULE)
+        "03 Submissions/_Working", "03 Submissions/Working",
+        "04 Comments & Responses/V1")), RULE)
     assert scan.misnamed == (f"{AHJ_DIR}/03 Submissions/R2_261399",
                              f"{AHJ_DIR}/03 Submissions/V1 Submission",
                              f"{AHJ_DIR}/04 Comments & Responses/V1")
@@ -197,11 +198,57 @@ def test_missing_register_is_missing_not_empty(tmp_path):
     assert scan.findings == ()      # doctor's control-plane check names it
 
 
-def test_unreadable_register_is_unreadable(tmp_path):
+def test_unreadable_register_is_unknown_not_empty(tmp_path):
     project = make_project(tmp_path, PROJECT)
     (project / RULE.register).mkdir(parents=True)
     scan = scan_permits(project, RULE)
     assert scan.unreadable and scan.unreadable[0].startswith(RULE.register)
+    assert scan.register_present and not scan.register_readable
+    assert permit_mode_lines(scan, TODAY)[0].startswith("Cannot read the AHJ register")
+    from atlas.core.permits import scan_dict
+    assert scan_dict(scan, TODAY)["register_readable"] is False
+
+
+def test_missing_register_beside_round_folders_is_not_an_empty_register(tmp_path):
+    scan = scan_permits(_project(tmp_path, register=None,
+                                 folders=("03 Submissions/R1_261001",)), RULE)
+    assert not scan.register_present and scan.findings == ()
+    assert [r.number for r in scan.submissions] == [1]
+
+
+def test_header_variants_and_subtables():
+    text = (
+        "## Applications\n\n"
+        "| Agency | Permit # | Permit type | Status | Round 2 |\n"
+        "|---|---|---|---|---|\n"
+        "| City | B-1 | Building | submitted 2026-10-01 | Round 2 |\n\n"
+        "### Contacts per agency\n\n"
+        "| Agency | Name |\n|---|---|\n| City | A. Person |\n"
+    )
+    (row,) = parse_register(text)
+    assert row == {"agency": "City", "number": "B-1", "type": "Building",
+                   "status": "submitted 2026-10-01", "round": "Round 2"}
+    assert build_application(row, {}, {}).round == 2
+    assert build_application({"status": "x", "round": "4th"}, {}, {}).round == 4
+
+
+def test_a_future_date_in_status_never_hides_the_age():
+    a = build_application({"status": "in review - filed 2026-09-01, response due 2026-11-30"},
+                          {}, {}, TODAY)
+    assert a.since == date(2026, 9, 1) and a.days(TODAY) == 60
+    b = build_application({"status": "submitted, due 2026-12-01", "submitted": "2026-10-01"},
+                          {}, {}, TODAY)
+    assert (b.since, b.since_source) == (date(2026, 10, 1), "submitted")
+
+
+def test_digest_names_applications_with_an_unclear_status(tmp_path):
+    odd = REGISTER.replace("issued 2026-08-03", "re-filed 2026-08-03")
+    drive = _drive(tmp_path)
+    (drive / PROJECT / RULE.register).write_text(odd, encoding="utf-8")
+    digest = collect(scan_drive(drive))
+    assert "**2267 Monticello** F26-00247: status unclear 89d (unrecognised status)" in \
+        permit_lines(digest, TODAY)
+    assert "0 closed, 1 status unclear." in render(digest, generated=TODAY)
 
 
 # --- map and lint ----------------------------------------------------------------

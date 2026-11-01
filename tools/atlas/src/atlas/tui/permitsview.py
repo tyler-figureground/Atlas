@@ -17,7 +17,7 @@ NO_RULE = "  The map has no 'permits' rule, so the permit tracker is off."
 
 
 def permit_mode_lines(scan: PermitScan, today: date) -> list[str]:
-    if scan.unreadable and not scan.register_present:
+    if not scan.register_readable:
         return ["Cannot read the AHJ register - permit status is unknown, not absent.",
                 *(f"  {line}" for line in scan.unreadable)]
     lines: list[str] = []

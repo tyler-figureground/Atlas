@@ -24,7 +24,17 @@ from datetime import date
 from pathlib import Path
 
 from .meetings import MeetingScan, scan_meetings
-from .permits import AHJ, CLOSED, FIELD, US, Application, PermitScan, describe, scan_permits
+from .permits import (
+    AHJ,
+    CLOSED,
+    FIELD,
+    UNKNOWN,
+    US,
+    Application,
+    PermitScan,
+    describe,
+    scan_permits,
+)
 from .scan import DriveInventory
 from .tasks import TaskItem, normalize_id, parse_open
 
@@ -354,8 +364,8 @@ def permit_lines(digest: Digest, today: date) -> list[str]:
         name = short_name(project.name)
         for a in scan.applications:
             days = a.days(today)
-            if a.court == US or (a.court == AHJ and days is not None and stuck is not None
-                                 and days > stuck):
+            if a.court in (US, UNKNOWN) or (a.court == AHJ and days is not None
+                                            and stuck is not None and days > stuck):
                 line = f"**{name}** {permit_label(a)}: {describe(a, today)}"
                 if a.court == US and a.next_action and a.next_action != "-":
                     nxt = a.next_action
@@ -379,10 +389,12 @@ def _render_permits(digest: Digest, today: date) -> list[str]:
         f"Nothing owed, nothing at an agency past {digest.permit_stuck_days} days."]
     apps = [a for p in digest.projects if p.permits for a in p.permits.applications]
     if apps:
-        counts = {c: sum(1 for a in apps if a.court == c) for c in (US, AHJ, FIELD, CLOSED)}
+        counts = {c: sum(1 for a in apps if a.court == c)
+                  for c in (US, AHJ, FIELD, CLOSED, UNKNOWN)}
+        unclear = f", {counts[UNKNOWN]} status unclear" if counts[UNKNOWN] else ""
         lines += ["", f"{len(apps)} applications in the AHJ registers: {counts[US]} we owe, "
                       f"{counts[AHJ]} at the agency, {counts[FIELD]} in inspections, "
-                      f"{counts[CLOSED]} closed. `atlas permits` lists them all."]
+                      f"{counts[CLOSED]} closed{unclear}. `atlas permits` lists them all."]
     return lines
 
 

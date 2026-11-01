@@ -447,7 +447,7 @@ def report_drive(inventory: DriveInventory, *,
                 meetings=scan_meetings(p.path, m.meetings) if m.meetings else None,
                 budgets=(scan_budgets(p.path, m.file_budgets, today or date.today())
                          if m.file_budgets else None),
-                permits=scan_permits(p.path, m.permits) if m.permits else None))
+                permits=scan_permits(p.path, m.permits, today) if m.permits else None))
         else:
             projects.append(report_project(p, inventory.map))
     return DriveReport(
