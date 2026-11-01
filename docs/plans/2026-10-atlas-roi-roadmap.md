@@ -405,3 +405,13 @@ console change, wheel to `_tools\atlas`, repin `Atlas.bat`, deploy log, HOW-TO u
   Still open from F4/F6 "done when": one supervised nightshift closeout, one supervised MPR
   split (both need a real pending meeting / Tyler's go). **Next: F3 permit tracker (ADR 0024
   first).**
+- 2026-10-31: **F3 done, narrowed** (PR #26, Atlas 0.24.0, map v4.4 `permits`, ADR 0024,
+  deployed: `_tools\logs\atlas-0.24.0-deploy-20261031-191258\`). The survey reversed F3's
+  premise: the 4 projects with live applications already keep full register rows, only
+  Monticello names rounds `R<n>_YYMMDD`, and no file carries an agency. So the register is
+  the source, folders date states and flag a stale register, and `--sync` is deferred - no
+  ADR 0012 exception. Live: 7 applications; Monticello BR26 at the County 50 days since R4;
+  we owe Pestoni (comments, 30 days), West Ln and San Vicente (preparing); Pestoni and West
+  Ln `V1`/`V2` folders flagged. Two review rounds: unreadable register read as empty; header,
+  future-date, unclear-status and round-cell edge cases. Still open from "done when": Tyler's
+  10-minute spot-check of the Permits block. **Next: F5 production queue (week 5).**
