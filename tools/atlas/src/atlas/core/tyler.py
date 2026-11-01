@@ -303,7 +303,7 @@ def meeting_line(project: ProjectDigest) -> str | None:
             text += f" - oldest {oldest.isoformat()}"
         parts.append(text)
     if scan.unreadable:
-        parts.append(f"{len(scan.unreadable)} meetings folder(s) could not be read")
+        parts.append(f"{len(scan.unreadable)} unreadable in the meetings folder")
     if scan.skipped:
         parts.append(f"{len(scan.skipped)} folder(s) past maxDepth not scanned")
     if not parts:

@@ -132,11 +132,21 @@ def test_stems_trim_only_a_trailing_transcript_or_minutes_word():
         "minutesreview": False, "transcriptofcall": True}
 
 
-def test_same_document_saved_twice_under_different_stems_is_one_document():
-    meetings = pair(["261001 - a.m4a", "261001 - b.m4a",
-                     "261001 - b - Meeting Minutes.md",
-                     "261001 - B - meeting minutes.docx"], RULE)
-    assert sum(m.closed for m in meetings) == 1
+def test_copy_and_version_tags_after_minutes_are_one_document():
+    assert (stem("261001 - Site - Meeting Minutes v2.docx")
+            == stem("261001 - Site - Transcript (1).md")
+            == stem("261001_Site_Meeting-Minutes-final.pdf") == "site")
+    # Review round 2: the -final PDF must not close the meeting the day before.
+    meetings = pair(["261005 - x.m4a", "261006 - Owner.transcript.md",
+                     "261006 - Owner - Minutes.md",
+                     "261006_Owner_Meeting-Minutes-final.pdf"], RULE)
+    assert {m.stem: m.closed for m in meetings} == {"x": False, "owner": True}
+
+
+def test_dated_meeting_with_undated_minutes_stays_pending():
+    # Safe side: no date on the minutes means no window to pair in.
+    meetings = pair(["261001 - Kickoff.transcript.md", "Kickoff - Meeting Minutes.md"], RULE)
+    assert not meetings[0].closed
 
 
 def test_one_document_in_three_formats_closes_one_meeting_only():

@@ -47,8 +47,11 @@ from .scan import is_link, long_path
 _DATE = re.compile(r"^(\d{8}|\d{6})(?!\d)")
 _EXTENSION = re.compile(r"\.[a-z0-9]{1,10}$")
 _HASH = re.compile(r"[\s\-_]+[0-9a-f]{12}$")
-# Only a trailing word: "minutes review with client" is a meeting's name.
-_SUFFIX = re.compile(r"[\s\-_]*(transcript|meeting[\s\-_]*minutes|minutes)([\s\-_]*excerpt)?$")
+# Only a trailing word, plus the copy and version tags people add after it:
+# "minutes review with client" is a meeting's name, "Minutes v2" is minutes.
+_SUFFIX = re.compile(
+    r"[\s\-_]*(transcript|meeting[\s\-_]*minutes|minutes)"
+    r"(?:[\s\-_]*(?:excerpt|final|draft|copy|rev\d*|v\d+|\(\d+\)))*$")
 _NOT_WORD = re.compile(r"[^a-z0-9]+")
 _FILLER = frozenset({"meeting", "meetings", "mtg"})
 
@@ -181,18 +184,12 @@ def pair(files: list[str], rule: MeetingRule) -> tuple[Meeting, ...]:
     tests drive it with names alone."""
     groups: dict[tuple[date | None, str], dict[str, list[str]]] = {}
     minutes: dict[tuple[date | None, str], str] = {}
-    documents: set[str] = set()
     for rel in sorted(files):
         name = rel.rsplit("/", 1)[-1]
         key = (file_date(name), stem(name))
         if _matches(rule.minutes, name):
-            # One document whatever formats it was saved in: the same path
-            # bar the extension, or the same date and stem. The first sorted
-            # path stands for it.
-            document = rel.rsplit(".", 1)[0].casefold()
-            if document in documents:
-                continue
-            documents.add(document)
+            # One document per date and stem, whatever formats and copy tags
+            # it was saved with; the first sorted path stands for it.
             minutes.setdefault(key, rel)
         elif _matches(rule.transcripts, name):
             groups.setdefault(key, {"t": [], "r": []})["t"].append(rel)
