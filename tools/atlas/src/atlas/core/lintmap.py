@@ -219,6 +219,15 @@ def lint_map(m: DriveMap) -> list[Finding]:
         findings.append(
             Finding(WARN, "MEETINGS-DIR", f"meetings.dir '{m.meetings.dir}' is not under a canonical section; the Meeting Inbox will find nothing")
         )
+    # -- permits: register and round folders under a canonical section ---------
+    if m.permits is not None:
+        for key, value in (("register", m.permits.register),
+                           ("submissions", m.permits.submissions),
+                           ("comments", m.permits.comments)):
+            if _first_segment(value) not in ids:
+                findings.append(
+                    Finding(WARN, "PERMITS-PATH", f"permits.{key} '{value}' is not under a canonical section; the permit tracker will find nothing")
+                )
     seen_budgets: set[str] = set()
     for b in m.file_budgets:
         if b.file.casefold() in seen_budgets:

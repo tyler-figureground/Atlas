@@ -592,6 +592,18 @@ leading `YYMMDD` date - same day, then the nearest minutes up to `windowDays` la
 never by matching file names. `atlas meetings --pending`, a `doctor --deep` warning and
 a Tyler Digest block. Report-only.
 
+**Ball In Court**
+Whose move an application is, read from the first word of its AHJ register Status cell
+(ADR 0024): `US` (researching, preparing, comments, approved), `AHJ` (submitted, in
+review, resubmitted), `FIELD` (inspections), `CLOSED` (issued, finaled, withdrawn), `?`
+for anything else. `atlas permits`, the Permits Companion Mode and the Tyler Digest show it
+with days in the current state, unknown when nothing dates it.
+
+**Permit Round**
+One filing to an agency and its answer: an `R<n>_YYMMDD` folder under `03 Submissions`
+and, when comments come back, under `04 Comments & Responses`. Evidence for the register,
+never its source; a folder that does not parse is a `doctor --deep` warning.
+
 **File Budget**
 A control file's limit (map key `fileBudgets`): a line count, or an age past which
 `## Done` items are due for pruning, plus the skill that fixes a breach. A `doctor --deep`

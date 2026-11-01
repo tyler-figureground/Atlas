@@ -125,6 +125,7 @@ from .layout import (
     list_width,
     HEALTH,
     MODE_LABELS,
+    PERMITS,
     PROJECT_LIST,
     REFUSED,
     REGION_FRAME,
@@ -147,6 +148,8 @@ from .model import (
     visible_rows,
 )
 from .dossier import dossier_error_lines, dossier_lines, dossier_missing_lines
+from .permitsview import NO_RULE, permit_mode_lines
+from ..core.permits import scan_permits
 from .repair import (
     UndoEntry,
     UndoStack,
@@ -1294,7 +1297,7 @@ class AtlasApp(App):
                 yield SystemCommand("New project", "Create a mapped project", self.action_new_project)
                 yield SystemCommand("Manage contacts", "Edit shared contact details", self.action_manage_contacts)
         if self._showing == "projects":
-            yield SystemCommand("Switch Companion mode", "d - unmet Expectations, health, or dossier",
+            yield SystemCommand("Switch Companion mode", "d - unmet Expectations, health, dossier, permits, or deep pass",
                                 self.action_cycle_companion)
             yield SystemCommand("Collapse or restore project list", "[ - give the Workspace the width",
                                 self.action_collapse_list)
@@ -1902,6 +1905,9 @@ class AtlasApp(App):
                 scan, walked = entry
                 body = deep_lines(scan, walked)
                 count = deep_findings_count(scan)
+        elif mode == PERMITS:
+            body = self._render_permits(row)
+            count = 0
         else:
             body = self._render_dossier(row, tree)
             count = 0
@@ -1918,6 +1924,22 @@ class AtlasApp(App):
         choices.display = bool(unmet)
         body_widget.display = not unmet
         self._refresh_summary()
+
+    def _render_permits(self, row: ProjectRow) -> str:
+        """The PERMITS Companion Mode (ADR 0024): one register read and two
+        folder listings for the Selected Project, on demand - like the
+        dossier, never preloaded."""
+        if self._inventory is None:
+            return ""
+        rule = self._inventory.map.permits
+        if rule is None:
+            return NO_RULE
+        inv = next((p for p in self._inventory.projects if p.name == row.key), None)
+        if inv is None:
+            return "  The project is no longer on the drive - press r to rescan."
+        scan = scan_permits(inv.path, rule)
+        return "\n".join(f"  {line}" if line else ""
+                         for line in permit_mode_lines(scan, date.today()))
 
     def _render_dossier(self, row: ProjectRow, tree: ProjectTree | None) -> str:
         """The DOSSIER Companion Mode: the validated facts contract, read-only

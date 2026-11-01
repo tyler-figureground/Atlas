@@ -24,6 +24,11 @@ asked for, and what we sent*, lives here.
 **Status:** researching - preparing - submitted - in review - comments - resubmitted -
 approved - issued - inspections - finaled - withdrawn
 
+Start the Status cell with one of these words, then the date it changed
+(`comments - 2026-10-01 intake review`). Round is the number of the latest `R<n>` folder.
+`atlas permits` and the daily digest read this table to say whose move each application
+is and for how long.
+
 ## Contacts
 
 | Agency | Role | Name | Email / phone | Portal |

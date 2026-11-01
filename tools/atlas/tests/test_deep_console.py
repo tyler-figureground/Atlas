@@ -15,7 +15,7 @@ import copy
 from textual.widgets import Static
 
 from atlas.tui.app import AtlasApp, ConfirmListModal
-from atlas.tui.layout import DEEP, DOSSIER, EXPECTATIONS, HEALTH
+from atlas.tui.layout import DEEP, DOSSIER, EXPECTATIONS, HEALTH, PERMITS
 
 from conftest import FIXTURE_MAP, make_project, write_map
 
@@ -69,7 +69,7 @@ async def test_the_deep_mode_before_a_run_says_how_to_run_one(fixture_drive):
 
     async with app.run_test(size=(120, 51)) as pilot:
         await settle(app, pilot)
-        for expected in (HEALTH, DOSSIER, DEEP):
+        for expected in (HEALTH, DOSSIER, PERMITS, DEEP):
             await pilot.press("d")
             await settle(app, pilot)
             assert app._companion_mode == expected

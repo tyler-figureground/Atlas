@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-31
+
+### Added
+
+- **Permit tracker (roadmap F3, ADR 0024).** `atlas permits [NAME] [--json]` lists every application in each project's AHJ register with its **Ball In Court** - `US`, `AHJ`, `FIELD`, `CLOSED`, or `?` - from the first word of the Status cell, and days in the current state. The state is dated by the matching `R<n>_YYMMDD` round folder when exactly one application has a round, else by the latest ISO date in Status, then Submitted; nothing dated reads unknown, never zero. Findings: a folder round newer than the register, round folders beside an empty register.
+- Tyler digest **Permits** block: everything we owe, everything at an agency past `stuckDays` (default 30), and the findings, then a count by court. `tyler --json` gains `permits` per project.
+- `doctor --deep` warns on round folders not named `R<n>_YYMMDD` and on the findings above; never a status or exit-code change. Doctor `--json` gains `permits` (misnamed, findings, unreadable).
+- **Permits Companion Mode** in the console (`d` cycles: unmet expectations, health, dossier, permits, deep pass). Read-only.
+- Map key `permits` (`register`, `submissions`, `comments`, `stuckDays`), strict; lint `PERMITS-PATH`. Upgrade note: add it to the drive map to turn the tracker on.
+
+### Changed
+
+- Roadmap F3's `--sync` (appending register rows from folders) is deferred: the drive survey found the registers already kept and the folders rarely `R<n>_YYMMDD`, with no agency in any name. Atlas stays read-only on the register; ADR 0012 is not amended.
+
 ## [0.23.0] - 2026-10-31
 
 ### Added

@@ -113,7 +113,8 @@ EXPECTATIONS = "expectations"
 HEALTH = "health"
 DOSSIER = "dossier"
 DEEP = "deep"
-MODES = (EXPECTATIONS, HEALTH, DOSSIER, DEEP)
+PERMITS = "permits"
+MODES = (EXPECTATIONS, HEALTH, DOSSIER, PERMITS, DEEP)
 
 # Unmet Expectations is the default because it is the only mode that has to be
 # readable at the same time as the tree - what is filed against what the map
@@ -126,6 +127,8 @@ MODE_LABELS = {
     EXPECTATIONS: "Unmet expectations",
     HEALTH: "Project health",
     DOSSIER: "Dossier",
+    # The AHJ register's applications (roadmap F3, ADR 0024). Read-only.
+    PERMITS: "Permits",
     # The opt-in walk below the root (ticket 31). On demand via `D`, never part
     # of the default root-only report; the mode lists findings and offers no
     # repair key - receipt sweeps are `conform --deep --apply` on the CLI.
