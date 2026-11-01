@@ -18,6 +18,7 @@ from .deep import ItemCount, OverlongPath, ReceiptHit, scan_deep
 from .filebudget import BudgetScan, breach_dict, scan_budgets
 from .filerules import first_match
 from .meetings import MeetingScan, scan_dict, scan_meetings
+from .permits import PermitScan, scan_permits
 from .mapfile import DriveMap
 from .mcpjson import has_pyvoid_server
 from .projectmd import agents_block_current, is_claude_pointer, with_revit_block
@@ -83,6 +84,9 @@ class ProjectReport:
     # status or doctor's exit code.
     meetings: MeetingScan | None = None
     budgets: BudgetScan | None = None
+    # Permit folder/register hygiene (ADR 0024): misnamed round folders and a
+    # register behind its folders. Same report-only rules.
+    permits: PermitScan | None = None
     # False when the project root itself could not be listed. Every other finding
     # is then empty and ``sections_present`` means nothing: an unreadable project
     # never reads as an empty one (#13, ADR 0004).
@@ -208,7 +212,8 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
                    depth_capped: tuple[str, ...] = (),
                    items: ItemCount | None = None,
                    meetings: MeetingScan | None = None,
-                   budgets: BudgetScan | None = None) -> ProjectReport:
+                   budgets: BudgetScan | None = None,
+                   permits: PermitScan | None = None) -> ProjectReport:
     """One project's conformance facts.
 
     ``count_files=False`` skips the one walk here - the file count under each
@@ -414,6 +419,7 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         items=items,
         meetings=meetings,
         budgets=budgets,
+        permits=permits,
     )
 
 
@@ -440,7 +446,8 @@ def report_drive(inventory: DriveInventory, *,
                 items=scan.items,
                 meetings=scan_meetings(p.path, m.meetings) if m.meetings else None,
                 budgets=(scan_budgets(p.path, m.file_budgets, today or date.today())
-                         if m.file_budgets else None)))
+                         if m.file_budgets else None),
+                permits=scan_permits(p.path, m.permits) if m.permits else None))
         else:
             projects.append(report_project(p, inventory.map))
     return DriveReport(
@@ -515,6 +522,12 @@ def report_to_dict(report: DriveReport) -> dict:
                 "budgets": ({"breaches": [breach_dict(b) for b in p.budgets.breaches],
                              "unreadable": list(p.budgets.unreadable)}
                             if p.budgets is not None else None),
+                # Folder and register hygiene only; `atlas permits` reports the
+                # applications themselves (ADR 0024).
+                "permits": ({"misnamed": list(p.permits.misnamed),
+                             "findings": list(p.permits.findings),
+                             "unreadable": list(p.permits.unreadable)}
+                            if p.permits is not None else None),
             }
             for p in report.projects
         ],

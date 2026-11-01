@@ -58,6 +58,8 @@ from .core.intake import (
 from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
 from .core.meetings import meeting_dict, scan_dict, scan_meetings
+from .core.permits import describe, scan_permits
+from .core.permits import scan_dict as permit_scan_dict
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
 from .core.pdfexport import PdfError, export_pdf
 from .core.deep import BUDGET_WARN_FRACTION, scan_deep
@@ -249,6 +251,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                     print(f"    warning: {b.message}")
                 for line in p.budgets.unreadable:
                     print(f"    warning: cannot read for budget: {line}")
+            if p.permits is not None:
+                for line in p.permits.misnamed:
+                    print(f"    warning: round folder not R<n>_YYMMDD: {line}")
+                for line in p.permits.findings:
+                    print(f"    warning: permits: {line}")
+                for line in p.permits.unreadable:
+                    print(f"    warning: cannot read for permits: {line}")
     # An unreadable folder is pending too: a person has to look (ADR 0004).
     # So is an over-long path or a depth-guard truncation: findings Atlas
     # cannot repair, which is exactly what the exit code is for.
@@ -1242,7 +1251,9 @@ def cmd_tyler(args: argparse.Namespace) -> int:
                  "tasks_missing": p.tasks_missing,
                  "errands": [item_dict(i) for i in p.errands],
                  "decisions": [{**item_dict(i), "blocks": p.blocks(i)} for i in p.decisions],
-                 "meetings": scan_dict(p.meetings) if p.meetings is not None else None}
+                 "meetings": scan_dict(p.meetings) if p.meetings is not None else None,
+                 "permits": (permit_scan_dict(p.permits, date.today())
+                             if p.permits is not None else None)}
                 for p in digest.projects
             ],
         }, indent=2))
@@ -1306,6 +1317,51 @@ def cmd_meetings(args: argparse.Namespace) -> int:
         total += len(meetings)
     what = "pending meetings" if args.pending else "meetings"
     print(f"\n{total} {what}" if total else f"no {what}")
+    return 0
+
+
+def cmd_permits(args: argparse.Namespace) -> int:
+    """The permit tracker (roadmap F3, ADR 0024): every application in each
+    project's AHJ register, whose court the ball is in and for how long, plus
+    where the round folders disagree with the register. Read-only; exit 0
+    whatever it finds."""
+    root = _resolve_drive(args.drive)
+    inventory = _scan(root)
+    rule = inventory.map.permits
+    if rule is None:
+        raise UsageError("the map has no 'permits' rule; add one to "
+                         f"{inventory.map.path} to turn the permit tracker on")
+    projects = sorted(inventory.projects, key=lambda p: p.name)
+    if args.project:
+        _resolve_project(root, args.project)
+        projects = [p for p in projects if p.name == args.project]
+    today = date.today()
+    rows = [(inv, scan_permits(inv.path, rule)) for inv in projects]
+    if args.json:
+        print(json.dumps([{"project": inv.name, **permit_scan_dict(scan, today)}
+                          for inv, scan in rows], indent=2))
+        return 0
+    total = 0
+    for inv, scan in rows:
+        quiet = not (scan.applications or scan.findings or scan.misnamed or scan.unreadable)
+        if quiet and (scan.register_present or not args.project):
+            continue
+        print(f"\n{inv.name}")
+        if not scan.register_present:
+            print(f"    register missing: {scan.register}")
+        for a in scan.applications:
+            label = " ".join(x for x in (a.agency, a.number) if x and x != "-")
+            print(f"    [{a.court:6}] {label}: {describe(a, today)}")
+            if a.next_action and a.next_action != "-":
+                print(f"             next: {a.next_action}")
+        for line in scan.findings:
+            print(f"    finding: {line}")
+        for line in scan.misnamed:
+            print(f"    round folder not R<n>_YYMMDD: {line}")
+        for line in scan.unreadable:
+            print(f"    cannot read: {line}")
+        total += len(scan.applications)
+    print(f"\n{total} applications" if total else "\nno applications in any register")
     return 0
 
 
@@ -1883,6 +1939,8 @@ def main(argv: list[str] | None = None) -> int:
                              "(read-only; --write regenerates _tools/TYLER-TODAY.md)"),
         ("meetings", cmd_meetings, "Meeting Inbox: recorded meetings and whether each has "
                                    "minutes (read-only; --pending for the ones that do not)"),
+        ("permits", cmd_permits, "permit tracker: each AHJ register application, whose court "
+                                 "the ball is in and for how long (read-only)"),
         ("search", cmd_search, "drive-wide search: projects, folders and files by name, "
                                "plus PDF text and Markdown with --content (read-only)"),
         ("dossier", cmd_dossier, "one project's validated dossier facts: intake, contact "
@@ -1902,6 +1960,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["meetings"].add_argument(
         "--pending", action="store_true",
         help="only meetings with no minutes yet - the /meeting-closeout queue")
+
+    sub.choices["permits"].add_argument("project", nargs="?",
+                                        help="one project folder name (default: every project)")
 
     sub.choices["tree"].add_argument("project", help="project folder name")
     sub.choices["tree"].add_argument(

@@ -108,6 +108,19 @@ class MeetingRule:
 
 
 @dataclass(frozen=True)
+class PermitRule:
+    """Where the permit tracker reads (roadmap F3, ADR 0024): the AHJ register
+    (the source) and the two round-folder locations (evidence). An ``AHJ``
+    application older than ``stuck_days`` in its state is called out in the
+    digest. Read-only."""
+
+    register: str
+    submissions: str
+    comments: str
+    stuck_days: int = 30
+
+
+@dataclass(frozen=True)
 class FileBudget:
     """One control-file budget (roadmap F6): a project-relative file with a
     line ceiling, a Done-section age ceiling, or both, and the skill that
@@ -143,6 +156,7 @@ class DriveMap:
     # the check is off: no folder name or limit is hard-coded here.
     meetings: MeetingRule | None = None
     file_budgets: tuple[FileBudget, ...] = ()
+    permits: PermitRule | None = None
 
     @property
     def section_ids(self) -> tuple[str, ...]:
@@ -310,6 +324,28 @@ def load_map(path: Path) -> DriveMap:
         receipt_rules=_parse_receipt_rules(raw.get("receiptRules", []), path, workspace),
         meetings=_parse_meetings(raw.get("meetings"), path),
         file_budgets=_parse_file_budgets(raw.get("fileBudgets", []), path),
+        permits=_parse_permits(raw.get("permits"), path),
+    )
+
+
+_PERMIT_KEYS = ("note", "register", "submissions", "comments", "stuckDays")
+
+
+def _parse_permits(raw: object, path: Path) -> PermitRule | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise MapError(f"permits must be an object: {path}")
+    unknown = sorted(set(raw) - set(_PERMIT_KEYS))
+    if unknown:
+        raise MapError(f"permits: unknown key {', '.join(repr(k) for k in unknown)}: {path}")
+    paths = {key: _safe_target(raw.get(key), f"permits '{key}'", path)
+             .replace("\\", "/").strip("/")
+             for key in ("register", "submissions", "comments")}
+    return PermitRule(
+        **paths,
+        stuck_days=(_positive_int(raw["stuckDays"], "permits stuckDays", path)
+                    if "stuckDays" in raw else 30),
     )
 
 

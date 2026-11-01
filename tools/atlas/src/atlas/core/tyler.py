@@ -24,6 +24,7 @@ from datetime import date
 from pathlib import Path
 
 from .meetings import MeetingScan, scan_meetings
+from .permits import AHJ, CLOSED, FIELD, US, Application, PermitScan, describe, scan_permits
 from .scan import DriveInventory
 from .tasks import TaskItem, normalize_id, parse_open
 
@@ -58,6 +59,8 @@ class ProjectDigest:
     tracks_blocks: bool = False
     # The Meeting Inbox (roadmap F4): None when the map has no meetings rule.
     meetings: MeetingScan | None = None
+    # The permit tracker (roadmap F3, ADR 0024): None when the map has no rule.
+    permits: PermitScan | None = None
 
     def blocks(self, decision: TaskItem) -> int | None:
         if not decision.id:
@@ -71,6 +74,8 @@ class Digest:
     drive: str
     projects: tuple[ProjectDigest, ...] = ()
     meetings_tracked: bool = False
+    # None when the map has no permits rule; else the AHJ "stuck" threshold.
+    permit_stuck_days: int | None = None
 
     @property
     def errand_count(self) -> int:
@@ -161,15 +166,19 @@ def _project(name: str, tyler_text: str | None, tasks_text: str | None) -> Proje
 def collect(inventory: DriveInventory) -> Digest:
     # Sorted by name: scan order is the filesystem's, which differs by OS.
     rule = inventory.map.meetings
+    permit_rule = inventory.map.permits
     projects = []
     for inv in sorted(inventory.projects, key=lambda p: p.name):
         project = _project(inv.name, _read(inv.path / TYLER_PATH),
                            _read(inv.path / TASKS_PATH))
         if rule is not None:
             project = replace(project, meetings=scan_meetings(inv.path, rule))
+        if permit_rule is not None:
+            project = replace(project, permits=scan_permits(inv.path, permit_rule))
         projects.append(project)
     return Digest(drive=inventory.map.drive, projects=tuple(projects),
-                  meetings_tracked=rule is not None)
+                  meetings_tracked=rule is not None,
+                  permit_stuck_days=permit_rule.stuck_days if permit_rule else None)
 
 
 def _undated_last(entry: QueueEntry) -> tuple[int, int]:
@@ -325,6 +334,58 @@ def _render_meetings(digest: Digest) -> list[str]:
     return lines
 
 
+def permit_label(a: Application) -> str:
+    """The permit number when the register has one, else the agency."""
+    number = a.number.strip()
+    if number and any(c.isdigit() for c in number) and not number.casefold().startswith("none"):
+        return number
+    return a.agency or "application"
+
+
+def permit_lines(digest: Digest, today: date) -> list[str]:
+    """What the Permits block says: everything we owe, everything at an agency
+    past the threshold, and every folder/register disagreement."""
+    stuck = digest.permit_stuck_days
+    out: list[str] = []
+    for project in digest.projects:
+        scan = project.permits
+        if scan is None:
+            continue
+        name = short_name(project.name)
+        for a in scan.applications:
+            days = a.days(today)
+            if a.court == US or (a.court == AHJ and days is not None and stuck is not None
+                                 and days > stuck):
+                line = f"**{name}** {permit_label(a)}: {describe(a, today)}"
+                if a.court == US and a.next_action and a.next_action != "-":
+                    nxt = a.next_action
+                    if len(nxt) > _QUEUE_CLIP:
+                        nxt = nxt[: _QUEUE_CLIP - 1].rstrip() + "…"
+                    line += f" - next: {nxt}"
+                out.append(line)
+        for finding in scan.findings:
+            out.append(f"**{name}**: {finding}")
+        if scan.unreadable:
+            out.append(f"**{name}**: {len(scan.unreadable)} AHJ path(s) could not be read")
+    return out
+
+
+def _render_permits(digest: Digest, today: date) -> list[str]:
+    if digest.permit_stuck_days is None:
+        return []
+    lines = ["", "## Permits", ""]
+    found = permit_lines(digest, today)
+    lines += [f"- {line}" for line in found] or [
+        f"Nothing owed, nothing at an agency past {digest.permit_stuck_days} days."]
+    apps = [a for p in digest.projects if p.permits for a in p.permits.applications]
+    if apps:
+        counts = {c: sum(1 for a in apps if a.court == c) for c in (US, AHJ, FIELD, CLOSED)}
+        lines += ["", f"{len(apps)} applications in the AHJ registers: {counts[US]} we owe, "
+                      f"{counts[AHJ]} at the agency, {counts[FIELD]} in inspections, "
+                      f"{counts[CLOSED]} closed. `atlas permits` lists them all."]
+    return lines
+
+
 def render(digest: Digest, *, generated: date | None = None) -> str:
     generated = generated or date.today()
     lines = [
@@ -338,6 +399,7 @@ def render(digest: Digest, *, generated: date | None = None) -> str:
     ]
     lines += _render_queue(digest, generated)
     lines += _render_meetings(digest)
+    lines += _render_permits(digest, generated)
     for project in digest.projects:
         lines += ["", f"## {project.name}"]
         if project.tyler_missing:

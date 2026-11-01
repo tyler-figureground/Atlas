@@ -15,6 +15,7 @@ from atlas.tui.layout import (
     DEFAULT_MODE,
     DEEP,
     DOSSIER,
+    PERMITS,
     EXPECTATIONS,
     HEALTH,
     MODE_LABELS,
@@ -141,7 +142,8 @@ def test_the_companion_cycles_four_modes_and_starts_on_expectations():
     assert DEFAULT_MODE == EXPECTATIONS
     assert next_mode(EXPECTATIONS) == HEALTH
     assert next_mode(HEALTH) == DOSSIER
-    assert next_mode(DOSSIER) == DEEP
+    assert next_mode(DOSSIER) == PERMITS
+    assert next_mode(PERMITS) == DEEP
     assert next_mode(DEEP) == EXPECTATIONS
 
 
@@ -150,6 +152,7 @@ def test_every_mode_has_a_label():
         EXPECTATIONS: "Unmet expectations",
         HEALTH: "Project health",
         DOSSIER: "Dossier",
+        PERMITS: "Permits",
         DEEP: "Deep pass",
     }
 
