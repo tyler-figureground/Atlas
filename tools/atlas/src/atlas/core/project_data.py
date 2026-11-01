@@ -27,6 +27,8 @@ from .project_index import (
 
 
 __all__ = [
+    "CRM_ID_PATTERN",
+    "CrmLinkPlan",
     "DecisionsSummary",
     "ProjectDataError",
     "ProjectRecord",
@@ -34,8 +36,12 @@ __all__ = [
     "ProjectUpdateResult",
     "apply_project_update",
     "decisions_summary",
+    "apply_crm_link",
+    "check_crm_id",
     "load_project_record",
+    "plan_crm_link",
     "preview_project_update",
+    "read_crm_id",
 ]
 
 
@@ -98,6 +104,9 @@ class ProjectRecord:
     client_contact: ContactSnapshot
     source_digest: str
     _source: bytes = field(repr=False, compare=False)
+    # The CRM's stable Project id (`crm_id`, ADR 0001 amendment); "" when the
+    # project is not linked. Blank means unknown, never a default.
+    crm_id: str = ""
 
     @property
     def decisions(self) -> "DecisionsSummary":
@@ -182,6 +191,7 @@ _ATLAS_KEYS = frozenset(
         "description",
         "project_use_case",
         "project_use_case_category",
+        "crm_id",
         *(
             f"{role}_contact_{suffix}"
             for role in ("billing", "client")
@@ -569,6 +579,7 @@ def _record_from_source(project: Path, dossier: Path, source: bytes) -> ProjectR
         client_contact=client,
         source_digest=hashlib.sha256(source).hexdigest(),
         _source=source,
+        crm_id=values.get("crm_id", ""),
     )
 
 
@@ -1025,3 +1036,113 @@ def apply_project_update(
         record=record,
         warnings=tuple(warnings),
     )
+
+
+# The CRM's Project id: an opaque token the CRM mints (a Convex document id
+# today). Atlas never interprets it; it only keeps it to one safe YAML scalar.
+CRM_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
+
+
+def check_crm_id(value: str) -> str:
+    """``value`` as a ``crm_id``, or ProjectDataError naming the shape."""
+
+    if CRM_ID_PATTERN.fullmatch(value) is None:
+        raise ProjectDataError(
+            f"invalid CRM id {value!r}: use 1-128 letters, digits, '_' or '-', "
+            "starting with a letter or digit"
+        )
+    return value
+
+
+@dataclass(frozen=True)
+class CrmLinkPlan:
+    """What linking a project to a CRM Project would change.
+
+    ``changed`` is False when the dossier already carries this id: linking is
+    idempotent, so a retried command is a no-op, not an error.
+    """
+
+    path: Path
+    crm_id: str
+    previous: str
+    changed: bool
+    source_digest: str
+    _source: bytes = field(repr=False, compare=False)
+    project_file: str = "PROJECT.md"
+
+
+def plan_crm_link(
+    project_path: Path, crm_id: str, *, project_file: str = "PROJECT.md"
+) -> CrmLinkPlan:
+    """Plan writing ``crm_id`` into a project's front matter. Never writes.
+
+    Needs only the front matter to parse - a legacy dossier whose intake keys
+    are still blank can be linked. Refuses a different existing id: relinking
+    a project to another CRM Project is a person's decision, not a retry.
+    """
+
+    check_crm_id(crm_id)
+    project, dossier, source = _read_source(project_path, project_file)
+    front = _parse_front_matter(_lines(source), dossier)
+    previous = front.values.get("crm_id", "")
+    if previous and previous != crm_id:
+        raise ProjectDataError(
+            f"{dossier} is already linked to CRM id {previous!r}; refusing to "
+            f"replace it with {crm_id!r}. Clear crm_id by hand to relink."
+        )
+    return CrmLinkPlan(
+        path=project,
+        crm_id=crm_id,
+        previous=previous,
+        changed=previous != crm_id,
+        source_digest=hashlib.sha256(source).hexdigest(),
+        _source=source,
+        project_file=project_file,
+    )
+
+
+def _render_crm_link(plan: CrmLinkPlan) -> bytes:
+    dossier = plan.path / plan.project_file
+    lines = _lines(plan._source)
+    front = _parse_front_matter(lines, dossier)
+    rewritten = f"crm_id: {_yaml(plan.crm_id)}"
+    index = front.line_of.get("crm_id")
+    if index is None:
+        # Add the key, never rename one: last in the front matter, so every
+        # existing line keeps its place.
+        lines.insert(front.end, rewritten)
+    else:
+        comment_at = front.comment_at.get("crm_id")
+        if comment_at is not None:
+            comment = lines[index][comment_at:]
+            rewritten += " " * max(1, comment_at - len(rewritten)) + comment
+        lines[index] = rewritten
+    return ("\r\n".join(lines) + "\r\n").encode("utf-8")
+
+
+def apply_crm_link(plan: CrmLinkPlan) -> bool:
+    """Write a planned link; a no-op plan writes nothing.
+
+    The dossier is rechecked against the planned digest at the moment of the
+    swap, so an edit made in between is kept and the link refused.
+    """
+
+    if not plan.changed:
+        return False
+    dossier = plan.path / plan.project_file
+    _atomic_replace(dossier, _render_crm_link(plan), plan._source)
+    return True
+
+
+def read_crm_id(project_path: Path, *, project_file: str = "PROJECT.md") -> str:
+    """The project's ``crm_id``, or "" when absent or unreadable.
+
+    For read surfaces that list many projects (search): a dossier that will
+    not parse is reported by `dossier` and `doctor`, never by a blank here.
+    """
+
+    try:
+        _project, dossier, source = _read_source(project_path, project_file)
+        return _parse_front_matter(_lines(source), dossier).values.get("crm_id", "")
+    except ProjectDataError:
+        return ""
