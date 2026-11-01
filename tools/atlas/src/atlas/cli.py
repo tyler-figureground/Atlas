@@ -86,6 +86,7 @@ from .core.project_data import (
     ProjectUpdateResult,
     apply_crm_link,
     apply_project_update,
+    check_crm_id,
     load_project_record,
     plan_crm_link,
     preview_project_update,
@@ -566,15 +567,21 @@ def _created_date(value: str | None) -> date:
     if re.fullmatch(r"\d{6}", value) is None:
         raise UsageError(f"--date must be YYMMDD (six digits), got {value!r}")
     try:
-        return datetime.strptime(value, "%y%m%d").date()
+        parsed = datetime.strptime(value, "%y%m%d").date()
     except ValueError:
         raise UsageError(f"--date {value!r} is not a real calendar date (YYMMDD)") from None
+    if parsed.year < 2000:
+        # strptime reads 69-99 as 19xx; no studio project predates 2000.
+        raise UsageError(f"--date {value!r} reads as {parsed.year}; use a date from 2000 on")
+    return parsed
 
 
 def cmd_new(args: argparse.Namespace) -> int:
     root = _resolve_drive(args.drive)
     drive_map = load_map(find_map(root))
     created = _created_date(args.date)
+    if args.crm_id is not None:
+        check_crm_id(args.crm_id)   # an empty --crm-id is an error, not "unlinked"
     try:
         directory = load_contacts(root)
         billing = find_contact(directory, args.billing_contact)

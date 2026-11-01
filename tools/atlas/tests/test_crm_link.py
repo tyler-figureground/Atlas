@@ -66,7 +66,8 @@ def test_new_without_date_keeps_today(fixture_drive, capsys):
     assert created["created"].startswith(date.today().strftime("%y%m%d") + "_")
 
 
-@pytest.mark.parametrize("bad", ["2604151", "26041", "260230", "261301", "abcdef", "2026-04-15"])
+@pytest.mark.parametrize("bad", ["2604151", "26041", "260230", "261301", "abcdef", "2026-04-15",
+                                 "990101"])
 def test_new_rejects_invalid_date_and_creates_nothing(fixture_drive, capsys, bad):
     _contact(fixture_drive, capsys)
     before = sorted(p.name for p in fixture_drive.iterdir())
@@ -95,6 +96,8 @@ def test_new_rejects_invalid_crm_id_before_creating(fixture_drive, capsys):
     _contact(fixture_drive, capsys)
     before = sorted(p.name for p in fixture_drive.iterdir())
 
+    status, _, err = _new(fixture_drive, capsys, "--crm-id=")
+    assert status == 2 and "CRM id" in err
     status, _, err = _new(fixture_drive, capsys, "--crm-id", "bad id\nx")
 
     assert status == 2
