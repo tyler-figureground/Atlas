@@ -17,7 +17,7 @@ from . import deep
 from .deep import ItemCount, OverlongPath, ReceiptHit, scan_deep
 from .filebudget import BudgetScan, breach_dict, scan_budgets
 from .filerules import first_match
-from .meetings import MeetingScan, meeting_dict, scan_meetings
+from .meetings import MeetingScan, scan_dict, scan_meetings
 from .mapfile import DriveMap
 from .mcpjson import has_pyvoid_server
 from .projectmd import agents_block_current, is_claude_pointer, with_revit_block
@@ -511,23 +511,11 @@ def report_to_dict(report: DriveReport) -> dict:
                 "items": ({"files": p.items.files, "folders": p.items.folders,
                            "total": p.items.total}
                           if p.items is not None else None),
-                "meetings": _meetings_dict(p.meetings),
+                "meetings": scan_dict(p.meetings) if p.meetings is not None else None,
                 "budgets": ({"breaches": [breach_dict(b) for b in p.budgets.breaches],
                              "unreadable": list(p.budgets.unreadable)}
                             if p.budgets is not None else None),
             }
             for p in report.projects
         ],
-    }
-
-
-def _meetings_dict(scan: MeetingScan | None) -> dict | None:
-    if scan is None:
-        return None
-    return {
-        "folder": scan.folder,
-        "present": scan.present,
-        "pending": [meeting_dict(m) for m in scan.pending],
-        "closed": sum(1 for m in scan.meetings if m.closed),
-        "unreadable": list(scan.unreadable),
     }

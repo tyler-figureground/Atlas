@@ -68,6 +68,9 @@ def test_stale_done_reads_only_top_level_done_items_by_their_first_date():
                                             date(2026, 7, 4)]
     assert stale_done(TASKS, TODAY, 100) == [date(2026, 7, 4)]
     assert stale_done("# no done section\n- [x] 2020-01-01 x\n", TODAY, 30) == []
+    # An H1 after Done ends it.
+    assert stale_done("## Done\n- [x] 2026-01-01 a\n# Appendix\n- [x] 2026-01-02 b\n",
+                      TODAY, 30) == [date(2026, 1, 1)]
 
 
 def test_check_names_the_breach_and_the_fix():

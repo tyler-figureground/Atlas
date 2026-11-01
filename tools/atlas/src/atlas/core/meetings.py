@@ -24,7 +24,11 @@ recording - so pairing never relies on a matching file name:
   is pending with an unknown date, never a guessed one.
 
 Dot folders (Dicta's ``.dicta`` working state) are skipped. A folder that
-cannot be listed is reported, never read as empty (ADR 0004).
+cannot be listed is reported, never read as empty (ADR 0004); a folder past
+``max_depth`` is named in ``skipped``.
+
+Cost: one listing per folder of one small subtree per project. The digest
+pays it on every run (hourly), about a dozen listings per project.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import re
+import stat
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -42,9 +47,10 @@ from .scan import is_link, long_path
 _DATE = re.compile(r"^(\d{8}|\d{6})(?!\d)")
 _EXTENSION = re.compile(r"\.[a-z0-9]{1,10}$")
 _HASH = re.compile(r"[\s\-_]+[0-9a-f]{12}$")
-_SUFFIX = re.compile(r"[\s\-_]*(transcript|meeting[\s\-_]*minutes|minutes)\b.*$")
+# Only a trailing word: "minutes review with client" is a meeting's name.
+_SUFFIX = re.compile(r"[\s\-_]*(transcript|meeting[\s\-_]*minutes|minutes)([\s\-_]*excerpt)?$")
 _NOT_WORD = re.compile(r"[^a-z0-9]+")
-_FILLER = frozenset({"meeting", "meetings", "mtg", "the", "a", "and"})
+_FILLER = frozenset({"meeting", "meetings", "mtg"})
 
 
 @dataclass(frozen=True)
@@ -82,6 +88,9 @@ class MeetingScan:
     present: bool = True
     meetings: tuple[Meeting, ...] = ()
     unreadable: tuple[str, ...] = ()
+    # Folders below maxDepth, never listed: a truncated scan is a fact, never
+    # a silent zero.
+    skipped: tuple[str, ...] = ()
 
     @property
     def pending(self) -> tuple[Meeting, ...]:
@@ -121,8 +130,9 @@ def stem(name: str) -> str:
     s = _HASH.sub("", s)
     # Filler words drop out, so Dicta's raw "<date> - X meeting Y-<hash>" and
     # the renamed "<date> - X Y" are one meeting, not a closed one and a
-    # phantom pending one.
-    return "".join(w for w in _NOT_WORD.split(s) if w and w not in _FILLER)
+    # phantom pending one. A name that is nothing but filler keeps it.
+    words = [w for w in _NOT_WORD.split(s) if w]
+    return "".join(w for w in words if w not in _FILLER) or "".join(words)
 
 
 def _matches(globs: tuple[str, ...], name: str) -> bool:
@@ -130,11 +140,13 @@ def _matches(globs: tuple[str, ...], name: str) -> bool:
     return any(fnmatch.fnmatchcase(folded, g.casefold()) for g in globs)
 
 
-def _walk(base: Path, rule: MeetingRule) -> tuple[list[str], list[str]]:
+def _walk(base: Path, rule: MeetingRule) -> tuple[list[str], list[str], list[str]]:
     """Every file below ``base`` to ``rule.max_depth`` folder levels, as
-    base-relative paths, plus the folders that could not be listed."""
+    sorted base-relative paths, plus what could not be read and the folders
+    past the depth limit."""
     files: list[str] = []
     unreadable: list[str] = []
+    skipped: list[str] = []
     stack: list[tuple[str, int]] = [("", 0)]
     while stack:
         rel, depth = stack.pop()
@@ -154,11 +166,14 @@ def _walk(base: Path, rule: MeetingRule) -> tuple[list[str], list[str]]:
                 if entry.is_dir(follow_symlinks=False):
                     if depth < rule.max_depth:
                         stack.append((child, depth + 1))
+                    else:
+                        skipped.append(child)
                     continue
-            except OSError:
+            except OSError as exc:
+                unreadable.append(f"{child}  {type(exc).__name__}: {exc.strerror or exc}")
                 continue
             files.append(child)
-    return files, unreadable
+    return sorted(files), unreadable, skipped
 
 
 def pair(files: list[str], rule: MeetingRule) -> tuple[Meeting, ...]:
@@ -166,12 +181,18 @@ def pair(files: list[str], rule: MeetingRule) -> tuple[Meeting, ...]:
     tests drive it with names alone."""
     groups: dict[tuple[date | None, str], dict[str, list[str]]] = {}
     minutes: dict[tuple[date | None, str], str] = {}
-    for rel in files:
+    documents: set[str] = set()
+    for rel in sorted(files):
         name = rel.rsplit("/", 1)[-1]
         key = (file_date(name), stem(name))
         if _matches(rule.minutes, name):
-            # One document per date and stem, whatever formats it was saved
-            # in; the first (sorted) path stands for it.
+            # One document whatever formats it was saved in: the same path
+            # bar the extension, or the same date and stem. The first sorted
+            # path stands for it.
+            document = rel.rsplit(".", 1)[0].casefold()
+            if document in documents:
+                continue
+            documents.add(document)
             minutes.setdefault(key, rel)
         elif _matches(rule.transcripts, name):
             groups.setdefault(key, {"t": [], "r": []})["t"].append(rel)
@@ -198,14 +219,19 @@ def pair(files: list[str], rule: MeetingRule) -> tuple[Meeting, ...]:
     for key in order:
         if key[0] is not None and key not in paired:
             take(key, [m for m in unused if m[0] == key[0]])
+    def in_window(key: tuple[date | None, str], m: tuple[date | None, str]) -> bool:
+        return (key[0] is not None and m[0] is not None
+                and 0 < (m[0] - key[0]).days <= rule.window_days)
+
+    # Minutes named for a meeting, inside the window, before any nearest-date
+    # guess - so an older meeting never takes a newer one's minutes.
     for key in order:
-        if key in paired:
-            continue
-        if key[0] is None:
-            take(key, [m for m in unused if m[1] == key[1]])
-        else:
-            take(key, [m for m in unused if m[0] is not None
-                       and 0 < (m[0] - key[0]).days <= rule.window_days])
+        if key not in paired:
+            take(key, [m for m in unused if m[1] == key[1]
+                       and (key[0] is None or in_window(key, m))])
+    for key in order:
+        if key not in paired and key[0] is not None:
+            take(key, [m for m in unused if in_window(key, m)])
 
     return tuple(
         Meeting(date=key[0], stem=key[1], transcripts=tuple(groups[key]["t"]),
@@ -217,15 +243,34 @@ def pair(files: list[str], rule: MeetingRule) -> tuple[Meeting, ...]:
 def scan_meetings(project: Path, rule: MeetingRule) -> MeetingScan:
     """One project's meetings folder: every meeting, closed or not."""
     base = project / rule.dir
+    # Only a folder that is not there is absent. Any other failure - a
+    # permission error, a Drive hiccup, a file where the folder should be -
+    # is unreadable, never "no meetings" (ADR 0004).
     try:
-        present = os.path.isdir(long_path(base))
-    except OSError:
-        present = False
-    if not present:
+        info = os.stat(long_path(base))
+    except FileNotFoundError:
         return MeetingScan(folder=rule.dir, present=False)
-    files, unreadable = _walk(base, rule)
+    except OSError as exc:
+        return MeetingScan(folder=rule.dir, unreadable=(
+            f".  {type(exc).__name__}: {exc.strerror or exc}",))
+    if not stat.S_ISDIR(info.st_mode):
+        return MeetingScan(folder=rule.dir, unreadable=(".  not a folder",))
+    files, unreadable, skipped = _walk(base, rule)
     return MeetingScan(folder=rule.dir, meetings=pair(files, rule),
-                       unreadable=tuple(unreadable))
+                       unreadable=tuple(unreadable), skipped=tuple(skipped))
+
+
+def scan_dict(scan: MeetingScan) -> dict[str, object]:
+    """JSON shape of one project's scan, with absence and unreadability
+    spelled out so an empty ``pending`` never stands for "could not look"."""
+    return {
+        "folder": scan.folder,
+        "present": scan.present,
+        "unreadable": list(scan.unreadable),
+        "skipped": list(scan.skipped),
+        "closed": sum(1 for m in scan.meetings if m.closed),
+        "pending": [meeting_dict(m) for m in scan.pending],
+    }
 
 
 def meeting_dict(m: Meeting) -> dict[str, object]:

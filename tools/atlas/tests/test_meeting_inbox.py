@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from datetime import date
 
 import pytest
 
+import atlas.core.meetings as meetings_module
 from atlas.cli import main
 from atlas.core.lintmap import lint_map
 from atlas.core.mapfile import MapError, MeetingRule, load_map
 from atlas.core.meetings import file_date, pair, scan_meetings, stem
 from atlas.core.scan import scan_drive
-from atlas.core.tyler import collect, meeting_line, render
+from atlas.core.tyler import ProjectDigest, collect, meeting_line, render
 
 from conftest import FIXTURE_MAP, make_project, write_map
 
@@ -94,9 +96,11 @@ def test_pairs_same_day_and_reports_exactly_the_unpaired():
 
 
 def test_minutes_up_to_the_window_later_close_a_meeting():
-    # Silverado: recorded 9/27, minutes dated 9/29.
-    meetings = pair(["Recordings/260927 - material story.m4a",
+    # Silverado, real names: recorded 9/27, minutes dated 9/29.
+    meetings = pair(["Recordings/260927 - silverado material story.m4a",
+                     "Recordings/260927 - silverado material story-e2f109372d44.transcript.md",
                      "Minutes/260929_Material-Story_Meeting-Minutes.md"], RULE)
+    assert len(meetings) == 1
     assert meetings[0].closed
     assert meetings[0].minutes == "Minutes/260929_Material-Story_Meeting-Minutes.md"
     # Past the window, or before the meeting, they do not.
@@ -108,6 +112,31 @@ def test_a_later_meetings_minutes_never_close_an_earlier_one_that_lacks_its_own(
     meetings = pair(["260915 - storage.m4a", "260916 - walk.m4a",
                      "260916 - walk - Meeting Minutes.md"], RULE)
     assert {m.date.day: m.closed for m in meetings} == {15: False, 16: True}
+
+
+def test_an_older_meeting_never_takes_a_newer_ones_named_minutes():
+    # Review P1: kickoff must stay pending; owner's minutes close owner.
+    meetings = pair(["261001 - kickoff.transcript.md", "261002 - owner.transcript.md",
+                     "261003 - owner - Meeting Minutes.md"], RULE)
+    assert {m.stem: m.closed for m in meetings} == {"kickoff": False, "owner": True}
+
+
+def test_stems_trim_only_a_trailing_transcript_or_minutes_word():
+    assert stem("261001 - minutes review with client.transcript.md") == "minutesreviewwithclient"
+    assert stem("261001 - transcript of call.m4a") == "transcriptofcall"
+    assert stem("261006 - A.transcript.md") == "a"
+    assert stem("261006 - Meeting.m4a") == "meeting"   # all filler keeps it
+    meetings = pair(["261001 - minutes review.m4a", "261001 - transcript of call.m4a",
+                     "261001 - transcript of call - Meeting Minutes.md"], RULE)
+    assert {m.stem: m.closed for m in meetings} == {
+        "minutesreview": False, "transcriptofcall": True}
+
+
+def test_same_document_saved_twice_under_different_stems_is_one_document():
+    meetings = pair(["261001 - a.m4a", "261001 - b.m4a",
+                     "261001 - b - Meeting Minutes.md",
+                     "261001 - B - meeting minutes.docx"], RULE)
+    assert sum(m.closed for m in meetings) == 1
 
 
 def test_one_document_in_three_formats_closes_one_meeting_only():
@@ -150,6 +179,35 @@ def test_scan_without_a_meetings_folder_is_absent_not_empty(tmp_path):
     project = make_project(tmp_path, PROJECT, sections=["01 Model"])
     scan = scan_meetings(project, RULE)
     assert not scan.present and scan.meetings == ()
+
+
+def test_a_folder_that_cannot_be_checked_is_unreadable_not_absent(tmp_path, monkeypatch):
+    project = make_project(tmp_path, PROJECT, sections=["11 Meetings"])
+    real_stat = os.stat
+
+    def failing_stat(path, *args, **kwargs):
+        if str(path).endswith("11 Meetings"):
+            raise PermissionError(13, "Permission denied")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(meetings_module.os, "stat", failing_stat)
+    scan = scan_meetings(project, RULE)
+    assert scan.present and scan.unreadable and "PermissionError" in scan.unreadable[0]
+
+
+def test_a_file_where_the_folder_should_be_is_unreadable(tmp_path):
+    project = make_project(tmp_path, PROJECT, files={"11 Meetings": "oops"})
+    scan = scan_meetings(project, RULE)
+    assert scan.present and scan.unreadable == (".  not a folder",)
+
+
+def test_folders_past_max_depth_are_named_not_dropped(tmp_path):
+    project = make_project(tmp_path, PROJECT, files={
+        "11 Meetings/a/b/c/d/261001 - deep.transcript.md": ""})
+    scan = scan_meetings(project, RULE)
+    assert scan.meetings == () and scan.skipped == ("a/b/c/d",)
+    digest_line = meeting_line(ProjectDigest(name=PROJECT, meetings=scan))
+    assert "1 folder(s) past maxDepth not scanned" in digest_line
 
 
 # --- the map --------------------------------------------------------------------
@@ -249,8 +307,9 @@ def test_digest_names_meetings_not_closed_out(tmp_path, capsys):
     assert "## Meetings not closed out" in text
     assert text.index("## Meetings not closed out") < text.index(f"## {PROJECT}")
     assert main(["tyler", "--drive", str(drive), "--json"]) == 0
-    data = json.loads(capsys.readouterr().out)
-    assert len(data["projects"][0]["meetings_pending"]) == 2
+    meetings = json.loads(capsys.readouterr().out)["projects"][0]["meetings"]
+    assert meetings["present"] and meetings["unreadable"] == []
+    assert len(meetings["pending"]) == 2 and meetings["closed"] == 1
 
 
 def test_digest_without_a_rule_has_no_meetings_block(tmp_path):

@@ -28,7 +28,8 @@ from .scan import long_path
 
 _ISO = re.compile(r"(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
 _DONE = re.compile(r"^##\s+Done\b", re.IGNORECASE)
-_HEADING = re.compile(r"^##\s")
+# An H1 or H2 ends the Done section; an H3 group stays inside it.
+_HEADING = re.compile(r"^#{1,2}\s")
 _ITEM = re.compile(r"^- ")
 
 

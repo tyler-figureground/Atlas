@@ -304,6 +304,8 @@ def meeting_line(project: ProjectDigest) -> str | None:
         parts.append(text)
     if scan.unreadable:
         parts.append(f"{len(scan.unreadable)} meetings folder(s) could not be read")
+    if scan.skipped:
+        parts.append(f"{len(scan.skipped)} folder(s) past maxDepth not scanned")
     if not parts:
         return None
     return f"**{short_name(project.name)}**: " + "; ".join(parts)
