@@ -415,3 +415,13 @@ console change, wheel to `_tools\atlas`, repin `Atlas.bat`, deploy log, HOW-TO u
   Ln `V1`/`V2` folders flagged. Two review rounds: unreadable register read as empty; header,
   future-date, unclear-status and round-cell edge cases. Still open from "done when": Tyler's
   10-minute spot-check of the Permits block. **Next: F5 production queue (week 5).**
+- 2026-10-31: Tyler confirmed the Permits block. **F5 queue done** (PR #28, Atlas 0.25.0,
+  deployed: `_tools\logs\atlas-0.25.0-deploy-20261031-204100\`). `atlas tasks` / `--next`
+  apply the template's own picking rule across projects. Deviations: stale claim uses the
+  template's 7-day rule (claims are dated, not timed); a prompt ranks a task up instead of
+  being required (1 of 25 live `AGENT` tasks has one). Live: 25 pickable `AGENT` tasks in 7
+  projects, 0 blocked, 0 claims. The parser now pairs code fences CommonMark-style, so a
+  prompt quoting `- [ ]` lines or a stray fence can never add or hide tasks (two review
+  rounds; live files parse identically). **Open: the overnight run.** nightshift only runs
+  git repos through worktree + PR; studio tasks write to G: with no PR gate, so a studio
+  lane is a design decision for Tyler.
