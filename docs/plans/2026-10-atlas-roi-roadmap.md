@@ -425,3 +425,17 @@ console change, wheel to `_tools\atlas`, repin `Atlas.bat`, deploy log, HOW-TO u
   rounds; live files parse identically). **Open: the overnight run.** nightshift only runs
   git repos through worktree + PR; studio tasks write to G: with no PR gate, so a studio
   lane is a design decision for Tyler.
+- 2026-11-01: **Week 5 done: nightshift studio lane** (nightshift `3e9674c`..`c186f40`, Tyler's
+  2026-10-31 call). `python nightshift.py studio [--task "<project>:T-NNN"]`; nightly when
+  `[studio] enabled`. Per task: pick via `atlas tasks --next --lane AGENT --json` (or a pin),
+  back up control files to `<project>/.agent/runs/<run>/backup/`, claim in `TASKS.md` under an
+  exclusive lock with an atomic replace (`claimed YYYY-MM-DD by nightshift`), engine with cwd =
+  the project, file manifest before/after into `RUN.md` and the morning report's Studio section.
+  Two review rounds (claim write could lose the backup; fenced lines read as tasks; scan errors
+  read as deletions; per-lane engine login). **First supervised run: 64th Lane T-326** - pi
+  glm-5.3, 10 min, done: `12 Construction Administration/261101_Framing-Review-Checklist.md` +
+  PDF, T-326 moved to Done, only `TASKS.md` changed, 2 asks in the receipt. Found and fixed on
+  the way: nightshift had been dead since 10-29 19:00 (orphaned run lock; nightshift
+  `668de33`). Still `enabled = false`: Atlas's `--next` top task is Pestoni T-001 (umbrella
+  over the retired vault list, ADR 0023), on the lane's skip list, which stops the lane.
+  **Next: Tyler closes or re-lanes Pestoni T-001 and flips `enabled`; then F7 (week 6).**
