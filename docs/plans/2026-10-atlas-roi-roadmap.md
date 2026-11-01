@@ -425,7 +425,7 @@ console change, wheel to `_tools\atlas`, repin `Atlas.bat`, deploy log, HOW-TO u
   rounds; live files parse identically). **Open: the overnight run.** nightshift only runs
   git repos through worktree + PR; studio tasks write to G: with no PR gate, so a studio
   lane is a design decision for Tyler.
-- 2026-11-01: **Week 5 done: nightshift studio lane** (nightshift `c186f40`, Tyler's
+- 2026-11-01: **Week 5 done: nightshift studio lane** (nightshift `3e9674c`..`c186f40`, Tyler's
   2026-10-31 call). `python nightshift.py studio [--task "<project>:T-NNN"]`; nightly when
   `[studio] enabled`. Per task: pick via `atlas tasks --next --lane AGENT --json` (or a pin),
   back up control files to `<project>/.agent/runs/<run>/backup/`, claim in `TASKS.md` under an
