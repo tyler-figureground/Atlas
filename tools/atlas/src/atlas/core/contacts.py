@@ -38,6 +38,37 @@ class DuplicateContactError(ContactError):
         )
 
 
+class DuplicateContactIdError(ContactError):
+    """A contact with this ID already exists."""
+
+    def __init__(self, existing: "Contact") -> None:
+        self.existing = existing
+        super().__init__(
+            f"contact ID already exists: {existing.id} belongs to {existing.first_name} "
+            f"{existing.last_name} ({existing.email}); file not changed"
+        )
+
+
+def check_contact_id(value: str) -> str:
+    """A caller-supplied contact ID as its canonical UUID4 text, or ContactError.
+
+    Canonical is lowercase and hyphenated, the form Atlas mints, so a CRM that
+    sends the same UUID in another case or without hyphens still matches.
+    """
+
+    try:
+        parsed = UUID(value.strip())
+    except (AttributeError, ValueError):
+        raise ContactError(
+            f"contact ID must be a UUID4, got {value!r}; file not changed"
+        ) from None
+    if parsed.version != 4 or parsed.variant != "specified in RFC 4122":
+        raise ContactError(
+            f"contact ID must be a UUID4 (random), got {value!r}; file not changed"
+        )
+    return str(parsed)
+
+
 class _ConcurrentContactWrite(Exception):
     pass
 
@@ -534,9 +565,17 @@ def _store_lock(path: Path):
             pass
 
 
-def add_contact(drive_root: Path, draft: ContactDraft) -> Contact:
-    """Add one contact to a drive and return its stable directory record."""
+def add_contact(
+    drive_root: Path, draft: ContactDraft, *, contact_id: str | None = None
+) -> Contact:
+    """Add one contact to a drive and return its stable directory record.
+
+    ``contact_id`` keeps an ID minted elsewhere (the CRM, CRM ADR 0004) so one
+    person has one ID on both sides; it must be a UUID4 not already in the
+    directory. Absent, Atlas mints one.
+    """
     values = _validate_draft(draft)
+    requested_id = check_contact_id(contact_id) if contact_id is not None else None
 
     path = Path(drive_root) / "_tools" / "billing-contacts.json"
     contact: Contact | None = None
@@ -550,10 +589,17 @@ def add_contact(drive_root: Path, draft: ContactDraft) -> Contact:
             )
             if existing is not None:
                 raise DuplicateContactError(existing)
+            if requested_id is not None:
+                taken = next(
+                    (item for item in directory.contacts if item.id.casefold() == requested_id),
+                    None,
+                )
+                if taken is not None:
+                    raise DuplicateContactIdError(taken)
             if contact is None:
                 stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 contact = Contact(
-                    id=str(uuid4()),
+                    id=requested_id or str(uuid4()),
                     first_name=values.first_name,
                     last_name=values.last_name,
                     email=values.email,

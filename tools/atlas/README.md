@@ -21,7 +21,7 @@ leaves conflicts in place. Clean removes only folders with no file anywhere bene
 | `atlas lint [--drive D] [--json]` | Validate the map file itself |
 | `atlas new --name NAME --street STREET --city CITY --state ST --zip ZIP --use-case USE_CASE --billing-contact ID_OR_EMAIL [--date YYMMDD] [--crm-id ID] [...]` | Create a complete mapped project. `--date` sets the folder prefix and Created (default today; an invalid date exits 2); `--crm-id` records the CRM Project id. `--yes` is accepted and ignored (new never prompts). `--json` adds `created_date` and `crm_id` |
 | `atlas contacts list [--drive D] [--json]` | List reusable drive contacts |
-| `atlas contacts add --first-name FIRST --last-name LAST --email EMAIL [...]` | Add a reusable drive contact |
+| `atlas contacts add --first-name FIRST --last-name LAST --email EMAIL [--id UUID4] [...]` | Add a reusable drive contact. `--id` keeps a UUID4 minted elsewhere (the CRM); a non-UUID4, a duplicate ID or a duplicate email exits 2 with nothing written. `--yes` is accepted and ignored (add never prompts) |
 | `atlas contacts edit ID_OR_EMAIL [--yes] [...]` | Edit a shared contact; stable ID retained |
 | `atlas project edit FOLDER [--yes] [...]` | Edit project intake; safely preview/confirm folder rename |
 | `atlas project link FOLDER --crm-id ID [--yes] [--dry-run] [--json]` | Write `crm_id` into `PROJECT.md` (ADR 0001 amendment). The same id again exits 0 unchanged; a different existing id exits 2. Scripted use needs `--yes`. `--json` emits `folder`, `path`, `crm_id`, `previous_crm_id`, `changed`, `applied` |

@@ -395,6 +395,7 @@ def cmd_contacts_add(args: argparse.Namespace) -> int:
                 company=args.company,
                 address=address,
             ),
+            contact_id=args.id,
         )
     except ContactError as error:
         print(f"error: {error}", file=sys.stderr)
@@ -2207,6 +2208,11 @@ def main(argv: list[str] | None = None) -> int:
     contacts_add.add_argument("--address-city")
     contacts_add.add_argument("--address-state")
     contacts_add.add_argument("--address-zip")
+    contacts_add.add_argument(
+        "--id", help="keep this UUID4 as the contact ID (default: Atlas mints one)")
+    contacts_add.add_argument(
+        "--yes", action="store_true",
+        help="accepted for scripted callers; add never prompts")
     contacts_add.set_defaults(fn=cmd_contacts_add)
     contacts_edit = contact_commands.add_parser("edit", help="edit a shared contact")
     contacts_edit.add_argument("contact", help="contact ID or email")

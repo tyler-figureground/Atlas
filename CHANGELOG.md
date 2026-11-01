@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **CRM link (ADR 0001 amendment).** PROJECT.md front-matter key `crm_id`, the CRM's Project id. `atlas project link FOLDER --crm-id ID [--yes] [--dry-run] [--json]` writes it: idempotent for the same id, exit 2 on a different existing id, every other line carried through. `atlas dossier --json` and `atlas search --json` report it.
 - `atlas new --date YYMMDD` sets the folder prefix and Created for a project created elsewhere (invalid dates exit 2); `--crm-id ID` writes `crm_id` at intake; `--yes` is accepted for scripted callers.
+- `atlas contacts add --id UUID4` keeps a contact ID minted elsewhere (the CRM), so one person has one ID on both sides. Validated as UUID4 and stored canonical (lowercase, hyphenated); a duplicate ID or email exits 2 with nothing written. Lock and digest rules unchanged. `--yes` is accepted for scripted callers.
 
 ## [0.25.0] - 2026-10-31
 
