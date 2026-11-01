@@ -45,8 +45,11 @@ _PATHLIKE = re.compile(r"[/\\]|\.[A-Za-z0-9]{1,5}$")
 _TICKS = re.compile(r"`(?P<path>[^`]+)`")
 _YYMMDD = re.compile(r"^(\d{2})(\d{2})(\d{2})(?=[ _\-.]|$)")
 # CommonMark-ish fences: optional list/number/quote markers, then ``` or ~~~.
-_FENCE_OPEN = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+|>\s*)*(?P<run>`{3,}|~{3,})(?P<info>[^`]*)$")
-_FENCE_CLOSE = re.compile(r"^\s*(?:>\s*)*(?P<run>`{3,}|~{3,})\s*$")
+# A backtick fence's info string has no backtick (else it is inline code); a
+# tilde fence's may.
+_FENCE_OPEN = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+|>\s*)*"
+                         r"(?:(?P<tick>`{3,})(?P<tinfo>[^`]*)|(?P<tilde>~{3,})(?P<info>.*))$")
+_FENCE_CLOSE = re.compile(r"^\s*(?:(?:[-*+]\s+)|>\s*)*(?P<run>`{3,}|~{3,})\s*$")
 
 # Item text runs long on real lists (211 Centre lines carry full audit detail);
 # views scan, they do not replace the list, so bodies are clipped.
@@ -181,19 +184,35 @@ def fences(lines: list[str]) -> tuple[set[int], dict[int, str]]:
     """
     inside: set[int] = set()
     openers: dict[int, str] = {}
+    # Per fence character, the shortest run already shown to have no closer
+    # anywhere below: a later, at-least-as-long opener cannot close either.
+    dead: dict[str, int] = {}
     n = 0
     while n < len(lines):
         opened = _FENCE_OPEN.match(lines[n])
         if opened:
-            run = opened.group("run")
-            for close in range(n + 1, len(lines)):
-                closed = _FENCE_CLOSE.match(lines[close])
-                if (closed and closed.group("run")[0] == run[0]
-                        and len(closed.group("run")) >= len(run)):
-                    openers[n] = opened.group("info").strip()
-                    inside.update(range(n, close + 1))
-                    n = close
-                    break
+            run = opened.group("tick") or opened.group("tilde")
+            info = opened.group("tinfo") if opened.group("tick") else opened.group("info")
+            indent = len(lines[n]) - len(lines[n].lstrip())
+            if len(run) < dead.get(run[0], len(run) + 1):
+                bounded = False
+                for close in range(n + 1, len(lines)):
+                    line = lines[close]
+                    # An indented fence lives inside its list item: a
+                    # less-indented line ends the item, and the fence with it.
+                    if indent and line.strip() and len(line) - len(line.lstrip()) < indent:
+                        bounded = True
+                        break
+                    closed = _FENCE_CLOSE.match(line)
+                    if (closed and closed.group("run")[0] == run[0]
+                            and len(closed.group("run")) >= len(run)):
+                        openers[n] = (info or "").strip()
+                        inside.update(range(n, close + 1))
+                        n = close
+                        break
+                else:
+                    if not bounded:
+                        dead[run[0]] = min(dead.get(run[0], len(run)), len(run))
         n += 1
     return inside, openers
 

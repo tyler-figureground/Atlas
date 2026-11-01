@@ -100,6 +100,26 @@ def test_no_fence_shape_can_swallow_the_tasks_after_it(middle):
     assert not any("quoted" in i.text for i in parse_open(text))
 
 
+def test_a_stray_indented_fence_ends_with_its_list_item():
+    text = ("## Now\n- [ ] T-1 a\n  ```\n- [ ] T-2 b\n- [ ] T-3 c\n"
+            "  ```text\n  p\n  ```\n- [ ] T-4 d\n")
+    items = parse_open(text)
+    assert [i.id for i in items] == ["T-1", "T-2", "T-3", "T-4"]
+    assert [i.prompt for i in items] == [False, False, True, False]
+
+
+def test_list_marker_closer_tilde_backticks_and_many_unclosed_openers():
+    marker = "## Now\n- [ ] T-1 a\n  - ```text\n    - [ ] q\n  - ```\n- [ ] T-2 b\n"
+    assert [(i.id, i.prompt) for i in parse_open(marker)] == [("T-1", True), ("T-2", False)]
+    tilde = "## Now\n- [ ] T-1 a\n~~~text `x`\n- [ ] q\n~~~\n- [ ] T-2 b\n"
+    assert [i.id for i in parse_open(tilde)] == ["T-1", "T-2"]
+    many = "## Now\n" + "```\n" * 1 + "".join(f"```lang{i}\n" for i in range(5000)) + "- [ ] T-1 a\n"
+    import time
+    started = time.perf_counter()
+    parse_open(many)
+    assert time.perf_counter() - started < 2
+
+
 def test_an_unclosed_fence_is_not_a_prompt():
     text = "## Now\n\n- [ ] T-1 a\n  ```text\n  do it\n\n## Next\n\n- [ ] T-2 b\n"
     items = parse_open(text)
