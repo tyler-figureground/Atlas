@@ -1,6 +1,6 @@
 [project]
 name = "studio-atlas"
-version = "0.25.0"
+version = "0.26.0"
 description = "Atlas - map-driven TUI/CLI for studio shared-drive project tooling (spec: LIBRARY - Reference/_House Standard/atlas-tui-spec.md)"
 requires-python = ">=3.12"
 dependencies = [
@@ -17,6 +17,7 @@ atlas = "atlas.cli:main"
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
+    "pyyaml>=6",
 ]
 
 [build-system]

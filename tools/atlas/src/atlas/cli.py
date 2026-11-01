@@ -37,6 +37,7 @@ from .core.conform import (
     node_key,
     plan_from_dict,
 )
+from .core.billing_block import apply_billing, check_billing, plan_billing
 from .core.contentindex import build_index, index_path, load_index, query_index
 from .core.contacts import (
     Contact,
@@ -921,6 +922,78 @@ def cmd_project_link(args: argparse.Namespace) -> int:
     else:
         print(f"linked: {project.name} -> {plan.crm_id}")
     return 0
+
+
+def cmd_project_billing(args: argparse.Namespace) -> int:
+    """Write PROJECT.md's `billing:` block (Pyvoid PRD-209; CRM ADR 0004).
+
+    Idempotent: a block that already reads this way is left untouched and
+    exits 0. Other keys and comments in the block, and the rest of the front
+    matter, are carried through; a block shape Atlas cannot read exits 2.
+    """
+    root = _resolve_drive(args.drive)
+    drive_map = load_map(find_map(root))
+    project = _resolve_project(root, args.folder)
+    values = check_billing(args.project, args.client, args.rate)
+    plan = plan_billing(project, values, project_file=drive_map.project_file)
+
+    def payload(applied: bool) -> dict[str, object]:
+        written = plan.written
+        rate = written["rate"]
+        return {
+            "folder": project.name,
+            "path": str(project),
+            "billing": {
+                "project": written["project"],
+                "client": written["client"],
+                "rate": None if rate in (None, "") else _number(rate),
+            },
+            "previous": plan.previous,
+            "changed": plan.changed,
+            "applied": applied,
+        }
+
+    if not plan.changed or args.dry_run:
+        if args.json:
+            print(json.dumps(payload(False), ensure_ascii=False))
+        elif not plan.changed:
+            print(f"billing unchanged: {project.name}")
+        else:
+            print("dry run: no changes made")
+            print(f"billing: {project.name} -> {plan.written}")
+        return 0
+    if not args.yes:
+        if args.json or not sys.stdin.isatty():
+            print("error: project billing requires --yes in non-interactive mode; "
+                  "no changes made", file=sys.stderr)
+            return 2
+        print(f"billing: {project.name} -> {plan.written}")
+        if input("Type yes to write the billing block (anything else cancels): "
+                 ).strip().casefold() != "yes":
+            print("cancelled: no changes made")
+            return 1
+    apply_billing(plan)
+    try:
+        append_log(root, f"[{project.name}] project billing: project {values.project}")
+    except OSError as error:
+        print(f"warning: billing written, but the Atlas log could not be written: {error}",
+              file=sys.stderr)
+    if args.json:
+        print(json.dumps(payload(True), ensure_ascii=False))
+    else:
+        print(f"billing written: {project.name} -> {plan.written}")
+    return 0
+
+
+def _number(text: str) -> int | float | str:
+    """A rate's YAML text as the number a reader gets; text when it is not one."""
+    try:
+        return int(text)
+    except ValueError:
+        try:
+            return float(text)
+        except ValueError:
+            return text
 
 
 def cmd_add(args: argparse.Namespace) -> int:
@@ -2304,6 +2377,23 @@ def main(argv: list[str] | None = None) -> int:
         help="short descriptor; use an empty value to clear",
     )
     project_edit.set_defaults(fn=cmd_project_edit)
+    project_billing = project_commands.add_parser(
+        "billing", help="write the PROJECT.md billing: block JDP reads (project, client, rate)")
+    project_billing.add_argument("folder", help="project folder name")
+    project_billing.add_argument("--project", required=True,
+                                 help="the six-digit project number (YYMMDD)")
+    project_billing.add_argument("--client", required=True, help="the client name to bill")
+    project_billing.add_argument(
+        "--rate", help="USD/hr, a plain number like 60 or 62.5 (omitted: keep the current rate)")
+    project_billing.add_argument(
+        "--drive", help="drive root (default: walk up from cwd, else auto-discover)")
+    project_billing.add_argument(
+        "--json", action="store_true", help="machine-readable output; never prompts")
+    project_billing.add_argument("--yes", action="store_true",
+                                 help="confirm a non-interactive write")
+    project_billing.add_argument("--dry-run", action="store_true",
+                                 help="report what would change without writing")
+    project_billing.set_defaults(fn=cmd_project_billing)
     project_link = project_commands.add_parser(
         "link", help="link a project to its CRM Project (writes crm_id)")
     project_link.add_argument("folder", help="project folder name")
