@@ -1375,6 +1375,11 @@ def cmd_tasks(args: argparse.Namespace) -> int:
     its state, or with ``--next`` the one task an agent should pick up.
     Read-only: claiming is an edit to the project's TASKS.md and stays with
     the agent through ``/tasks``. ``--next`` exits 1 when nothing is pickable."""
+    if args.with_prompt and not args.next:
+        raise UsageError("--with-prompt only applies with --next")
+    if args.next and args.lane in ("DECISION", "WAIT"):
+        raise UsageError(f"--next picks AGENT or MODEL work; a {args.lane} task is never "
+                         "picked up by an agent")
     root = _resolve_drive(args.drive)
     inventory = _scan(root)
     today = date.today()
@@ -1382,6 +1387,12 @@ def cmd_tasks(args: argparse.Namespace) -> int:
     if args.project:
         _resolve_project(root, args.project)
         queues = tuple(q for q in queues if q.project == args.project)
+    # Work in a TASKS.md Atlas could not read is unknown, never absent: every
+    # mode names those projects on stderr (ADR 0004).
+    for q in queues:
+        if not q.tasks_readable:
+            print(f"warning: cannot read {q.project}/{TASKS_PATH} ({q.error}); "
+                  "its tasks are unknown", file=sys.stderr)
     if args.next:
         lane = args.lane or "AGENT"
         task = next_task(queues, lane, today, with_prompt=args.with_prompt)
@@ -1440,6 +1451,9 @@ def cmd_tasks(args: argparse.Namespace) -> int:
             # The text is the whole line, ID and lane included.
             print(f"    [{t.state:11}] {t.item.text[:120]}{tail}")
     summary = ", ".join(f"{n} {s}" for s, n in counts.items() if n)
+    unknown = sum(1 for q in queues if not q.tasks_readable)
+    if unknown:
+        summary = f"{summary or 'no open tasks read'}; {unknown} project(s) unreadable"
     print(f"\n{summary or 'no open tasks'}")
     return 0
 

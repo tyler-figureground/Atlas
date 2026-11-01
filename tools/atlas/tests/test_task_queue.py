@@ -85,6 +85,27 @@ def test_a_prompt_belongs_to_the_line_above_it_only():
     assert [i.prompt for i in parse_open(text)] == [False, False]
 
 
+@pytest.mark.parametrize("middle", [
+    "```x``` is inline code, not a fence",                       # inline triple ticks
+    "1. ```text\n   - [ ] q quoted\n   ```",                      # numbered-list fence
+    "> ```\n> - [ ] q quoted\n```",                               # blockquote fence
+    "  ```text\n  - [ ] T-9 unclosed fence, so this is a task",   # never closed
+    "````text\n- [ ] q quoted\n```\nstill inside\n````",          # four ticks, inner ```
+    "~~~\n- [ ] q quoted\n~~~",                                   # tildes
+])
+def test_no_fence_shape_can_swallow_the_tasks_after_it(middle):
+    text = f"## Now\n\n- [ ] T-1 a\n{middle}\n- [ ] T-2 b\n\n## Next\n\n- [ ] T-3 c\n"
+    ids = [i.id for i in parse_open(text)]
+    assert ids[0] == "T-1" and ids[-2:] == ["T-2", "T-3"]
+    assert not any("quoted" in i.text for i in parse_open(text))
+
+
+def test_an_unclosed_fence_is_not_a_prompt():
+    text = "## Now\n\n- [ ] T-1 a\n  ```text\n  do it\n\n## Next\n\n- [ ] T-2 b\n"
+    items = parse_open(text)
+    assert [i.id for i in items] == ["T-1", "T-2"] and not items[0].prompt
+
+
 # --- states ----------------------------------------------------------------------
 
 def test_every_state():
@@ -106,12 +127,32 @@ def test_a_run_since_the_claim_keeps_it_fresh():
     assert _states(newest_run=date(2026, 9, 30))["T-011"][0] == STALE
 
 
+def test_an_unreadable_runs_folder_never_makes_a_claim_stale():
+    states = {i.id: s for i, s, _ in classify(parse_open(TASKS), TODAY, None, runs_known=False)}
+    assert states["T-011"] == CLAIMED
+
+
+def test_archived_run_zips_count_as_receipts(tmp_path):
+    from atlas.core.taskqueue import project_queue
+    project = make_project(tmp_path, "261001_A", files={
+        "00 Tasks/TASKS.md": TASKS, ".agent/archive/261005-old-run.zip": "z"})
+    (project / ".agent" / "runs").mkdir(parents=True)
+    queue = project_queue("261001_A", project, ".agent/runs", "PROJECT.md", TODAY,
+                          ".agent/archive")
+    assert queue.newest_run == date(2026, 10, 5)
+    assert {t.item.id: t.state for t in queue.tasks}["T-011"] == CLAIMED
+
+
 def test_revit_ready_reads_only_a_named_model():
     blank = "---\nproject: x\nrevit:\n  model:\n  local:\n---\n# P\n"
     named = "---\nproject: x\nrevit:\n  model: 'C:/Models/x.rvt'  # central\n---\n"
     other = "---\nother:\n  model: x.rvt\nrevit:\n  model: null\n---\n"
     assert not revit_ready(blank) and revit_ready(named) and not revit_ready(other)
     assert not revit_ready("no front matter\nrevit:\n  model: x\n") and not revit_ready(None)
+    assert revit_ready("---\nrevit:\n\n  model: a.rvt\n---\n")          # blank line inside
+    assert not revit_ready("---\nrevit:\n  local: x\n    model: a.rvt\n---\n")   # nested
+    assert not revit_ready("---\nrevit:\n  model: |\n    a.rvt\n---\n")  # block scalar
+    assert revit_ready("---\r\nrevit:\r\n  model: a.rvt\r\n---\r\n")     # CRLF
 
 
 # --- the next task -----------------------------------------------------------------
@@ -191,7 +232,17 @@ def test_cli_json_names_missing_and_unreadable(tmp_path, capsys):
     assert rows["261003_C"]["tasks_present"] is False and rows["261003_C"]["tasks"] == []
     assert rows["261004_D"]["tasks_readable"] is False and rows["261004_D"]["error"]
     assert main(["tasks", "--drive", str(drive)]) == 0
-    assert "cannot read 00 Tasks/TASKS.md" in capsys.readouterr().out
+    out, err = capsys.readouterr()
+    assert "cannot read 00 Tasks/TASKS.md" in out and "1 project(s) unreadable" in out
+    assert main(["tasks", "--drive", str(drive), "--next"]) == 0
+    assert "warning: cannot read 261004_D" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("args", [["--with-prompt"], ["--next", "--lane", "DECISION"],
+                                  ["--next", "--lane", "WAIT"]])
+def test_cli_refuses_flag_combinations_that_mean_nothing(tmp_path, capsys, args):
+    assert main(["tasks", "--drive", str(_drive(tmp_path)), *args]) == 2
+    assert "error:" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("lane", ["AGENT", "MODEL"])

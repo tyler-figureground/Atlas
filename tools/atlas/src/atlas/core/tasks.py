@@ -44,9 +44,9 @@ _LINK = re.compile(r"\]\((?:<(?P<angle>[^>]+)>|(?P<target>[^)\s]+))\)")
 _PATHLIKE = re.compile(r"[/\\]|\.[A-Za-z0-9]{1,5}$")
 _TICKS = re.compile(r"`(?P<path>[^`]+)`")
 _YYMMDD = re.compile(r"^(\d{2})(\d{2})(\d{2})(?=[ _\-.]|$)")
-_FENCE = re.compile(r"^\s*(?:[-*]\s+)?```")
-# An indented ```text fence opening under a task line is its prompt.
-_PROMPT = re.compile(r"^\s+(?:[-*]\s+)?```text\b")
+# CommonMark-ish fences: optional list/number/quote markers, then ``` or ~~~.
+_FENCE_OPEN = re.compile(r"^\s*(?:(?:[-*+]|\d+[.)])\s+|>\s*)*(?P<run>`{3,}|~{3,})(?P<info>[^`]*)$")
+_FENCE_CLOSE = re.compile(r"^\s*(?:>\s*)*(?P<run>`{3,}|~{3,})\s*$")
 
 # Item text runs long on real lists (211 Centre lines carry full audit detail);
 # views scan, they do not replace the list, so bodies are clipped.
@@ -169,6 +169,35 @@ def _item(body: str, section: str) -> TaskItem:
     )
 
 
+def fences(lines: list[str]) -> tuple[set[int], dict[int, str]]:
+    """Closed code fences, CommonMark-style: the line numbers inside them
+    (opener and closer included) and each opener's info string.
+
+    An opener is three or more backticks or tildes, after optional list,
+    number or quote markers, whose info string has no backtick (so inline
+    ```code``` is not a fence). It closes on a bare run of the same character
+    at least as long. A fence that never closes is not a fence: nothing
+    below it is hidden, so a typo can never swallow the rest of a list.
+    """
+    inside: set[int] = set()
+    openers: dict[int, str] = {}
+    n = 0
+    while n < len(lines):
+        opened = _FENCE_OPEN.match(lines[n])
+        if opened:
+            run = opened.group("run")
+            for close in range(n + 1, len(lines)):
+                closed = _FENCE_CLOSE.match(lines[close])
+                if (closed and closed.group("run")[0] == run[0]
+                        and len(closed.group("run")) >= len(run)):
+                    openers[n] = opened.group("info").strip()
+                    inside.update(range(n, close + 1))
+                    n = close
+                    break
+        n += 1
+    return inside, openers
+
+
 def parse_open(text: str, *, lane: str | None = None) -> tuple[TaskItem, ...]:
     """Open checkbox items before ``## Done``; ``lane`` keeps only that lane tag."""
     items: list[TaskItem] = []
@@ -176,16 +205,17 @@ def parse_open(text: str, *, lane: str | None = None) -> tuple[TaskItem, ...]:
     # The last item kept, while the lines below it are still its own (indented
     # or blank); an indented ```text fence there is its prompt.
     under: int | None = None
-    fenced = False
-    for line in text.splitlines():
-        # Inside a code fence nothing is a task or a heading: a prompt may quote
-        # "- [ ]" lines of its own.
-        if _FENCE.match(line):
-            if not fenced and under is not None and _PROMPT.match(line):
+    lines = text.splitlines()
+    inside, openers = fences(lines)
+    for n, line in enumerate(lines):
+        # Inside a closed code fence nothing is a task or a heading: a prompt
+        # may quote "- [ ]" lines of its own.
+        if n in openers:
+            if (under is not None and line[:1] in (" ", "\t")
+                    and openers[n].split()[:1] == ["text"]):
                 items[under] = replace(items[under], prompt=True)
-            fenced = not fenced
             continue
-        if fenced:
+        if n in inside:
             continue
         heading = _HEADING.match(line)
         if heading:

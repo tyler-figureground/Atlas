@@ -90,27 +90,34 @@ def _read(path: Path) -> tuple[str | None, str]:
         return None, f"{type(exc).__name__}: {getattr(exc, 'strerror', None) or exc}"
 
 
-def newest_run_date(runs: Path) -> date | None:
-    """The latest ``YYMMDD``-named run folder; undated folders (legacy-*) and
-    files do not count."""
+def newest_run_date(folder: Path, *, zips: bool = False) -> tuple[date | None, bool]:
+    """The latest ``YYMMDD``-named run in ``folder`` - run folders, or with
+    ``zips`` the closed runs ``atlas runs`` archived as ``YYMMDD-slug.zip``.
+    Undated names (legacy-*) do not count. Returns (date, known): a folder
+    that is not there is known-empty; one that cannot be read is unknown."""
     best: date | None = None
     try:
-        with os.scandir(long_path(runs)) as it:
+        with os.scandir(long_path(folder)) as it:
             for entry in it:
                 match = _RUN_DATE.match(entry.name)
                 if not match:
                     continue
                 try:
-                    if not entry.is_dir(follow_symlinks=False):
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                    wanted = (not is_dir and entry.name.lower().endswith(".zip")) if zips \
+                        else is_dir
+                    if not wanted:
                         continue
                     when = date(2000 + int(match.group(1)), int(match.group(2)),
                                 int(match.group(3)))
                 except (OSError, ValueError):
                     continue
                 best = when if best is None or when > best else best
+    except FileNotFoundError:
+        return None, True
     except OSError:
-        return None
-    return best
+        return None, False
+    return best, True
 
 
 def revit_ready(project_md: str | None) -> bool:
@@ -126,20 +133,26 @@ def revit_ready(project_md: str | None) -> bool:
     for line in lines[1:]:
         if _FRONT.match(line):
             break
+        if not line.strip():
+            continue          # a blank line does not end the block
         if not line.startswith((" ", "\t")):
             in_revit = line.split("#", 1)[0].strip() == "revit:"
             continue
-        if in_revit:
+        # Only the block's own keys: two-space indent, nothing deeper.
+        if in_revit and line.startswith("  ") and not line.startswith("   "):
             key, _, value = line.strip().partition(":")
             value = value.split("#", 1)[0].strip().strip("'\"")
-            if key == "model" and value and value.lower() not in ("null", "~"):
+            if (key == "model" and value and value.lower() not in ("null", "~")
+                    and value[0] not in "|>"):
                 return True
     return False
 
 
-def classify(items: tuple[TaskItem, ...], today: date,
-             newest_run: date | None) -> list[tuple[TaskItem, str, tuple[str, ...]]]:
-    """Each open item's state. Pure."""
+def classify(items: tuple[TaskItem, ...], today: date, newest_run: date | None,
+             runs_known: bool = True) -> list[tuple[TaskItem, str, tuple[str, ...]]]:
+    """Each open item's state. Pure. With ``runs_known`` False (the runs
+    folder could not be read) no claim is called stale: no receipt seen is not
+    no receipt."""
     open_ids = {normalize_id(i.id) for i in items if i.id}
     out = []
     for item in items:
@@ -151,7 +164,8 @@ def classify(items: tuple[TaskItem, ...], today: date,
             state = WAITING
         elif item.claim:
             when = item.claimed_on
-            stale = (when is not None and (today - when).days > STALE_CLAIM_DAYS
+            stale = (runs_known and when is not None
+                     and (today - when).days > STALE_CLAIM_DAYS
                      and (newest_run is None or newest_run < when))
             state = STALE if stale else CLAIMED
         elif blockers:
@@ -165,9 +179,15 @@ def classify(items: tuple[TaskItem, ...], today: date,
 
 
 def project_queue(name: str, path: Path, runs_dir: str, project_file: str,
-                  today: date) -> ProjectQueue:
+                  today: date, archive_dir: str = "") -> ProjectQueue:
     text, error = _read(path / TASKS_PATH)
-    newest = newest_run_date(path / runs_dir) if runs_dir else None
+    newest, runs_known = (newest_run_date(path / runs_dir) if runs_dir else (None, True))
+    if archive_dir:
+        # A closed run zipped by `atlas runs` is still a receipt.
+        archived, archive_known = newest_run_date(path / archive_dir, zips=True)
+        runs_known = runs_known and archive_known
+        if archived and (newest is None or archived > newest):
+            newest = archived
     dossier, _ = _read(path / project_file)
     if text is None:
         # No error means the file is not there; an error means it is there and
@@ -178,7 +198,7 @@ def project_queue(name: str, path: Path, runs_dir: str, project_file: str,
     tasks = tuple(
         QueuedTask(project=name, item=item, state=state, blockers=blockers, order=n)
         for n, (item, state, blockers) in enumerate(
-            classify(parse_open(text), today, newest)))
+            classify(parse_open(text), today, newest, runs_known)))
     return ProjectQueue(project=name, path=path, tasks=tasks,
                         revit_ready=revit_ready(dossier), newest_run=newest)
 
@@ -187,7 +207,7 @@ def collect(inventory: DriveInventory, today: date | None = None) -> tuple[Proje
     today = today or date.today()
     m = inventory.map
     return tuple(
-        project_queue(p.name, p.path, m.runs_dir, m.project_file, today)
+        project_queue(p.name, p.path, m.runs_dir, m.project_file, today, m.archive_dir)
         for p in sorted(inventory.projects, key=lambda p: p.name)
     )
 
