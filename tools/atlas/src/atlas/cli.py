@@ -57,6 +57,7 @@ from .core.intake import (
 )
 from .core.lintmap import lint_map
 from .core.mapfile import MapError, find_map, load_map
+from .core.meetings import meeting_dict, scan_dict, scan_meetings
 from .core.ops import OpsError, add_sections, find_empty_dirs, new_project, remove_empty_dirs
 from .core.pdfexport import PdfError, export_pdf
 from .core.deep import BUDGET_WARN_FRACTION, scan_deep
@@ -230,6 +231,24 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 print(f"    ignored (map-tolerated): {', '.join(p.ignored)}")
             for line in p.unreadable:
                 print(f"    cannot read: {line}")
+            # Report-only warnings (roadmap F4, F6): never the status, never
+            # the exit code.
+            if p.meetings is not None:
+                for m in p.meetings.pending:
+                    when = m.date.isoformat() if m.date else "date unknown"
+                    state = "" if m.transcribed else " (not transcribed)"
+                    print(f"    warning: meeting not closed out ({when}){state}: "
+                          f"{p.meetings.folder}/{m.label}")
+                for line in p.meetings.unreadable:
+                    print(f"    warning: cannot read meetings folder: {line}")
+                for line in p.meetings.skipped:
+                    print(f"    warning: meetings folder past maxDepth, not scanned: "
+                          f"{p.meetings.folder}/{line}")
+            if p.budgets is not None:
+                for b in p.budgets.breaches:
+                    print(f"    warning: {b.message}")
+                for line in p.budgets.unreadable:
+                    print(f"    warning: cannot read for budget: {line}")
     # An unreadable folder is pending too: a person has to look (ADR 0004).
     # So is an over-long path or a depth-guard truncation: findings Atlas
     # cannot repair, which is exactly what the exit code is for.
@@ -1222,7 +1241,8 @@ def cmd_tyler(args: argparse.Namespace) -> int:
                  "tyler_missing": p.tyler_missing,
                  "tasks_missing": p.tasks_missing,
                  "errands": [item_dict(i) for i in p.errands],
-                 "decisions": [{**item_dict(i), "blocks": p.blocks(i)} for i in p.decisions]}
+                 "decisions": [{**item_dict(i), "blocks": p.blocks(i)} for i in p.decisions],
+                 "meetings": scan_dict(p.meetings) if p.meetings is not None else None}
                 for p in digest.projects
             ],
         }, indent=2))
@@ -1235,6 +1255,57 @@ def cmd_tyler(args: argparse.Namespace) -> int:
               f"{digest.decision_count} decisions)")
     else:
         print(text, end="")
+    return 0
+
+
+def cmd_meetings(args: argparse.Namespace) -> int:
+    """The Meeting Inbox (roadmap F4): every project's meetings, or with
+    ``--pending`` only those with no minutes yet. Read-only; the feed a
+    scheduled `/meeting-closeout` run works from. Exit 0 whatever it finds:
+    a pending meeting is work to do, not a drive fault."""
+    root = _resolve_drive(args.drive)
+    inventory = _scan(root)
+    rule = inventory.map.meetings
+    if rule is None:
+        raise UsageError("the map has no 'meetings' rule; add one to "
+                         f"{inventory.map.path} to turn the Meeting Inbox on")
+    projects = sorted(inventory.projects, key=lambda p: p.name)
+    if args.project:
+        _resolve_project(root, args.project)
+        projects = [p for p in projects if p.name == args.project]
+    rows = []
+    for inv in projects:
+        scan = scan_meetings(inv.path, rule)
+        meetings = scan.pending if args.pending else scan.meetings
+        rows.append((inv, scan, meetings))
+    if args.json:
+        print(json.dumps([
+            {"project": inv.name,
+             "path": str(inv.path / scan.folder),
+             **scan_dict(scan),
+             "meetings": [meeting_dict(m) for m in meetings]}
+            for inv, scan, meetings in rows
+        ], indent=2))
+        return 0
+    total = 0
+    for inv, scan, meetings in rows:
+        if not meetings and not scan.unreadable and not scan.skipped:
+            continue
+        print(f"\n{inv.name}")
+        for m in meetings:
+            when = m.date.isoformat() if m.date else "date unknown"
+            if m.closed:
+                state = f"closed: {m.minutes}"
+            else:
+                state = "PENDING" if m.transcribed else "PENDING, not transcribed"
+            print(f"    {when}  {m.label}  [{state}]")
+        for line in scan.unreadable:
+            print(f"    cannot read: {line}")
+        for line in scan.skipped:
+            print(f"    past maxDepth, not scanned: {line}")
+        total += len(meetings)
+    what = "pending meetings" if args.pending else "meetings"
+    print(f"\n{total} {what}" if total else f"no {what}")
     return 0
 
 
@@ -1810,6 +1881,8 @@ def main(argv: list[str] | None = None) -> int:
         ("unarchive", cmd_unarchive, "bring an archived project back, by name or --revert manifest"),
         ("tyler", cmd_tyler, "Tyler digest: open errands + DECISION blockers across projects "
                              "(read-only; --write regenerates _tools/TYLER-TODAY.md)"),
+        ("meetings", cmd_meetings, "Meeting Inbox: recorded meetings and whether each has "
+                                   "minutes (read-only; --pending for the ones that do not)"),
         ("search", cmd_search, "drive-wide search: projects, folders and files by name, "
                                "plus PDF text and Markdown with --content (read-only)"),
         ("dossier", cmd_dossier, "one project's validated dossier facts: intake, contact "
@@ -1823,6 +1896,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.choices["tyler"].add_argument(
         "--write", action="store_true",
         help="write the digest to _tools/TYLER-TODAY.md instead of printing it")
+
+    sub.choices["meetings"].add_argument("project", nargs="?",
+                                         help="one project folder name (default: every project)")
+    sub.choices["meetings"].add_argument(
+        "--pending", action="store_true",
+        help="only meetings with no minutes yet - the /meeting-closeout queue")
 
     sub.choices["tree"].add_argument("project", help="project folder name")
     sub.choices["tree"].add_argument(
@@ -2053,9 +2132,11 @@ def main(argv: list[str] | None = None) -> int:
              "(already past Win32's 260, not ones Atlas would create), deep "
              "unreadable folders, and the item count against the 400,000 "
              "shared-drive cap - counting costs the same walk, which is why "
-             "it rides this flag. Enumeration only, never a content read; "
-             "depth-guarded. --deep --all pays the full drive walk by flag, "
-             "never by default")
+             "it rides this flag. Enumeration only, depth-guarded; with the "
+             "map's meetings and fileBudgets keys it also warns on meetings "
+             "with no minutes and control files past their budget (reading "
+             "only those files). --deep --all pays the full drive walk by "
+             "flag, never by default")
     sub.choices["doctor"].add_argument(
         "--all", action="store_true",
         help="with --deep: every project pays the deep walk")

@@ -10,11 +10,14 @@ from __future__ import annotations
 import fnmatch
 import os
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 from . import deep
 from .deep import ItemCount, OverlongPath, ReceiptHit, scan_deep
+from .filebudget import BudgetScan, breach_dict, scan_budgets
 from .filerules import first_match
+from .meetings import MeetingScan, scan_dict, scan_meetings
 from .mapfile import DriveMap
 from .mcpjson import has_pyvoid_server
 from .projectmd import agents_block_current, is_claude_pointer, with_revit_block
@@ -74,6 +77,12 @@ class ProjectReport:
     overlong: tuple[OverlongPath, ...] = ()
     depth_capped: tuple[str, ...] = ()
     items: ItemCount | None = None
+    # Report-only deep-pass warnings (roadmap F4, F6): meetings with no
+    # minutes and control files past their budget. None when the deep pass
+    # did not run or the map has no rule; never part of `actionable`, the
+    # status or doctor's exit code.
+    meetings: MeetingScan | None = None
+    budgets: BudgetScan | None = None
     # False when the project root itself could not be listed. Every other finding
     # is then empty and ``sections_present`` means nothing: an unreadable project
     # never reads as an empty one (#13, ADR 0004).
@@ -197,7 +206,9 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
                    deep_unreadable: tuple[str, ...] = (),
                    overlong: tuple[OverlongPath, ...] = (),
                    depth_capped: tuple[str, ...] = (),
-                   items: ItemCount | None = None) -> ProjectReport:
+                   items: ItemCount | None = None,
+                   meetings: MeetingScan | None = None,
+                   budgets: BudgetScan | None = None) -> ProjectReport:
     """One project's conformance facts.
 
     ``count_files=False`` skips the one walk here - the file count under each
@@ -401,11 +412,14 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         overlong=tuple(overlong),
         depth_capped=tuple(depth_capped),
         items=items,
+        meetings=meetings,
+        budgets=budgets,
     )
 
 
 def report_drive(inventory: DriveInventory, *,
-                 deep: frozenset[str] | None = None) -> DriveReport:
+                 deep: frozenset[str] | None = None,
+                 today: date | None = None) -> DriveReport:
     """The drive-wide report. ``deep`` names the projects that also get the
     opt-in deep pass (Receipt Rules, over-long paths, deep unreadable folders,
     item counts); None - the default everywhere else - keeps the report
@@ -416,12 +430,17 @@ def report_drive(inventory: DriveInventory, *,
             # The deep pass walks whether or not the map carries receiptRules:
             # over-long paths, deep unreadable folders and the item count are
             # findings on every map (plan 1.4-1.6).
-            scan = scan_deep(p.path, inventory.map)
-            projects.append(report_project(p, inventory.map, receipts=scan.hits,
-                                           deep_unreadable=scan.unreadable,
-                                           overlong=scan.overlong,
-                                           depth_capped=scan.depth_capped,
-                                           items=scan.items))
+            m = inventory.map
+            scan = scan_deep(p.path, m)
+            projects.append(report_project(
+                p, m, receipts=scan.hits,
+                deep_unreadable=scan.unreadable,
+                overlong=scan.overlong,
+                depth_capped=scan.depth_capped,
+                items=scan.items,
+                meetings=scan_meetings(p.path, m.meetings) if m.meetings else None,
+                budgets=(scan_budgets(p.path, m.file_budgets, today or date.today())
+                         if m.file_budgets else None)))
         else:
             projects.append(report_project(p, inventory.map))
     return DriveReport(
@@ -492,6 +511,10 @@ def report_to_dict(report: DriveReport) -> dict:
                 "items": ({"files": p.items.files, "folders": p.items.folders,
                            "total": p.items.total}
                           if p.items is not None else None),
+                "meetings": scan_dict(p.meetings) if p.meetings is not None else None,
+                "budgets": ({"breaches": [breach_dict(b) for b in p.budgets.breaches],
+                             "unreadable": list(p.budgets.unreadable)}
+                            if p.budgets is not None else None),
             }
             for p in report.projects
         ],

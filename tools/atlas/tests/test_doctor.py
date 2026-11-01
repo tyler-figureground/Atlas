@@ -122,7 +122,10 @@ def test_report_json_shape(fixture_drive):
         "name", "status", "sections_present", "missing_control_plane",
         "drift", "relocations", "sweeps", "receipts", "unfiled", "ignored",
         "unreadable", "unreadable_deep", "overlong", "depth_capped", "items",
+        "meetings", "budgets",
     }
+    # Deep-pass warnings are null, not empty, when the deep pass did not run.
+    assert proj["meetings"] is None and proj["budgets"] is None
     # An agent reading this must be able to tell "nothing wrong here" from
     # "Atlas could not look". ADR 0004.
     assert proj["unreadable"] == []

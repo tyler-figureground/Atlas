@@ -213,4 +213,18 @@ def lint_map(m: DriveMap) -> list[Finding]:
             Finding(ERROR, "TEMPLATE-MISSING", f"controlPlane.agentsRules '{m.agents_rules}' is not in {template_path(m.agents_rules).parent}")
         )
 
+    # -- meetings: the Meeting Inbox reads a canonical section ------------------
+    # A typo here reports every project as having no meetings, silently.
+    if m.meetings is not None and _first_segment(m.meetings.dir) not in ids:
+        findings.append(
+            Finding(WARN, "MEETINGS-DIR", f"meetings.dir '{m.meetings.dir}' is not under a canonical section; the Meeting Inbox will find nothing")
+        )
+    seen_budgets: set[str] = set()
+    for b in m.file_budgets:
+        if b.file.casefold() in seen_budgets:
+            findings.append(
+                Finding(WARN, "DUP-BUDGET", f"fileBudgets lists '{b.file}' twice; both limits are checked")
+            )
+        seen_budgets.add(b.file.casefold())
+
     return findings
