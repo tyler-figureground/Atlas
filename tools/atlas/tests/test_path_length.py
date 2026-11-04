@@ -66,14 +66,26 @@ def test_a_deep_subtree_is_measured_on_a_machine_without_long_paths(fixture_driv
     assert relocate.file_count == 1, "the file past 260 is counted, not skipped"
 
 
-@windows_only
-def test_long_path_measures_the_absolute_path_not_the_relative_string(tmp_path, monkeypatch):
-    base = tmp_path / ("a" * 100) / ("b" * 100)
-    os.makedirs(long_path(base), exist_ok=True)
-    monkeypatch.chdir(long_path(base))
-    relative = "c" * 41
+def test_long_path_measures_the_absolute_path_not_the_relative_string(monkeypatch):
+    from types import SimpleNamespace
 
-    assert long_path(relative).startswith("\\\\?\\")
+    from atlas.core import scan
+
+    relative = "c" * 41
+    absolute = "C:\\" + "a" * 120 + "\\" + "b" * 100 + "\\" + relative
+
+    def abspath(path):
+        assert path == relative
+        return absolute
+
+    # Exercise Windows path handling without creating/chdir-ing into a directory
+    # that Windows may refuse when LongPathsEnabled is off.
+    monkeypatch.setattr(scan, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(scan, "os", SimpleNamespace(
+        fspath=os.fspath, path=SimpleNamespace(abspath=abspath),
+    ))
+    assert len(relative) < WINDOWS_MAX_PATH <= len(absolute)
+    assert long_path(relative) == "\\\\?\\" + absolute
 
 
 @windows_only
