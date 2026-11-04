@@ -202,7 +202,13 @@ def test_render_empty_queue_says_so(fixture_drive):
     assert "Nothing queued" in text
 
 
-def test_cli_json_carries_the_queue(fixture_drive, capsys):
+def test_cli_json_carries_the_queue(fixture_drive, capsys, monkeypatch):
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return TODAY
+
+    monkeypatch.setattr("atlas.cli.date", FixedDate)
     _queue(fixture_drive)
     assert main(["tyler", "--drive", str(fixture_drive), "--json"]) == 0
     data = json.loads(capsys.readouterr().out)
