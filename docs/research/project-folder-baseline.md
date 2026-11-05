@@ -348,8 +348,9 @@ move (CAD links, point clouds, families loaded by path) - the conform guard appl
 
 Map-level relocations (`relocations` key) for names that recur: `01 Model/Archive`,
 `01 Model/archive`, `01 Model/aRCHIVE`, `02 Sheets/Test Prints`, `06/Photos`, `06/Vicinity Map`, `06/Google Maps`,
-`06/County Records - Site Review`, `06/Site Review/Virtual Tour`, `06/Reality Capture`,
-`06/Program and client Reqs`. The rest of the table is project-specific and stays a
+`06/County Records - Site Review`, `06/Site Review/Virtual Tour`,
+`06/Program and client Reqs`. `06/Reality Capture` stays a per-project move: a point cloud
+may be linked into a Revit model by path. The rest of the table is project-specific and stays a
 per-project move. `01 Model/Families` and `Materials` stay per-project moves: a Revit
 model may load them by path, so each move is checked by hand before it runs.
 
