@@ -46,7 +46,7 @@ tasks, AHJ, fuller `06` seed - all shipped), `correspondence-folder-structure.md
 - **Discoverability is half the problem.** The map lists names, never what goes in them.
   Only `07 Correspondence` has a "Where does it go?" card. Tyler did not know where coffee
   photos go because no section says. (Observed)
-- **Plan:** map v4.5 adds 15 children and 3 templates (`PROGRAM.md`, `CLIENT-ITEMS.md`,
+- **Plan:** map v4.5 adds 14 children and 3 templates (`PROGRAM.md`, `CLIENT-ITEMS.md`,
   `SELECTIONS.md`); Atlas learns child descriptions and on-create templates; a `06`
   filing card is generated from the map; seven projects are conformed one at a time.
   Section 5.
@@ -196,8 +196,9 @@ record *why* a choice was made; the register records *what is currently selected
 
 ADR 0024's tracker dates rounds from `R<n>_YYMMDD` folder names. Pestoni files
 `V1 Submission`, `V2 Submission`, `V3 Submission - Water Permit`, `Working`; Beitz `V2`;
-Monticello `R2_260728 (600807)` and `floodplain`. The tracker reads none of the Pestoni
-rounds. A relocation (rename) closes it; the stray `Working` folder belongs in `_Outbox`.
+Monticello `floodplain`. The tracker reads none of the Pestoni or Beitz rounds.
+Monticello's `R2_260728 (600807)` is read already (`permits.py` `ROUND_FOLDER` has no end
+anchor); renaming it is tidy-up only. A relocation (rename) closes it; the stray `Working` folder belongs in `_Outbox`.
 
 ### 2.6 The map has names, not meanings (Observed)
 
@@ -231,7 +232,7 @@ appears in the archive that section 1 does not already list.
 
 ## 3. Proposed structure - map v4.5 (Proposed)
 
-Existing names stay verbatim. Fifteen children added, three templates added, one new map
+Existing names stay verbatim. Fourteen children added, three templates added, one new map
 field. Seed stays minimal: one new seeded folder.
 
 ### 3.1 New children
@@ -346,15 +347,15 @@ move (CAD links, point clouds, families loaded by path) - the conform guard appl
 | 262 Monte Vista, 1655 San Vicente | - | clean today (San Vicente's iGUIDE pack is a dated instance inside `Scans & Tours`) |
 
 Map-level relocations (`relocations` key) for names that recur: `01 Model/Archive`,
-`01 Model/archive`, `01 Model/aRCHIVE`, `01 Model/Families`, `01 Model/Materials`,
-`02 Sheets/Test Prints`, `06/Photos`, `06/Vicinity Map`, `06/Google Maps`,
+`01 Model/archive`, `01 Model/aRCHIVE`, `02 Sheets/Test Prints`, `06/Photos`, `06/Vicinity Map`, `06/Google Maps`,
 `06/County Records - Site Review`, `06/Site Review/Virtual Tour`, `06/Reality Capture`,
 `06/Program and client Reqs`. The rest of the table is project-specific and stays a
-per-project move.
+per-project move. `01 Model/Families` and `Materials` stay per-project moves: a Revit
+model may load them by path, so each move is checked by hand before it runs.
 
 App working folders: `11 Meetings/.dicta` (Dicta) and `01 Model/Revit_temp` are machine
-state. `meetings.py` already skips dot folders; add `.dicta` to `tolerated` if doctor
-flags it, and confirm `Revit_temp` is treated like the Revit `_backup` folders `scan.py`
+state. `meetings.py` and `scan.py` already skip dot folders; the doctor off-map
+count (2.5) skips them the same way (`tolerated` only takes root names, ADR 0018), and confirm `Revit_temp` is treated like the Revit `_backup` folders `scan.py`
 already exempts.
 
 ---
@@ -377,7 +378,7 @@ then keep it clean.
 | # | Work | Done when |
 |---|---|---|
 | 1.1 | Tyler answers section 6 | done 2026-11-04; see section 6 |
-| 1.2 | ADR 0025 - client-side homes: program, client items, selections; the received-document rule (3.2); `description` on map children | accepted |
+| 1.2 | ADR 0025 - client-side homes: program, client items, selections; the received-document rule (3.2); `description` on map children; amends ADR 0012 (on-create templates are not carried by every project) | accepted |
 | 1.3 | `CONTEXT.md` terms: Program, Client Item, Selection, Selections Register, Filing Card | terms land |
 
 ### Phase 2 - Atlas (one release)
@@ -385,7 +386,7 @@ then keep it clean.
 | # | Work | Files | Done when |
 |---|---|---|---|
 | 2.1 | Child entries accept `"description"`; unknown-key check updated; `atlas lint` warns on a seeded child without one | `core/mapfile.py`, `core/lintmap.py`, tests | v4.4 map loads unchanged; description round-trips |
-| 2.2 | Template entries accept `"when": "on-create"`: copied when Atlas creates that folder (Add-Section, conform relocation target), never by new-project or conform backfill. Today every template is copied unconditionally, so a template in an on-demand folder would create the folder in every project | `core/mapfile.py`, `core/ops.py`, `core/conform.py`, tests | adding `Client Items` copies `CLIENT-ITEMS.md`; new project does not create `Client Items` |
+| 2.2 | Template entries accept `"when": "on-create"`: copied when Atlas creates that folder (Add-Section, conform relocation target), never by new-project or conform backfill. Today every template is copied unconditionally, so a template in an on-demand folder would create the folder in every project | `core/mapfile.py`, `core/ops.py`, `core/conform.py`, `core/doctor.py` (missing-template list and explained top folders skip on-create templates whose folder is absent), `core/projectmd.py` (AGENTS.md index lists only present templates), check `core/runs.py`, tests | adding `Client Items` copies `CLIENT-ITEMS.md`; new project does not create `Client Items` |
 | 2.3 | Add-Section menu shows the description beside each name | TUI add-section screen | visible in a snapshot test |
 | 2.4 | Generated filing card: `06 .../README.md` built from `06`'s child descriptions; conform rewrites it in place between markers, Tyler's notes outside the markers kept (same pattern as the AGENTS.md block) | `core/templates.py` or new `core/filingcard.py` | conform on a v4.4 project adds the card; second run is a no-op |
 | 2.5 | Doctor `--deep`: off-map folder count per project (excluding Revit backups, dated instances, `_sources`), so drift has a number | `core/doctor.py`, `core/deep.py` | prints 78-ish today across active projects; 0 is the target |
@@ -397,7 +398,7 @@ then keep it clean.
 |---|---|---|---|
 | 3.1 | Add the children in 3.1 and a description for every `06` child and the new children | `_tools\architecture-map.json` | `atlas lint` clean |
 | 3.2 | Templates: `PROGRAM.md` (seeded), `CLIENT-ITEMS.md` and `SELECTIONS.md` (`on-create`) - Appendices A-C | `tools/atlas/src/atlas/templates/project/` | files present, placeholders render |
-| 3.3 | Relocations from section 4's map-level list | map `relocations` | `conform --only relocate` previews them on a fixture |
+| 3.3 | Relocations from section 4's map-level list | map `relocations` | `conform --only relocate` previews them on a fixture; targets such as `01 Model/00 Library`, `04 Conceptual`, `05 Design`, `02 Sheets/0 Feasibility` confirmed as map children, or `atlas lint` warns `RELOC-UNBLESSED-CHILD` |
 | 3.4 | `INTAKE.md`: add three design questions - who uses the building and how; what they own that must fit; budget band - pointing answers to `PROGRAM.md` | template | intake covers use, not only permit |
 | 3.5 | `RESEARCH-INDEX.md` filing note: received documents are indexed where they arrived, never copied | template | |
 | 3.6 | `CORRESPONDENCE-README.md`: rows for design review / HOA (AHJ) and for client program material (`Client/In`, cited from `PROGRAM.md`) | template | |
