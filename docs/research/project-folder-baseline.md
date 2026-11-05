@@ -238,8 +238,8 @@ field. Seed stays minimal: one new seeded folder.
 
 | Section | Child | Seed | Template | Absorbs |
 |---|---|---|---|---|
-| `06 Research & Existing Conditions` | `Program & Requirements` | **yes** | `PROGRAM.md` | Silverado `Program and client Reqs`; 211 `Client Prom Requirements`; 1221 narrative |
-| `06 Research & Existing Conditions` | `Program & Requirements/Client Items` | no | `CLIENT-ITEMS.md` (on create) | Silverado equipment and coffee photos |
+| `06 Research & Existing Conditions` | `Client Program` | **yes** | `PROGRAM.md` | Silverado `Program and client Reqs`; 211 `Client Prom Requirements`; 1221 narrative |
+| `06 Research & Existing Conditions` | `Client Program/Client Items` | no | `CLIENT-ITEMS.md` (on create) | Silverado equipment and coffee photos |
 | `06 Research & Existing Conditions` | `Site Review/Field Measurements` | no | - | `Contractor/In/As Built Dimensions` working copies |
 | `06 Research & Existing Conditions` | `Utilities & Services` | no | - | septic, well, will-serve, service capacity |
 | `05 Specs` | `00 Selections` | no | `SELECTIONS.md` (on create) | 64th Lane `12 CA` selection memos, 211 kitchen schedule |
@@ -252,8 +252,7 @@ field. Seed stays minimal: one new seeded folder.
 
 Names, and why:
 
-- **`Program & Requirements`**, not "Client Program": ADR 0022 separates client and owner;
-  the program belongs to whoever uses the building. Under `06`, as Tyler asked and where
+- **`Client Program`** (Tyler's decision, Q1). Under `06`, as Tyler asked and where
   `Project Information` already sits. Seeded because every project has a program, even a
   one-line one, and the seed costs one Drive item.
 - **`Client Items`**, under the program: they are requirements with dimensions. Not under
@@ -296,7 +295,7 @@ move (CAD links, point clouds, families loaded by path) - the conform guard appl
 
 | Project | From | To |
 |---|---|---|
-| 2981 Silverado | `06/Program and client Reqs` | `06/Program & Requirements` |
+| 2981 Silverado | `06/Program and client Reqs` | `06/Client Program` |
 | | `06/1998 As-Builts` | `06/As-Builts & Record Drawings/1998 As-Builts` |
 | | `06/CAD Deliverables` (iGUIDE DWGs) | `06/Site Review/Ex CADs & PDF` |
 | | `01 Model/Families`, `01 Model/Materials` | `01 Model/00 Library/Families`, `.../Materials` (only if not loaded by path) |
@@ -305,7 +304,7 @@ move (CAD links, point clouds, families loaded by path) - the conform guard appl
 | | `02 Sheets/Warm Floors` (vendor DWG) | `07/Vendors/In/YYMMDD_Warm Floors` |
 | | `03 Renderings/Material Studies`, `04 Presentation/Purple Material` | `03 Renderings/Material Studies` |
 | | `03 Renderings/Inspiration` | `06/Inspiration` |
-| 211 Centre | `06/Project Information/Client Prom Requirements` | `06/Program & Requirements` |
+| 211 Centre | `06/Project Information/Client Prom Requirements` | `06/Client Program` |
 | | `06/Project Information/*Selection*`, `*Coating*` memos | `06/Products & Materials` (per file) |
 | | `06/mp_matterpak_Montez-Press_*` (159) | `06/Site Review/Scans & Tours/YYMMDD_Matterport` |
 | | `05 Specs/Kitchen` | `05 Specs/11 Equipment` (schedule rows into `SELECTIONS.md`) |
@@ -370,14 +369,14 @@ then keep it clean.
 
 | # | Work | Done when |
 |---|---|---|
-| 0.1 | Silverado: put the equipment and coffee photos in the existing hand-made `06\Program and client Reqs\Client Items\` (create the subfolder by hand once). Phase 5 renames the parent to `Program & Requirements`; the photos move with it | photos filed, named `YYMMDD_<Room>_<Item>_NN` |
+| 0.1 | Silverado: put the equipment and coffee photos in the existing hand-made `06\Program and client Reqs\Client Items\` (create the subfolder by hand once). Phase 5 renames the parent to `Client Program`; the photos move with it | photos filed, named `YYMMDD_<Room>_<Item>_NN` |
 | 0.2 | Note each item's W x D x H and service needs while on site; a plain list is fine, it becomes `CLIENT-ITEMS.md` rows in 5.x | list exists |
 
 ### Phase 1 - Decide and record (1 session)
 
 | # | Work | Done when |
 |---|---|---|
-| 1.1 | Tyler answers section 6 | answers recorded in this report's header |
+| 1.1 | Tyler answers section 6 | done 2026-11-04; see section 6 |
 | 1.2 | ADR 0025 - client-side homes: program, client items, selections; the received-document rule (3.2); `description` on map children | accepted |
 | 1.3 | `CONTEXT.md` terms: Program, Client Item, Selection, Selections Register, Filing Card | terms land |
 
@@ -434,7 +433,7 @@ the move list.
 | 7 | 1221 Hayes, 1757 Coleman | legacy-shaped `06` |
 | - | 262 Monte Vista, 1655 San Vicente | conform adds the new seed and card only |
 
-Per project, done when: doctor off-map count 0 (2.5); `Program & Requirements/PROGRAM.md`
+Per project, done when: doctor off-map count 0 (2.5); `Client Program/PROGRAM.md`
 exists with at least the client's own words or a "none received" line; every selection
 memo is a register row; `atlas permits` dates every round; Revit opens with no missing
 links.
@@ -449,21 +448,23 @@ links.
 
 ---
 
-## 6. Open questions for Tyler
+## 6. Decisions (Tyler, 2026-11-04)
 
-| # | Question | Recommended default |
+All seven questions answered. Q1 overrode the recommended name; Q2-Q7 took the default.
+
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Name: `Program & Requirements` or `Client Program & Requirements`? | `Program & Requirements` - shorter, and it is the users' program even when the client is not the user |
-| Q2 | Client items: subfolder of the program (`Program & Requirements/Client Items`) or its own `06` child? | Subfolder - they are requirements with dimensions, and one place to look |
-| Q3 | Seed `Program & Requirements` in every new project? | Yes, with `PROGRAM.md`. One Drive item; every project has a program |
-| Q4 | Selections register in `05 Specs/00 Selections` or at `06/Products & Materials`? | `05 Specs/00 Selections` - research is "what could we use", selections are "what we chose"; specs is where chosen things are written up |
-| Q5 | Received reference documents (geotech, survey, hazmat): index-only pointer, or a working copy in `06`? | Pointer only. One file, one place; the research index finds it |
-| Q6 | Beitz's example drawing sets from other projects: move to the studio Reference Sets library or keep per project? | Library, if they are reusable references (ADR 0015); per project otherwise |
-| Q7 | Coleman's cost-seg budget: stay in `10 Legal` or move to `06/Costs & Bids`? | Stay - it is the client's tax record, not design research |
+| Q1 | Name of the program folder | `Client Program` (Tyler's call over the recommended `Program & Requirements`) |
+| Q2 | Client items: subfolder of the program or its own `06` child? | Subfolder: `Client Program/Client Items` |
+| Q3 | Seed `Client Program` in every new project? | Yes, with `PROGRAM.md` |
+| Q4 | Selections register location | `05 Specs/00 Selections` |
+| Q5 | Received reference documents (geotech, survey, hazmat) | Pointer only from the research index; no working copy |
+| Q6 | Beitz's example drawing sets from other projects | Move to the studio Reference Sets library (ADR 0015) |
+| Q7 | Coleman's cost-seg budget | Stays in `10 Legal` |
 
 ---
 
-## Appendix A - `06 .../Program & Requirements/PROGRAM.md` template
+## Appendix A - `06 .../Client Program/PROGRAM.md` template
 
 ```markdown
 ---
@@ -508,7 +509,7 @@ See `Client Items/CLIENT-ITEMS.md` for every item with its size and service need
 Newest first. `YYYY-MM-DD - what changed - source (meeting, email) - decision ref`.
 ```
 
-## Appendix B - `Program & Requirements/Client Items/CLIENT-ITEMS.md` template
+## Appendix B - `Client Program/Client Items/CLIENT-ITEMS.md` template
 
 ```markdown
 # Client items - {{project_name}}
