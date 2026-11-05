@@ -22,6 +22,7 @@ from .permits import PermitScan, scan_permits
 from .mapfile import DriveMap
 from .mcpjson import has_pyvoid_server
 from .projectmd import agents_block_current, is_claude_pointer, with_revit_block
+from .filingcard import card_current, card_path, card_sections
 from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
 # Files tolerated at a project root without being flagged: OS noise plus the
@@ -87,6 +88,9 @@ class ProjectReport:
     # Permit folder/register hygiene (ADR 0024): misnamed round folders and a
     # register behind its folders. Same report-only rules.
     permits: PermitScan | None = None
+    # Folders inside a section the map does not bless (ADR 0025), from the
+    # deep pass. Report-only like the warnings above; None without --deep.
+    off_map: tuple[str, ...] | None = None
     # False when the project root itself could not be listed. Every other finding
     # is then empty and ``sections_present`` means nothing: an unreadable project
     # never reads as an empty one (#13, ADR 0004).
@@ -213,7 +217,8 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
                    items: ItemCount | None = None,
                    meetings: MeetingScan | None = None,
                    budgets: BudgetScan | None = None,
-                   permits: PermitScan | None = None) -> ProjectReport:
+                   permits: PermitScan | None = None,
+                   off_map: tuple[str, ...] | None = None) -> ProjectReport:
     """One project's conformance facts.
 
     ``count_files=False`` skips the one walk here - the file count under each
@@ -302,10 +307,26 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
             missing.append(agent_dir)
     # Template files every project carries (ADR 0012). Missing means absent:
     # one that exists is the project's own, however far it has drifted from
-    # the template, and conform never overwrites it.
-    for template in m.templates:
+    # the template, and conform never overwrites it. An on-create template is
+    # owed only once its folder exists (ADR 0025).
+    for template in m.carried_templates(inv.path):
         if not (inv.path / template.path).exists():
             missing.append(template.path)
+    # Filing cards (ADR 0025): a card section that is here owes a README.md
+    # whose generated block matches the map. Like AGENTS.md, a stale block reads
+    # as missing so conform refreshes it; lines outside the markers stay.
+    dirs_here = {e.name for e in inv.root_entries if e.is_dir}
+    for section in card_sections(m):
+        if section.id not in dirs_here:
+            continue
+        card = inv.path / card_path(section)
+        try:
+            text = _read_control_file(card) if card.is_file() else None
+        except _CannotRead as error:
+            unreadable.append(str(error))
+            continue
+        if text is None or not card_current(text, section):
+            missing.append(card_path(section))
     # Seeded children of a seeded section that is here, or that a template
     # backfill above is about to create (it applies first: backfills keep
     # their order). Not of any other absent section: conform never creates a
@@ -420,6 +441,7 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         meetings=meetings,
         budgets=budgets,
         permits=permits,
+        off_map=tuple(off_map) if off_map is not None else None,
     )
 
 
@@ -447,7 +469,8 @@ def report_drive(inventory: DriveInventory, *,
                 meetings=scan_meetings(p.path, m.meetings) if m.meetings else None,
                 budgets=(scan_budgets(p.path, m.file_budgets, today or date.today())
                          if m.file_budgets else None),
-                permits=scan_permits(p.path, m.permits, today) if m.permits else None))
+                permits=scan_permits(p.path, m.permits, today) if m.permits else None,
+                off_map=scan.off_map))
         else:
             projects.append(report_project(p, inventory.map))
     return DriveReport(
@@ -515,6 +538,7 @@ def report_to_dict(report: DriveReport) -> dict:
                 "unreadable_deep": list(p.deep_unreadable),
                 "overlong": [{"path": o.path, "length": o.length} for o in p.overlong],
                 "depth_capped": list(p.depth_capped),
+                "off_map": list(p.off_map) if p.off_map is not None else None,
                 "items": ({"files": p.items.files, "folders": p.items.folders,
                            "total": p.items.total}
                           if p.items is not None else None),

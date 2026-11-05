@@ -69,7 +69,8 @@ Before writing the record, look at a good one ([`rules/reference-sets.md`](../..
 2. Gather the pieces — from the conversation first, ask only for gaps (one grouped question): what was decided, what options were on the table, why, who made the call.
 3. Write `decisions/NNNN-{kebab-slug}.md` from the template.
 4. Update the Decisions index in `PROJECT.md`.
-5. Confirm with the path and a one-line restatement of the decision.
+5. A decision that picks or changes a product or finish also updates its row in `05 Specs/00 Selections/SELECTIONS.md` and links the record from the row's Decision cell. The register says what is selected; the record says why.
+6. Confirm with the path and a one-line restatement of the decision.
 
 ## Template
 

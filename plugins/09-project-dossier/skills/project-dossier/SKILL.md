@@ -101,7 +101,7 @@ Atlas (the studio drive tool) creates the dossier at project intake and edits th
 
 ## On `update`
 
-1. Read `PROJECT.md` — both the front-matter and the tables.
+1. Read `PROJECT.md` — both the front-matter and the tables — and, where it exists, `06 Research & Existing Conditions/Client Program/PROGRAM.md`.
 2. Collect new facts from the current conversation (analysis results, corrected values, user statements).
 3. Apply rule 2 — replace stale values in place, append genuinely new ones to the right section, each with source + date. When a fact maps to a front-matter key, **update the key and its mirror row in the same pass** (rule 5). If the file has no front-matter yet (an older dossier), add the block from the template while you're there.
 4. Show a short diff-style summary of what changed.
@@ -202,7 +202,15 @@ basis: []                    # unconfirmed drawn values: {fact, value, source, r
 
 ## Program
 
-<!-- programming skills append here: headcount, space program, occupant loads -->
+<!-- programming skills append here: headcount, space program, occupant loads.
+     The full client program lives in 06 Research & Existing Conditions/Client Program/PROGRAM.md;
+     keep only code-bearing facts and a pointer here. -->
+
+On a studio project the client's program (users, rooms, sizes, must-haves) lives in
+`06 Research & Existing Conditions/Client Program/PROGRAM.md`, and the things it must fit in
+`Client Program/Client Items/CLIENT-ITEMS.md`. Read both alongside `PROJECT.md`. Copy into the
+dossier only the program facts that are code inputs - occupancy, occupant count, bedrooms -
+each with its source; the rest stays in `PROGRAM.md`.
 
 ## Code
 

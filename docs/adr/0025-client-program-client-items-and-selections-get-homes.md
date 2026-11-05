@@ -64,10 +64,14 @@ inside an on-demand folder would therefore create that folder everywhere.
    (`06 .../README.md`) from `06`'s descriptions, between markers, so the card cannot
    disagree with the map. `07`'s card stays hand-written. `atlas lint` warns on a seeded
    child with no description.
-7. **Templates take `"when": "on-create"`.** Such a template is copied when Atlas creates its
-   folder (Add-Section, a conform relocation target) and never by `atlas new` or conform
-   backfill. Doctor does not report it missing while its folder is absent, and the AGENTS.md
-   index lists it only where it exists. Every other template keeps the ADR 0012 rule.
+7. **Templates take `"when": "on-create"`.** Such a template is owed only once its folder
+   exists. `atlas new` copies it only when that folder is seeded; Add-Section copies it with
+   the folder. A folder that arrives any other way (a conform relocation, a folder made by
+   hand) makes doctor report the template missing, and the next conform backfills it -
+   backfills run before moves, so a relocation target gets its template on the following
+   pass, never mid-move. Doctor does not report it while the folder is absent. The AGENTS.md
+   block is the same in every project, so its index row says "only once its folder is added"
+   rather than being left out. Every other template keeps the ADR 0012 rule.
 8. **Hand-made folders are the signal.** When two projects improvise the same folder name, it
    goes to the map as a blessed child or a relocation.
 

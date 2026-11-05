@@ -221,6 +221,12 @@ def deep_lines(scan: DeepScan, walked: str) -> str:
         lines.extend(("", "DEPTH GUARD"))
         lines.extend(f"  not scanned below {line}" for line in scan.depth_capped)
 
+    if scan.off_map:
+        # A warning, not a finding: drift with a number (ADR 0025).
+        lines.extend(("", f"NOT ON THE MAP ({len(scan.off_map)})"))
+        lines.extend(f"  off-map: {line}" for line in scan.off_map)
+        lines.append("  Move each into a mapped folder, or bring the name to the map.")
+
     items = scan.items
     lines.extend(("", "ITEMS"))
     item_line = (f"  {items.files} files, {items.folders} folders "

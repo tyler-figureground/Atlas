@@ -32,6 +32,16 @@ class Section:
     # is a name, or {"name": ..., "seed": true}; only seeded sections seed
     # children. Clean leaves a seeded child alone, as it does a seeded top.
     seed_children: tuple[str, ...] = ()
+    # (child, one plain line) for children whose map entry carries a
+    # "description": what goes in and what does not. Shown in Add-Section and
+    # in a generated filing card. ADR 0025.
+    descriptions: tuple[tuple[str, str], ...] = ()
+    # Map "filingCard": true - the section carries a generated README.md built
+    # from the descriptions (core/filingcard.py, ADR 0025).
+    filing_card: bool = False
+
+    def description(self, child: str) -> str:
+        return next((text for name, text in self.descriptions if name == child), "")
 
 
 @dataclass(frozen=True)
@@ -42,11 +52,21 @@ class TemplateFile:
     folder (core/templates.py); ``index`` is the AGENTS.md index row's text, and
     empty keeps the file out of the index. Doctor reports a missing one, and
     conform creates it - with its folder - but never overwrites one. ADR 0012.
+
+    ``on_create`` (map ``"when": "on-create"``, ADR 0025) narrows "every
+    project" to "every project whose folder for it exists": a new project gets
+    it only if that folder is seeded, Add-Section copies it when it makes the
+    folder, and doctor and conform leave it alone while the folder is absent.
     """
 
     path: str
     template: str
     index: str = ""
+    on_create: bool = False
+
+    @property
+    def folder(self) -> str:
+        return self.path.rpartition("/")[0]
 
 
 @dataclass(frozen=True)
@@ -252,6 +272,18 @@ class DriveMap:
     def seed_child_paths(self) -> tuple[str, ...]:
         return tuple(f"{s.id}/{c}" for s in self.sections if s.seed for c in s.seed_children)
 
+    def carried_templates(self, project: Path) -> tuple[TemplateFile, ...]:
+        """The templates this project should hold now: every template, except
+        an on-create one whose folder the project does not have (ADR 0025)."""
+        return tuple(t for t in self.templates
+                     if not t.on_create or not t.folder or (project / t.folder).is_dir())
+
+    def seeded_templates(self) -> tuple[TemplateFile, ...]:
+        """The templates a new project gets: an on-create one only when its
+        folder is made with the project."""
+        seeded = {s.id for s in self.sections if s.seed} | set(self.seed_child_paths())
+        return tuple(t for t in self.templates if not t.on_create or t.folder in seeded)
+
 
 def find_map(drive_root: Path) -> Path | None:
     """Locate the drive's map: _tools/*-map.json, ignoring _deprecated."""
@@ -284,13 +316,20 @@ def load_map(path: Path) -> DriveMap:
     for entry in raw["sections"]:
         if not isinstance(entry, dict) or not isinstance(entry.get("id"), str):
             raise MapError(f"section without a string 'id' in {path}")
-        names, seeded = _parse_children(entry.get("children", []), entry["id"], path)
+        names, seeded, described = _parse_children(entry.get("children", []), entry["id"], path)
+        card = entry.get("filingCard", False)
+        if not isinstance(card, bool):
+            raise MapError(f"section '{entry['id']}' 'filingCard' must be true or false: {path}")
+        if card and not described:
+            raise MapError(f"section '{entry['id']}' has a filingCard but no child descriptions: {path}")
         sections.append(
             Section(
                 id=entry["id"],
                 seed=bool(entry.get("seed", False)),
                 children=names,
                 seed_children=seeded,
+                descriptions=described,
+                filing_card=card,
             )
         )
 
@@ -441,27 +480,35 @@ def _archive_root(value: object, path: Path) -> str:
     return normalised
 
 
-def _parse_children(raw: object, section_id: str, path: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """(every child name, the seeded ones). A child is a name or an object
-    with a name and an optional ``seed``; anything else refuses the map."""
+def _parse_children(raw: object, section_id: str, path: Path
+                    ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """(every child name, the seeded ones, (name, description) pairs). A child
+    is a name or an object with a name, an optional ``seed`` and an optional
+    one-line ``description``; anything else refuses the map."""
     where = f"section '{section_id}' children"
     if not isinstance(raw, list):
         raise MapError(f"{where} must be a list of names: {path}")
     names: list[str] = []
     seeded: list[str] = []
+    described: list[tuple[str, str]] = []
     for child in raw:
         if isinstance(child, str):
             names.append(child)
             continue
         if not isinstance(child, dict) or not isinstance(child.get("name"), str) or not child["name"].strip():
             raise MapError(f"{where}: each child must be a name or {{\"name\": ...}}: {path}")
-        unknown = sorted(set(child) - {"name", "seed"})
+        unknown = sorted(set(child) - {"name", "seed", "description"})
         if unknown:
             raise MapError(f"{where} '{child['name']}': unknown key {', '.join(repr(k) for k in unknown)}: {path}")
         names.append(child["name"])
         if child.get("seed") is True:
             seeded.append(child["name"])
-    return tuple(names), tuple(seeded)
+        if "description" in child:
+            text = child["description"]
+            if not isinstance(text, str) or not text.strip() or "\n" in text:
+                raise MapError(f"{where} '{child['name']}': 'description' must be one line of text: {path}")
+            described.append((child["name"], text.strip()))
+    return tuple(names), tuple(seeded), tuple(described)
 
 
 def _parse_templates(raw: object, path: Path) -> tuple[TemplateFile, ...]:
@@ -474,7 +521,7 @@ def _parse_templates(raw: object, path: Path) -> tuple[TemplateFile, ...]:
         where = f"templates[{index}]"
         if not isinstance(entry, dict):
             raise MapError(f"{where} is not an object: {path}")
-        unknown = sorted(set(entry) - {"path", "template", "index"})
+        unknown = sorted(set(entry) - {"path", "template", "index", "when"})
         if unknown:
             raise MapError(f"{where}: unknown key {', '.join(repr(k) for k in unknown)}: {path}")
         target = _safe_target(entry.get("path"), where, path).replace("\\", "/").strip("/")
@@ -484,10 +531,16 @@ def _parse_templates(raw: object, path: Path) -> tuple[TemplateFile, ...]:
         note = entry.get("index", "")
         if not isinstance(note, str):
             raise MapError(f"{where} 'index' must be text: {path}")
+        when = entry.get("when", "always")
+        if when not in ("always", "on-create"):
+            raise MapError(f"{where} 'when' must be \"always\" or \"on-create\": {path}")
+        if when == "on-create" and "/" not in target:
+            raise MapError(f"{where}: an on-create template needs a folder to be created with: {path}")
         if target.lower() in seen:
             raise MapError(f"{where}: '{target}' is listed twice: {path}")
         seen.add(target.lower())
-        out.append(TemplateFile(path=target, template=template, index=note))
+        out.append(TemplateFile(path=target, template=template, index=note,
+                                on_create=when == "on-create"))
     return tuple(out)
 
 

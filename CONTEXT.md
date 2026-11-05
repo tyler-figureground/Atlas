@@ -639,9 +639,10 @@ derived or reference. A received document is indexed where it arrived, never cop
 into 06 (ADR 0025).
 
 **On-Create Template**
-A Template File marked `"when": "on-create"` in the map. Copied when Atlas creates its
-folder, never by a new project or conform backfill, and not reported missing while its
-folder is absent. ADR 0025.
+A Template File marked `"when": "on-create"` in the map, owed only once its folder
+exists: Add-Section copies it with the folder, a new project gets it only if the folder is
+seeded, and conform backfills it into a folder that arrived another way. Never reported
+missing while its folder is absent. ADR 0025.
 
 **Program**
 What the people who use a place need from it: users, rooms and areas, adjacencies,

@@ -27,6 +27,13 @@ pays a second walk:
   listing each child is noise on the finding, not information.
 - **Item counts** (plan 1.6): files and folders, free on top of the
   enumeration, against the shared-drive item cap.
+- **Off-map folders** (ADR 0025): a folder inside a canonical section that is
+  neither a blessed child nor on the way to one. Only the first off-map
+  level is named - what sits below a hand-made folder is its own business.
+  Inside a blessed child anything goes. Dot folders (app state), Revit
+  backup folders, dated instances (a leading YYMMDD) and `_sources` are
+  machine or per-issue folders, never drift. Report-only, so drift has a
+  number.
 
 The walk enumerates and never opens a file. It never descends into a
 junction, and it stops DEEP_MAX_DEPTH levels below the project root - a
@@ -38,6 +45,7 @@ fact, never a silent zero.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -59,6 +67,15 @@ DRIVE_ITEM_CAP = 400_000
 # The text report speaks once the drive is past half the cap; --json always
 # carries the number.
 BUDGET_WARN_FRACTION = 0.5
+
+# Folders inside a section that are never drift (ADR 0025): a leading YYMMDD
+# is a dated instance, "_backup" is Revit's, "_sources" holds an issue's inputs.
+_DATED = re.compile(r"^\d{6}(?!\d)")
+_REVIT_BACKUP = re.compile(r"_backup$", re.IGNORECASE)
+
+# Walk states for the off-map check: a folder still being checked against the
+# map, or one inside a blessed child, below which nothing is checked.
+_CHECK, _FREE = "check", "free"
 
 
 @dataclass(frozen=True)
@@ -103,6 +120,30 @@ class DeepScan:
     overlong: tuple[OverlongPath, ...] = ()
     depth_capped: tuple[str, ...] = ()
     items: ItemCount = ItemCount()
+    off_map: tuple[str, ...] = ()
+
+
+def _exempt(name: str) -> bool:
+    return (name.startswith(".") or name.casefold() == "_sources"
+            or bool(_DATED.match(name)) or bool(_REVIT_BACKUP.search(name)))
+
+
+def map_state(m: DriveMap, rel: str) -> str | None:
+    """Where folder ``rel`` sits against the map: _CHECK (a section, or a
+    folder on the way to a blessed child), _FREE (a blessed child), "off"
+    (off the map), or None for anything outside a section - the root report
+    and the agent workspace own those."""
+    head, _, rest = rel.partition("/")
+    section = m.section(head)
+    if section is None:
+        return None
+    if not rest:
+        return _CHECK
+    if rest in section.children:
+        return _FREE
+    if any(c.startswith(rest + "/") for c in section.children):
+        return _CHECK
+    return "off"
 
 
 def scan_deep(project: Path, m: DriveMap) -> DeepScan:
@@ -117,20 +158,22 @@ def scan_deep(project: Path, m: DriveMap) -> DeepScan:
     unreadable: list[str] = []
     overlong: list[OverlongPath] = []
     depth_capped: list[str] = []
+    off_map: list[str] = []
     files = folders = 0
 
     # Iterative with an explicit stack: the depth guard, not Python's
     # recursion limit, is what bounds a pathological tree.
-    stack: list[tuple[str, int, bool]] = [("", 0, False)]  # rel, depth, under over-long
+    # rel, depth, under over-long, still checked against the map
+    stack: list[tuple[str, int, bool, bool]] = [("", 0, False, True)]
     while stack:
-        rel, depth, under_overlong = stack.pop()
+        rel, depth, under_overlong, checking = stack.pop()
         try:
             with os.scandir(long_path(project / rel if rel else project)) as it:
                 entries = list(it)
         except OSError as exc:
             unreadable.append(f"{rel or '.'}  {type(exc).__name__}: {exc.strerror or exc}")
             continue
-        children: list[tuple[str, int, bool]] = []
+        children: list[tuple[str, int, bool, bool]] = []
         for entry in entries:
             child = f"{rel}/{entry.name}" if rel else entry.name
             try:
@@ -148,10 +191,16 @@ def scan_deep(project: Path, m: DriveMap) -> DeepScan:
                 overlong.append(OverlongPath(path=child, length=length))
             if directory:
                 folders += 1
+                check_below = False
+                if checking:
+                    state = map_state(m, child)
+                    if state == "off" and not _exempt(entry.name):
+                        off_map.append(child)
+                    check_below = state == _CHECK
                 if depth + 1 >= DEEP_MAX_DEPTH:
                     depth_capped.append(child)
                 else:
-                    children.append((child, depth + 1, under_overlong or over))
+                    children.append((child, depth + 1, under_overlong or over, check_below))
             else:
                 files += 1
                 # Files at the root are File Rules' ground, not receipts, and
@@ -170,4 +219,5 @@ def scan_deep(project: Path, m: DriveMap) -> DeepScan:
         stack.extend(reversed(children))
     return DeepScan(hits=tuple(hits), unreadable=tuple(unreadable),
                     overlong=tuple(overlong), depth_capped=tuple(depth_capped),
-                    items=ItemCount(files=files, folders=folders))
+                    items=ItemCount(files=files, folders=folders),
+                    off_map=tuple(sorted(off_map)))
