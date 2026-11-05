@@ -269,21 +269,21 @@ def add_sections(drive_root: Path, m: DriveMap, project: Path, requests: list[st
         raise OpsError(f"project folder is no longer available: {project}")
     created: list[str] = []
     resolved = [_resolve_blessed(m, req) for req in requests]
+    # An on-create template arrives with its folder (ADR 0025). Rendered before
+    # any folder is made: a missing template stops the add here, not half-way.
+    values = template_values(project.name, created=datetime.now().date().isoformat())
+    try:
+        rendered = [(t.path, render_template(t.template, values)) for t in m.templates
+                    if t.on_create and t.folder in resolved]
+    except TemplateError as error:
+        raise OpsError(str(error)) from error
     for rel in resolved:
         if mkdir_below(project, rel):
             created.append(rel)
-    # An on-create template arrives with its folder (ADR 0025). Create-only, as
-    # every template is: a file already there is the project's own.
-    for template in m.templates:
-        if not template.on_create or template.folder not in resolved:
-            continue
-        try:
-            lines = render_template(template.template, template_values(
-                project.name, created=datetime.now().date().isoformat()))
-        except TemplateError as error:
-            raise OpsError(str(error)) from error
-        if create_crlf_no_bom(project / template.path, lines):
-            created.append(template.path)
+    # Create-only, as every template is: a file already there is the project's own.
+    for relative, lines in rendered:
+        if create_crlf_no_bom(project / relative, lines):
+            created.append(relative)
     if created:
         append_log(drive_root, f"[{project.name}] add: {', '.join(created)}")
     return created

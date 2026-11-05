@@ -312,21 +312,6 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
     for template in m.carried_templates(inv.path):
         if not (inv.path / template.path).exists():
             missing.append(template.path)
-    # Filing cards (ADR 0025): a card section that is here owes a README.md
-    # whose generated block matches the map. Like AGENTS.md, a stale block reads
-    # as missing so conform refreshes it; lines outside the markers stay.
-    dirs_here = {e.name for e in inv.root_entries if e.is_dir}
-    for section in card_sections(m):
-        if section.id not in dirs_here:
-            continue
-        card = inv.path / card_path(section)
-        try:
-            text = _read_control_file(card) if card.is_file() else None
-        except _CannotRead as error:
-            unreadable.append(str(error))
-            continue
-        if text is None or not card_current(text, section):
-            missing.append(card_path(section))
     # Seeded children of a seeded section that is here, or that a template
     # backfill above is about to create (it applies first: backfills keep
     # their order). Not of any other absent section: conform never creates a
@@ -340,6 +325,22 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
             rel = f"{section.id}/{child}"
             if not (inv.path / rel).is_dir():
                 missing.append(rel)
+    # Filing cards (ADR 0025): a card section that is here - or that a template
+    # backfill above is about to create - owes a README.md whose generated block
+    # matches the map. Like AGENTS.md, a stale block reads as missing so conform
+    # refreshes it; lines outside the markers stay. After the templates, so the
+    # card lands in the same pass as the folder.
+    for section in card_sections(m):
+        if section.id not in present:
+            continue
+        card = inv.path / card_path(section)
+        try:
+            text = _read_control_file(card) if card.is_file() else None
+        except _CannotRead as error:
+            unreadable.append(str(error))
+            continue
+        if text is None or not card_current(text, section):
+            missing.append(card_path(section))
 
     # driftMap: top-level dirs whose (case-insensitive) name is a known drift.
     drift: list[tuple[str, str]] = []

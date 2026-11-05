@@ -31,7 +31,7 @@ pays a second walk:
   neither a blessed child nor on the way to one. Only the first off-map
   level is named - what sits below a hand-made folder is its own business.
   Inside a blessed child anything goes. Dot folders (app state), Revit
-  backup folders, dated instances (a leading YYMMDD) and `_sources` are
+  backup and `Revit_temp` folders, dated instances (a leading YYMMDD) and `_sources` are
   machine or per-issue folders, never drift. Report-only, so drift has a
   number.
 
@@ -69,9 +69,10 @@ DRIVE_ITEM_CAP = 400_000
 BUDGET_WARN_FRACTION = 0.5
 
 # Folders inside a section that are never drift (ADR 0025): a leading YYMMDD
-# is a dated instance, "_backup" is Revit's, "_sources" holds an issue's inputs.
+# is a dated instance, "_backup" and "Revit_temp" are Revit's, "_sources" holds
+# an issue's inputs.
 _DATED = re.compile(r"^\d{6}(?!\d)")
-_REVIT_BACKUP = re.compile(r"_backup$", re.IGNORECASE)
+_REVIT_BACKUP = re.compile(r"(_backup|^revit_temp)$", re.IGNORECASE)
 
 # Walk states for the off-map check: a folder still being checked against the
 # map, or one inside a blessed child, below which nothing is checked.

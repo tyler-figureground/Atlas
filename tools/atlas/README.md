@@ -273,6 +273,10 @@ Map v4.5 keys (ADR 0025):
   warning (`off_map` in `--json`, null without `--deep`). Dot folders, `*_backup`, dated
   `YYMMDD...` folders and `_sources` are skipped; inside a blessed child anything goes.
 
+`scripts/migrate_map_v4_5.py <v4.4 map> <out.json>` writes the v4.5 map (it never
+overwrites its source). Copy it into `_tools` only once every machine runs Atlas 0.27.0:
+older Atlas refuses the new keys.
+
 ## Reference sets
 
 ```

@@ -193,6 +193,15 @@ def lint_map(m: DriveMap) -> list[Finding]:
                     Finding(WARN, "CHILD-UNDESCRIBED", f"section '{s.id}' seeds {', '.join(undescribed)} without a description; staff see a name and nothing about what goes in it")
                 )
 
+    # -- a card section's undescribed children never reach its card ------------
+    for s in m.sections:
+        if s.filing_card:
+            missing_rows = [c for c in s.children if not s.description(c)]
+            if missing_rows:
+                findings.append(
+                    Finding(WARN, "CARD-CHILD-UNDESCRIBED", f"section '{s.id}' has a filing card, but {', '.join(missing_rows)} have no description and are left off it")
+                )
+
     # -- on-create templates whose folder is seeded anyway ---------------------
     seeded_paths = {s.id for s in m.sections if s.seed} | set(m.seed_child_paths())
     for t in m.templates:

@@ -358,7 +358,7 @@ def load_map(path: Path) -> DriveMap:
         relocations=relocations,
         control_plane=control_plane,
         file_rules=_parse_file_rules(raw.get("fileRules", []), path),
-        templates=_parse_templates(raw.get("templates", []), path),
+        templates=_checked_templates(_parse_templates(raw.get("templates", []), path), sections, path),
         tolerated=_parse_tolerated(raw.get("tolerated", []), path),
         receipt_rules=_parse_receipt_rules(raw.get("receiptRules", []), path, workspace),
         meetings=_parse_meetings(raw.get("meetings"), path),
@@ -509,6 +509,17 @@ def _parse_children(raw: object, section_id: str, path: Path
                 raise MapError(f"{where} '{child['name']}': 'description' must be one line of text: {path}")
             described.append((child["name"], text.strip()))
     return tuple(names), tuple(seeded), tuple(described)
+
+
+def _checked_templates(templates: tuple[TemplateFile, ...], sections: list[Section],
+                       path: Path) -> tuple[TemplateFile, ...]:
+    """A filing card is Atlas's file (ADR 0025): a template may not claim its path."""
+    cards = {f"{s.id}/README.md".lower() for s in sections if s.filing_card}
+    for t in templates:
+        if t.path.lower() in cards:
+            raise MapError(f"template '{t.template}' -> '{t.path}' is the generated filing card of "
+                           f"'{t.path.split('/')[0]}'; drop the template or the filingCard: {path}")
+    return templates
 
 
 def _parse_templates(raw: object, path: Path) -> tuple[TemplateFile, ...]:

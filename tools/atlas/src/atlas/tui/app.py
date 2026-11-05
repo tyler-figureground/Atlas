@@ -2761,7 +2761,9 @@ class AtlasApp(App):
                 created = add_sections(root, fresh_map, project_path, picked)
                 return OperationOutcome(
                     title="Folders created",
-                    summary=f"Created {len(created)} folder(s) in {name}",
+                    summary=(f"Created {sum(1 for c in created if not c.lower().endswith('.md'))} "
+                             f"folder(s) and {sum(1 for c in created if c.lower().endswith('.md'))} "
+                             f"file(s) in {name}"),
                     lines=tuple(f"Created: {item}" for item in created) or ("Nothing changed.",),
                 )
 

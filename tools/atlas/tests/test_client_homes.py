@@ -196,7 +196,10 @@ def test_broken_card_markers_are_a_conflict_not_a_rewrite(drive):
     assert (project / "06 Research/README.md").read_text(encoding="utf-8") == broken
 
 
-def test_no_card_for_an_absent_section(drive):
+def test_no_card_for_an_absent_section_nothing_will_create(drive):
+    data = copy.deepcopy(MAP)
+    data["templates"] = []          # no backfill makes 06 Research here
+    write_map(drive, data)
     m = _load(drive)
     project = make_project(drive, "250101_Bare House", sections=["01 Model"])
     assert "06 Research/README.md" not in _report(project, m).missing_control_plane
@@ -267,3 +270,51 @@ def test_deep_pass_names_folders_off_the_map(drive):
     report = _report(project, m, off_map=scan.off_map)
     assert report.off_map == scan.off_map
     assert _report(project, m).off_map is None   # not walked is not "none found"
+
+
+# ---------------------------------------------------------------- review fixes
+
+def test_one_conform_pass_brings_the_section_its_template_and_its_card(drive):
+    m = _load(drive)
+    project = make_project(drive, "250101_One Pass House", sections=["01 Model"])
+    apply_plan(drive, project, m, build_plan(_report(project, m), m, project))
+    assert (project / PROGRAM).is_file()
+    assert (project / "06 Research/README.md").is_file()
+    assert _report(project, m).missing_control_plane == ()
+
+
+def test_a_template_may_not_claim_a_filing_card_path(fixture_drive):
+    data = copy.deepcopy(MAP)
+    data["templates"].append({"path": "06 Research/README.md", "template": "PROGRAM.md"})
+    write_map(fixture_drive, data)
+    with pytest.raises(MapError, match="filing card"):
+        _load(fixture_drive)
+
+
+def test_revit_temp_is_not_drift(drive):
+    m = _load(drive)
+    project = make_project(drive, "250101_Revit House", sections=["01 Model"])
+    (project / "01 Model/Revit_temp").mkdir()
+    assert scan_deep(project, m).off_map == ()
+
+
+def test_a_pipe_in_a_description_stays_in_its_cell(drive):
+    data = copy.deepcopy(MAP)
+    next(s for s in data["sections"] if s["id"] == "06 Research")["children"][0]["description"] = "Zoning | overlays"
+    write_map(drive, data)
+    lines = card_block_lines(_load(drive).section("06 Research"))
+    assert "| Zoning \\| overlays | `Zoning` |" in lines
+
+
+def test_a_missing_on_create_template_stops_the_add_before_any_folder(drive, monkeypatch, tmp_path):
+    m = _load(drive)
+    project = new_project(drive, m, make_intake(drive, "No Template House")).path
+    monkeypatch.setenv("ATLAS_TEMPLATES", str(tmp_path / "nowhere"))
+    with pytest.raises(Exception, match="CLIENT-ITEMS.md"):
+        add_sections(drive, m, project, [ITEMS_DIR])
+    assert not (project / ITEMS_DIR).exists()
+
+
+def test_lint_warns_when_a_card_section_child_has_no_description(drive):
+    codes = {f.code for f in lint_map(_load(drive))}
+    assert "CARD-CHILD-UNDESCRIBED" in codes
