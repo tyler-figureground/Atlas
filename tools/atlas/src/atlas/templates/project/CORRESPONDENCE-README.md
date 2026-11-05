@@ -7,7 +7,9 @@ making a new folder.
 | I have... | It goes in |
 |---|---|
 | An email, letter or file from or to the client | `Client/In` or `Client/Out` |
+| The client's wish list, questionnaire answers or brief | `Client/In` as received; cite it in `06 .../Client Program/PROGRAM.md` |
 | The same, with an owner who is **not** the client | `Owner/In` or `Owner/Out` (create `Owner` only then) |
+| Anything with a design review board or HOA | `AHJ`, by stage like any agency, with its own row in `AHJ/AHJ-REGISTER.md` |
 | City or county requirements, checklists, pre-app notes | `AHJ/01 Requirements & Pre-Application` |
 | A permit application form, owner authorisation, fee receipt | `AHJ/02 Applications & Forms` |
 | The set we filed with the city or county | `AHJ/03 Submissions/R<n>_YYMMDD` (one folder per round) |

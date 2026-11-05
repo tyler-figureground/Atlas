@@ -262,6 +262,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                     print(f"    warning: {b.message}")
                 for line in p.budgets.unreadable:
                     print(f"    warning: cannot read for budget: {line}")
+            if p.off_map:
+                print(f"    warning: {len(p.off_map)} folder(s) not on the map:")
+                for line in p.off_map:
+                    print(f"      off-map: {line}")
             if p.permits is not None:
                 for line in p.permits.misnamed:
                     print(f"    warning: round folder not R<n>_YYMMDD: {line}")

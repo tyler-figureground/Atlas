@@ -348,8 +348,9 @@ move (CAD links, point clouds, families loaded by path) - the conform guard appl
 
 Map-level relocations (`relocations` key) for names that recur: `01 Model/Archive`,
 `01 Model/archive`, `01 Model/aRCHIVE`, `02 Sheets/Test Prints`, `06/Photos`, `06/Vicinity Map`, `06/Google Maps`,
-`06/County Records - Site Review`, `06/Site Review/Virtual Tour`, `06/Reality Capture`,
-`06/Program and client Reqs`. The rest of the table is project-specific and stays a
+`06/County Records - Site Review`, `06/Site Review/Virtual Tour`,
+`06/Program and client Reqs`. `06/Reality Capture` stays a per-project move: a point cloud
+may be linked into a Revit model by path. The rest of the table is project-specific and stays a
 per-project move. `01 Model/Families` and `Materials` stay per-project moves: a Revit
 model may load them by path, so each move is checked by hand before it runs.
 
@@ -385,11 +386,11 @@ then keep it clean.
 
 | # | Work | Files | Done when |
 |---|---|---|---|
-| 2.1 | Child entries accept `"description"`; unknown-key check updated; `atlas lint` warns on a seeded child without one | `core/mapfile.py`, `core/lintmap.py`, tests | v4.4 map loads unchanged; description round-trips |
-| 2.2 | Template entries accept `"when": "on-create"`: copied when Atlas creates that folder (Add-Section, conform relocation target), never by new-project or conform backfill. Today every template is copied unconditionally, so a template in an on-demand folder would create the folder in every project | `core/mapfile.py`, `core/ops.py`, `core/conform.py`, `core/doctor.py` (missing-template list and explained top folders skip on-create templates whose folder is absent), `core/projectmd.py` (AGENTS.md index lists only present templates), check `core/runs.py`, tests | adding `Client Items` copies `CLIENT-ITEMS.md`; new project does not create `Client Items` |
-| 2.3 | Add-Section menu shows the description beside each name | TUI add-section screen | visible in a snapshot test |
-| 2.4 | Generated filing card: `06 .../README.md` built from `06`'s child descriptions; conform rewrites it in place between markers, Tyler's notes outside the markers kept (same pattern as the AGENTS.md block) | `core/templates.py` or new `core/filingcard.py` | conform on a v4.4 project adds the card; second run is a no-op |
-| 2.5 | Doctor `--deep`: off-map folder count per project (excluding Revit backups, dated instances, `_sources`), so drift has a number | `core/doctor.py`, `core/deep.py` | prints 78-ish today across active projects; 0 is the target |
+| 2.1 | Child entries accept `"description"`; unknown-key check updated; `atlas lint` warns on a seeded child without one | `core/mapfile.py`, `core/lintmap.py`, tests | done 2026-11-04, Atlas 0.27.0 |
+| 2.2 | Template entries accept `"when": "on-create"`: copied when Atlas creates that folder (Add-Section, conform relocation target), never by new-project or conform backfill. Today every template is copied unconditionally, so a template in an on-demand folder would create the folder in every project | `core/mapfile.py`, `core/ops.py`, `core/conform.py`, `core/doctor.py` (missing-template list and explained top folders skip on-create templates whose folder is absent), `core/projectmd.py` (AGENTS.md index lists only present templates), check `core/runs.py`, tests | done 2026-11-04, Atlas 0.27.0 |
+| 2.3 | Add-Section menu shows the description beside each name | TUI add-section screen | done 2026-11-04, Atlas 0.27.0 |
+| 2.4 | Generated filing card: `06 .../README.md` built from `06`'s child descriptions; conform rewrites it in place between markers, Tyler's notes outside the markers kept (same pattern as the AGENTS.md block) | `core/templates.py` or new `core/filingcard.py` | done 2026-11-04, Atlas 0.27.0 |
+| 2.5 | Doctor `--deep`: off-map folder count per project (excluding Revit backups, dated instances, `_sources`), so drift has a number | `core/doctor.py`, `core/deep.py` | done 2026-11-04, Atlas 0.27.0 |
 | 2.6 | `uv run pytest` green; CI green; release | `tools/atlas` | green |
 
 ### Phase 3 - Map v4.5 and templates
@@ -397,21 +398,21 @@ then keep it clean.
 | # | Work | Where | Done when |
 |---|---|---|---|
 | 3.1 | Add the children in 3.1 and a description for every `06` child and the new children | `_tools\architecture-map.json` | `atlas lint` clean |
-| 3.2 | Templates: `PROGRAM.md` (seeded), `CLIENT-ITEMS.md` and `SELECTIONS.md` (`on-create`) - Appendices A-C | `tools/atlas/src/atlas/templates/project/` | files present, placeholders render |
+| 3.2 | Templates: `PROGRAM.md` (seeded), `CLIENT-ITEMS.md` and `SELECTIONS.md` (`on-create`) - Appendices A-C | `tools/atlas/src/atlas/templates/project/` | done 2026-11-04, shipped in Atlas 0.27.0 |
 | 3.3 | Relocations from section 4's map-level list | map `relocations` | `conform --only relocate` previews them on a fixture; targets such as `01 Model/00 Library`, `04 Conceptual`, `05 Design`, `02 Sheets/0 Feasibility` confirmed as map children, or `atlas lint` warns `RELOC-UNBLESSED-CHILD` |
-| 3.4 | `INTAKE.md`: add three design questions - who uses the building and how; what they own that must fit; budget band - pointing answers to `PROGRAM.md` | template | intake covers use, not only permit |
-| 3.5 | `RESEARCH-INDEX.md` filing note: received documents are indexed where they arrived, never copied | template | |
-| 3.6 | `CORRESPONDENCE-README.md`: rows for design review / HOA (AHJ) and for client program material (`Client/In`, cited from `PROGRAM.md`) | template | |
+| 3.4 | `INTAKE.md`: add three design questions - who uses the building and how; what they own that must fit; budget band - pointing answers to `PROGRAM.md` | template | done 2026-11-04, Atlas 0.27.0 |
+| 3.5 | `RESEARCH-INDEX.md` filing note: received documents are indexed where they arrived, never copied | template | done 2026-11-04, Atlas 0.27.0 |
+| 3.6 | `CORRESPONDENCE-README.md`: rows for design review / HOA (AHJ) and for client program material (`Client/In`, cited from `PROGRAM.md`) | template | done 2026-11-04, Atlas 0.27.0 |
 | 3.7 | Drive `README.md` v1.5 change record and `_tools\HOW-TO.md` "where does it go" pointer | drive | |
 
 ### Phase 4 - Rules and skills agents read
 
 | # | Work | Where |
 |---|---|---|
-| 4.1 | Filing rules: program -> `PROGRAM.md`; client item photos -> `Client Items` + register row; selections -> `SELECTIONS.md`, never in `12 CA` or decisions alone | `templates/project/agents-rules.md` (Atlas block of every AGENTS.md) |
-| 4.2 | `/project-dossier`: read `PROGRAM.md` alongside `PROJECT.md`; program facts that are code inputs (occupancy, occupant count) also go into `PROJECT.md` front matter | `plugins/09-project-dossier/skills/project-dossier/SKILL.md` |
-| 4.3 | `/meeting-closeout`: program changes heard in a meeting update `PROGRAM.md` (with a dated change line) and selections update `SELECTIONS.md` | `plugins/09-project-dossier/skills/meeting-closeout/SKILL.md` |
-| 4.4 | `/decision`: a decision that changes a selection links its `SELECTIONS.md` row | `plugins/09-project-dossier/skills/decision/SKILL.md` |
+| 4.1 | Filing rules: program -> `PROGRAM.md`; client item photos -> `Client Items` + register row; selections -> `SELECTIONS.md`, never in `12 CA` or decisions alone | `templates/project/agents-rules.md` (Atlas block of every AGENTS.md) (done 2026-11-04) |
+| 4.2 | `/project-dossier`: read `PROGRAM.md` alongside `PROJECT.md`; program facts that are code inputs (occupancy, occupant count) also go into `PROJECT.md` front matter | `plugins/09-project-dossier/skills/project-dossier/SKILL.md` (done 2026-11-04) |
+| 4.3 | `/meeting-closeout`: program changes heard in a meeting update `PROGRAM.md` (with a dated change line) and selections update `SELECTIONS.md` | `plugins/09-project-dossier/skills/meeting-closeout/SKILL.md` (done 2026-11-04) |
+| 4.4 | `/decision`: a decision that changes a selection links its `SELECTIONS.md` row | `plugins/09-project-dossier/skills/decision/SKILL.md` (done 2026-11-04) |
 | 4.5 | `./scripts/lint.sh` green | repo |
 
 A dedicated `/program` skill (walk the client through the program questionnaire, turn

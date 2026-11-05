@@ -258,6 +258,25 @@ folder of templates.
 A child in the map may be `{"name": "Archive", "seed": true}`. Seeded children of a seeded
 section are created with a new project, kept by clean, and backfilled by conform.
 
+Map v4.5 keys (ADR 0025):
+
+- A child may carry `"description"`: one plain line, what goes in it and what does not.
+  Add folders (`a`) shows it beside the name, and the PROJECT.md map block lists it. Once a
+  map uses descriptions, `atlas lint` warns on a seeded child without one.
+- A section with `"filingCard": true` gets `<section>/README.md`, an "I have... / it goes
+  in" table built from its children's descriptions between `atlas:card` markers. Conform
+  writes it and refreshes the block when the map changes; lines outside the markers stay.
+- A template with `"when": "on-create"` is owed only once its folder exists: `atlas new`
+  copies it only if that folder is seeded, `atlas add` copies it with the folder, and doctor
+  and conform leave it alone while the folder is absent. The AGENTS.md index row says so.
+- `doctor --deep` names folders inside a section that the map does not bless, as a
+  warning (`off_map` in `--json`, null without `--deep`). Dot folders, `*_backup`, dated
+  `YYMMDD...` folders and `_sources` are skipped; inside a blessed child anything goes.
+
+`scripts/migrate_map_v4_5.py <v4.4 map> <out.json>` writes the v4.5 map (it never
+overwrites its source). Copy it into `_tools` only once every machine runs Atlas 0.27.0:
+older Atlas refuses the new keys.
+
 ## Reference sets
 
 ```
