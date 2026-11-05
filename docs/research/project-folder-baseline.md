@@ -397,13 +397,13 @@ then keep it clean.
 
 | # | Work | Where | Done when |
 |---|---|---|---|
-| 3.1 | Add the children in 3.1 and a description for every `06` child and the new children | `_tools\architecture-map.json` | `atlas lint` clean |
+| 3.1 | Add the children in 3.1 and a description for every `06` child and the new children | `_tools\architecture-map.json` | done 2026-11-04: map v4.5 deployed with Atlas 0.27.0 (`tools/atlas/scripts/migrate_map_v4_5.py`); lint shows only the existing DUP-CHILD warning |
 | 3.2 | Templates: `PROGRAM.md` (seeded), `CLIENT-ITEMS.md` and `SELECTIONS.md` (`on-create`) - Appendices A-C | `tools/atlas/src/atlas/templates/project/` | done 2026-11-04, shipped in Atlas 0.27.0 |
-| 3.3 | Relocations from section 4's map-level list | map `relocations` | `conform --only relocate` previews them on a fixture; targets such as `01 Model/00 Library`, `04 Conceptual`, `05 Design`, `02 Sheets/0 Feasibility` confirmed as map children, or `atlas lint` warns `RELOC-UNBLESSED-CHILD` |
+| 3.3 | Relocations from section 4's map-level list | map `relocations` | done 2026-11-04: 10 map-level relocations; `Reality Capture`, `Families`, `Materials` stay per-project |
 | 3.4 | `INTAKE.md`: add three design questions - who uses the building and how; what they own that must fit; budget band - pointing answers to `PROGRAM.md` | template | done 2026-11-04, Atlas 0.27.0 |
 | 3.5 | `RESEARCH-INDEX.md` filing note: received documents are indexed where they arrived, never copied | template | done 2026-11-04, Atlas 0.27.0 |
 | 3.6 | `CORRESPONDENCE-README.md`: rows for design review / HOA (AHJ) and for client program material (`Client/In`, cited from `PROGRAM.md`) | template | done 2026-11-04, Atlas 0.27.0 |
-| 3.7 | Drive `README.md` v1.5 change record and `_tools\HOW-TO.md` "where does it go" pointer | drive | |
+| 3.7 | Drive `README.md` v1.5 change record and `_tools\HOW-TO.md` "where does it go" pointer | drive | done 2026-11-04: drive README v1.5 and HOW-TO "Where client things go" |
 
 ### Phase 4 - Rules and skills agents read
 
@@ -426,7 +426,7 @@ the move list.
 
 | Order | Project | Why this order |
 |---|---|---|
-| 1 (pilot) | 2981 Silverado | the trigger; live program work; photos waiting |
+| 1 (pilot) | 2981 Silverado | the trigger; live program work; photos waiting. **Applied 2026-11-04**: `Client Program` + `PROGRAM.md`, `Client Items` + `CLIENT-ITEMS.md`, `06` card, `Archive` -> `_Archive`, `Test Prints` -> `_Check Prints`, `Program and client Reqs` merged into `Client Program`. Manifest `_tools\logs\conform-silverado-v45-20261104.json`. 12 off-map folders left for per-project moves |
 | 2 | 211 Centre | second program improvisation; kitchen schedule into `SELECTIONS.md` |
 | 3 | 1673 Pestoni | `V<n>` -> `R<n>` so the permit tracker sees it |
 | 4 | 80-23 64th Lane | selection memos out of `12 CA` |
