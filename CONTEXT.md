@@ -542,6 +542,8 @@ Pyvoid mcp_server folder; elsewhere Atlas reports the skip. An existing
 A file every project carries, copied by Atlas from the studio template folder in the
 repo (tools/atlas/src/atlas/templates/project/). The drive map names where each one goes.
 Created with a new project, backfilled by conform when absent, never overwritten. ADR 0012.
+The exception is an On-Create Template, which only projects using its folder carry
+(ADR 0025).
 
 **Seeded Child**
 A child folder created with its section when a project is started, and kept by clean.
@@ -633,7 +635,8 @@ its number, status and next action. The stage folders beside it hold the files. 
 **Research Index**
 06 Research & Existing Conditions/RESEARCH-INDEX.md: every source a person or agent may
 rely on, who it came from, and its authority - official, record, professional, client,
-derived or reference.
+derived or reference. A received document is indexed where it arrived, never copied
+into 06 (ADR 0025).
 
 **On-Create Template**
 A Template File marked `"when": "on-create"` in the map. Copied when Atlas creates its
@@ -656,6 +659,7 @@ Client Program/Client Items/CLIENT-ITEMS.md, photos beside it named
 A product or finish the project has chosen, as opposed to research into what it could
 use. Recorded as a row in the Selections Register; its cut sheets go in the matching
 05 Specs division folder. ADR 0025.
+_Avoid_: Selected Project (a console selection, not a product).
 
 **Selections Register**
 05 Specs/00 Selections/SELECTIONS.md: one row per Selection with who furnishes it, who
@@ -666,6 +670,7 @@ worth keeping also gets a project decision, linked from its row. ADR 0025.
 A section's staff-facing README.md: "I have... / it goes in". The 07 card is
 hand-written (ADR 0022); the 06 card is generated from the map's child descriptions
 between markers, so it cannot disagree with the map (ADR 0025).
+_Avoid_: card on its own (a Card is a Reference Set's SET.md).
 
 ## Atlas Agent Workspace
 
