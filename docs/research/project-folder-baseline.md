@@ -378,8 +378,8 @@ then keep it clean.
 | # | Work | Done when |
 |---|---|---|
 | 1.1 | Tyler answers section 6 | done 2026-11-04; see section 6 |
-| 1.2 | ADR 0025 - client-side homes: program, client items, selections; the received-document rule (3.2); `description` on map children; amends ADR 0012 (on-create templates are not carried by every project) | accepted |
-| 1.3 | `CONTEXT.md` terms: Program, Client Item, Selection, Selections Register, Filing Card | terms land |
+| 1.2 | ADR 0025 - client-side homes: program, client items, selections; the received-document rule (3.2); `description` on map children; amends ADR 0012 (on-create templates are not carried by every project) | done 2026-11-04: `docs/adr/0025-client-program-client-items-and-selections-get-homes.md` |
+| 1.3 | `CONTEXT.md` terms: Program, Client Item, Selection, Selections Register, Filing Card | done 2026-11-04, plus On-Create Template |
 
 ### Phase 2 - Atlas (one release)
 
