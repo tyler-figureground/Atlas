@@ -427,13 +427,13 @@ the move list.
 | Order | Project | Why this order |
 |---|---|---|
 | 1 (pilot) | 2981 Silverado | the trigger; live program work; photos waiting. **Applied 2026-11-04**: `Client Program` + `PROGRAM.md`, `Client Items` + `CLIENT-ITEMS.md`, `06` card, `Archive` -> `_Archive`, `Test Prints` -> `_Check Prints`, `Program and client Reqs` merged into `Client Program`. Manifest `_tools\logs\conform-silverado-v45-20261104.json`. 12 off-map folders left for per-project moves |
-| 2 | 211 Centre | second program improvisation; kitchen schedule into `SELECTIONS.md` |
-| 3 | 1673 Pestoni | `V<n>` -> `R<n>` so the permit tracker sees it |
-| 4 | 80-23 64th Lane | selection memos out of `12 CA` |
-| 5 | 315 West Ln | largest `06` drift |
-| 6 | 2267 Monticello | small; duplicates to resolve |
-| 7 | 1221 Hayes, 1757 Coleman | legacy-shaped `06` |
-| - | 262 Monte Vista, 1655 San Vicente | conform adds the new seed and card only |
+| 2 | 211 Centre | second program improvisation; kitchen schedule into `SELECTIONS.md`. **Applied 2026-11-04**: 10 moves (program docx, kitchen schedule to `11 Equipment`, memos + `_sources` to `Products & Materials`, Matterport photos, check print); `SELECTIONS.md` 18 rows; Matterport pack (point cloud) left. `moves-211centre-v45-20261104.json` |
+| 3 | 1673 Pestoni | `V<n>` -> `R<n>` so the permit tracker sees it. **Applied 2026-11-05**: R0_260917, R1_260930, R2_261006, R3_261103; floodplain ENF26-00090 its own register row and `R0_261103_Floodplain` round; prior signage permit set to `As-Builts & Record Drawings`. `moves-pestoni-rounds-20261105.json` |
+| 4 | 80-23 64th Lane | selection memos out of `12 CA`. **Applied 2026-11-05**: `Archive` -> `_Archive`; `SELECTIONS.md` 11 rows linking the memos in place (they cross-link by relative path, so they did not move); recording to `11 Meetings/Recordings` |
+| 5 | 315 West Ln | largest `06` drift. **Applied 2026-11-05**: 5 map relocations; R0_261002, R1_261009; parcel map, receipt, C-22 checks filed. `Reference Drawing Sets` left in place (Tyler; the library's CD Sets type is full) |
+| 6 | 2267 Monticello | small; duplicates to resolve. **Applied 2026-11-05**: `aRCHIVE`, `Virtual Tour` relocations |
+| 7 | 1221 Hayes, 1757 Coleman | legacy-shaped `06`. **Applied 2026-11-05**: Hayes `06` 18 moves, 34 empty folders removed (29 legacy `05 Specs/0NN`); `00/Survey` (aerials, not a licensed survey) to `GIS & Maps`; a Coleman solar quote misfiled in Hayes moved to Coleman `Costs & Bids`; Coleman `Archive` relocation. Hayes non-`06` legacy folders left |
+| - | 262 Monte Vista, 1655 San Vicente | conform adds the new seed and card only. **Done 2026-11-05** (drive-wide backfill) |
 
 Per project, done when: doctor off-map count 0 (2.5); `Client Program/PROGRAM.md`
 exists with at least the client's own words or a "none received" line; every selection
