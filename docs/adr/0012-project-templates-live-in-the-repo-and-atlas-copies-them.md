@@ -4,7 +4,8 @@ Date: 2026-10-02
 
 ## Status
 
-Accepted
+Accepted. Amended by ADR 0025: a template marked `"when": "on-create"` is copied only when
+its folder is created, and is not carried by every project.
 
 Map v3.0 key `templates`. Atlas 0.7.0. Constrained by ADR 0010 (agent files) and the
 create-only backfill rule.

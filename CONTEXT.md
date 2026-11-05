@@ -635,6 +635,38 @@ its number, status and next action. The stage folders beside it hold the files. 
 rely on, who it came from, and its authority - official, record, professional, client,
 derived or reference.
 
+**On-Create Template**
+A Template File marked `"when": "on-create"` in the map. Copied when Atlas creates its
+folder, never by a new project or conform backfill, and not reported missing while its
+folder is absent. ADR 0025.
+
+**Program**
+What the people who use a place need from it: users, rooms and areas, adjacencies,
+must-haves. Written in 06 Research & Existing Conditions/Client Program/PROGRAM.md, a
+seeded child; client source material stays in 07 Correspondence/Client/In and is cited
+by path. ADR 0025.
+
+**Client Item**
+A thing the client brings or keeps that the design must fit - an appliance, a coffee
+setup, a collection - with its size, clearances and hookups. One row in
+Client Program/Client Items/CLIENT-ITEMS.md, photos beside it named
+`YYMMDD_<Room>_<Item>_NN`. A requirement, not a Selection. ADR 0025.
+
+**Selection**
+A product or finish the project has chosen, as opposed to research into what it could
+use. Recorded as a row in the Selections Register; its cut sheets go in the matching
+05 Specs division folder. ADR 0025.
+
+**Selections Register**
+05 Specs/00 Selections/SELECTIONS.md: one row per Selection with who furnishes it, who
+installs it and its status. Changes go through the register; a choice with a reason
+worth keeping also gets a project decision, linked from its row. ADR 0025.
+
+**Filing Card**
+A section's staff-facing README.md: "I have... / it goes in". The 07 card is
+hand-written (ADR 0022); the 06 card is generated from the map's child descriptions
+between markers, so it cannot disagree with the map (ADR 0025).
+
 ## Atlas Agent Workspace
 
 **Run**
