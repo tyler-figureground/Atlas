@@ -59,6 +59,7 @@ Evidence reports live in `docs/research/`. Read the relevant one **before** star
 | `reference-sets.md` | Curated, Tyler-approved reference sets per deliverable type, with leak lists. | Its **Implementation plan** and **Open questions**. |
 | `drawing-production-reference-sets.md` | Drawing reference sets: per sheet type a `RULES.yaml`, exemplar, redline pair, print-first sheet check. | Its **Implementation plan** (phases A-F) and **Open questions**. |
 | `agent-baseline-rules-evidence.md` | What every project's `AGENTS.md` block carries for JDP, Maestro and Norma; Pyvoid reconciliation. | ADR 0017; Pyvoid #769. |
+| `project-folder-baseline.md` | Baseline of every project document type and its home; seven gaps (program, client items, selections, utilities, pay apps, closeout, receipts); map v4.5 children, templates and per-project relocations. | Its **Implementation plan** and **Open questions**. |
 | `atlas-tui-ux-evidence.md` | Console direction; never preload files on the shared drive. | ADR 0005, `.agent/handoff/atlas-tui-research.md`. |
 
 Atlas work: `.scratch/atlas-console/map.md`, tickets in `.scratch/atlas-console/issues/`. Session continuity: `.agent/handoff/`. Vocabulary: `/CONTEXT.md`.
