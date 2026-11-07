@@ -398,7 +398,7 @@ uv tool update-shell
 
 Staff launch Atlas through `Atlas.bat`, a launcher on the ARCHITECTURE drive pinned to one wheel version. The wheel lives in the drive's `_tools\atlas\` folder - 0.3.0 went to `G:\Shared drives\ARCHITECTURE\_tools\atlas\studio_atlas-0.3.0-py3-none-any.whl`. Rebuilding from `HEAD` without a version bump produces a second, different wheel under the same number, so bump `version` in `pyproject.toml` first; `atlas --version` reads it from the installed package.
 
-A redeploy writes to the production drive. Do it only with the user's go-ahead. What the deploy records (`.agent/handoff/atlas-editing-plan.md`, `atlas-project-intake-plan.md`) show each release doing:
+A redeploy writes to the production drive. Do it only with the user's go-ahead. Each release follows this deployment checklist:
 
 1. Tests green (`uv run pytest`) and repo lint green.
 2. Build: `uv build` in `tools/atlas` writes `dist/studio_atlas-<version>-py3-none-any.whl`.
