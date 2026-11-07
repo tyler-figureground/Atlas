@@ -58,7 +58,8 @@ def test_migration_seeds_check_prints_with_a_card_and_lints_clean(tmp_path, fixt
     assert "_Check Prints" in sheets.seed_children
     assert sheets.description("_Check Prints")
     assert any(t.path == CARD and not t.on_create for t in m.templates)
-    assert data["relocations"]["02 Sheets/Check Set"] == CHECK
+    assert data["relocations"]["02 Sheets/Check Set"] == f"{CHECK}/Check Set (moved)"
+    assert data["relocations"]["02 Sheets/Test Prints"] == f"{CHECK}/Test Prints (moved)"
     assert [f for f in lint_map(m) if f.level == ERROR] == []
 
 
@@ -79,17 +80,26 @@ def test_new_project_gets_the_folder_and_its_card(tmp_path, fixture_drive):
     assert _report(project, m).missing_control_plane == ()
 
 
-def test_conform_backfills_the_card_and_merges_a_hand_made_check_set(tmp_path, fixture_drive):
+def test_one_conform_pass_brings_the_folder_and_card_to_a_project_without_them(tmp_path, fixture_drive):
+    _data, m = _migrated(tmp_path, fixture_drive)
+    project = make_project(fixture_drive, "250101_Bare Print House", sections=["02 Sheets"])
+    apply_plan(fixture_drive, project, m, build_plan(_report(project, m), m, project))
+    assert (project / CARD).is_file()
+    assert _report(project, m).missing_control_plane == ()
+
+
+def test_conform_moves_a_hand_made_check_set_in_whole_never_loose(tmp_path, fixture_drive):
     _data, m = _migrated(tmp_path, fixture_drive)
     project = make_project(fixture_drive, "250101_Old Print House", sections=["02 Sheets"])
     (project / "02 Sheets/Check Set").mkdir()
     (project / "02 Sheets/Check Set/261002_A101_Check.pdf").write_bytes(b"%PDF-1.7")
     (project / CHECK).mkdir()
-    (project / CHECK / "1.pdf").write_bytes(b"%PDF-1.7")
+    (project / CHECK / "261001_A-Series").mkdir()
     apply_plan(fixture_drive, project, m, build_plan(_report(project, m), m, project))
     assert (project / CARD).is_file()
-    assert (project / CHECK / "261002_A101_Check.pdf").is_file()
-    assert (project / CHECK / "1.pdf").is_file()
+    assert (project / CHECK / "Check Set (moved)/261002_A101_Check.pdf").is_file()
+    assert not (project / CHECK / "261002_A101_Check.pdf").exists()
+    assert (project / CHECK / "261001_A-Series").is_dir()
     assert not (project / "02 Sheets/Check Set").exists()
 
 

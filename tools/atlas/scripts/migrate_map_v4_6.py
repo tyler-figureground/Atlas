@@ -12,15 +12,22 @@ import json
 import os
 import sys
 
+
+def refuse(why: str) -> None:
+    sys.exit(f"refusing: {why}")
+
+
 if len(sys.argv) != 3:
     sys.exit(__doc__)
 src, out = sys.argv[1], sys.argv[2]
 if os.path.exists(out) and os.path.samefile(src, out):
-    sys.exit("refusing to overwrite the source map; write to another path")
+    refuse("would overwrite the source map; write to another path")
 d = json.load(open(src, encoding="utf-8"))
-assert d["version"] == "4.5", d["version"]
+if d.get("version") != "4.5":
+    refuse(f"source map is v{d.get('version')}, not v4.5")
 
 CHECK = "_Check Prints"
+CP = f"02 Sheets/{CHECK}"
 CHILD = {
     "name": CHECK,
     "seed": True,
@@ -28,31 +35,31 @@ CHILD = {
                    "with its redline. Agent in-between prints stay in the run",
 }
 
-sheets = next(s for s in d["sections"] if s["id"] == "02 Sheets")
-assert sheets.get("seed") is True, "02 Sheets must be seeded for its child to seed"
+sheets = next((s for s in d["sections"] if s["id"] == "02 Sheets"), None)
+if sheets is None or sheets.get("seed") is not True:
+    refuse("02 Sheets must exist and be seeded for its child to seed")
 names = [c if isinstance(c, str) else c["name"] for c in sheets["children"]]
-assert CHECK in names, names
+if CHECK not in names:
+    refuse(f"02 Sheets has no '{CHECK}' child: {names}")
 sheets["children"][names.index(CHECK)] = CHILD
 
 card = {
-    "path": f"02 Sheets/{CHECK}/README.md",
+    "path": f"{CP}/README.md",
     "template": "CHECK-PRINTS-README.md",
     "index": "Check prints - where a set printed for review goes, and its redline",
 }
-assert all(t["path"] != card["path"] for t in d["templates"])
+if any(t["path"] == card["path"] for t in d["templates"]):
+    refuse(f"a template already writes {card['path']}")
 d["templates"].append(card)
 
-d["relocations"].update({
-    "02 Sheets/Check Set": f"02 Sheets/{CHECK}",
-    "02 Sheets/Check Sets": f"02 Sheets/{CHECK}",
-    "02 Sheets/Check Prints": f"02 Sheets/{CHECK}",
-    "02 Sheets/Tylers Review": f"02 Sheets/{CHECK}",
-    "02 Sheets/Test Prints": f"02 Sheets/{CHECK}",
-})
+# A hand-made check folder moves in whole, as one folder, so its prints never
+# land loose beside the card (one folder per check, ADR 0026 decision 2).
+for old in ("Check Set", "Check Sets", "Check Prints", "Tylers Review", "Test Prints"):
+    d["relocations"][f"02 Sheets/{old}"] = f"{CP}/{old} (moved)"
 
 d["version"] = "4.6"
 d["versionNote"] = ("v4.6 (ADR 0026, Atlas 0.28.0+): 02 Sheets/_Check Prints seeded, with a "
-                    "filing card (README.md); hand-made check-set folders relocate into it. "
+                    "filing card (README.md); hand-made check-set folders relocate into it whole. "
                     "Previous: " + d.get("versionNote", ""))
 with open(out, "w", encoding="utf-8", newline="\n") as f:
     json.dump(d, f, indent=2, ensure_ascii=False)

@@ -45,13 +45,18 @@ wanted Tyler to look at had no home; each agent invented one. `_Check Prints` wa
 5. **Issued and sent sets do not move.** Phase folders keep issued sets; `07 Correspondence`
    keeps what was sent. Only prints made to be checked move.
 6. **Existing check prints move in,** one previewed move manifest per project in
-   `_tools\logs\`. Hand-made `Check Set(s)`, `Test Prints` and `Tylers Review` folders join
-   the map's relocations to `_Check Prints`.
+   `_tools\logs\`, grouped into dated check folders. That covers prints nested where no
+   relocation reaches (211 Centre's `02 Sheets/Phase 3/Check Set`, Beitz's review prints in
+   `4 Construction`). For folders made by hand later, the map relocates `02 Sheets/Check
+   Set(s)`, `Check Prints`, `Test Prints` and `Tylers Review` into `_Check Prints` whole, as
+   `<name> (moved)`, so their prints never land loose beside the card. Relocation matches
+   exact spelling; other spellings are a per-project move.
 
 ## Consequences
 
 - Each project gains one folder and one card; conform adds both, and refreshes the AGENTS.md
-  block with the print rule.
+  block with the print rule. The card is owed always, not on create, so conform also makes
+  `02 Sheets` in a project that lacks it, as the `07 Correspondence` templates already do.
 - Map v4.6 names a template only Atlas 0.28.0 bundles. Older Atlas loads the map but fails
   when `atlas new` or conform renders the card, so the wheel and `Atlas.bat` pin deploy
   before the map.
