@@ -277,6 +277,12 @@ Map v4.5 keys (ADR 0025):
 overwrites its source). Copy it into `_tools` only once every machine runs Atlas 0.27.0:
 older Atlas refuses the new keys.
 
+Map v4.6 (ADR 0026) adds no keys: `02 Sheets/_Check Prints` becomes seeded with a filing
+card (`README.md` from `CHECK-PRINTS-README.md`), and hand-made `Check Set(s)`, `Test
+Prints` and `Tylers Review` folders relocate into it whole, as `<name> (moved)`. `scripts/migrate_map_v4_6.py <v4.5
+map> <out.json>` writes it. Deploy the 0.28.0 wheel and `Atlas.bat` pin first: older Atlas
+has no such template and fails when it renders the card.
+
 ## Reference sets
 
 ```

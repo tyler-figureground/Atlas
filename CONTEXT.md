@@ -673,6 +673,14 @@ hand-written (ADR 0022); the 06 card is generated from the map's child descripti
 between markers, so it cannot disagree with the map (ADR 0025).
 _Avoid_: card on its own (a Card is a Reference Set's SET.md).
 
+**Check Print**
+A set printed to be reviewed, never issued. One folder per check in
+02 Sheets/_Check Prints/YYMMDD_<Scope>/: the set (`_Check.pdf`), its returned markup
+(`_Redline.pdf`) and a NOTE.md. A seeded child with its own filing card. An agent's
+in-between prints stay in its Run Folder's `print/`; only the set it hands over is a
+Check Print. ADR 0026.
+_Avoid_: check set, test print, review print (old folder names, now relocated).
+
 ## Atlas Agent Workspace
 
 **Run**
