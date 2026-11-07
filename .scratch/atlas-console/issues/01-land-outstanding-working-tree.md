@@ -9,9 +9,8 @@ Parent: ../map.md
 
 Roughly thirty modified and untracked files sit in the working tree - the project
 intake, shared contacts, and project/contact editing work - while `main` is ahead of
-`origin/main` by one commit. `.agent/handoff/atlas-editing-plan.md` and
-`.agent/handoff/atlas-project-intake-plan.md` both record that work as complete and
-production-deployed, and `CONTEXT.md`, `docs/adr/0003-...`, and five new core modules
+`origin/main` by one commit. The completed editing and intake handoffs recorded that
+work as complete and production-deployed, and `CONTEXT.md`, `docs/adr/0003-...`, and five new core modules
 with their tests are part of it.
 
 Every redesign diff from this map lands on top of that. Until it is resolved, no
