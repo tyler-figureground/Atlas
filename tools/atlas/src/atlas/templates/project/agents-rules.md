@@ -115,6 +115,7 @@ Done is checked on paper:
 
 - Export the sheets with native PDF export and look at every page. Compare actual exported model viewports against the last accepted background content; text/font/PDF checks cannot pass missing geometry. Model checks and printed checks are separate; a check that could not run is BLOCKED, never passed. Data reads (schedule cell text, dimension value strings) do not prove what prints.
 - Before every export, sweep for another project's names, addresses, firm names and revision rows.
+- Where prints go - two places, nowhere else. Every export names its output folder and file; a default printer folder or name (`1.pdf`, `23542.pdf`) is a misfiled print. In-between prints while working: `.agent/runs/<run>/print/`. The set handed to Tyler for review: `02 Sheets/_Check Prints/YYMMDD_<Scope>/YYMMDD_<Scope>_Check.pdf`, with a `NOTE.md` beside it (sheets, what changed, the run that made it). Never in a phase folder, `02 Sheets` itself or a hand-made `Check Set` folder; never stamp "NOT ISSUED" in the name - the folder says it. Filing card: `02 Sheets/_Check Prints/README.md`.
 
 ## Code work
 
@@ -169,7 +170,7 @@ Not done until all six. A meeting whose minutes exist but whose brief and tasks 
 
 ## Where agent work goes
 
-- Scratch - scripts, receipts, JSON, captures, check exports, before/after images, saved web pages - goes in `.agent/runs/YYMMDD-<slug>/`, started from `.agent/runs/_RUN-TEMPLATE.md`. Nowhere else - not `handoff/`, not a `QA` folder.
+- Scratch - scripts, receipts, JSON, captures, in-between check exports (in `print/`), before/after images, saved web pages - goes in `.agent/runs/YYMMDD-<slug>/`, started from `.agent/runs/_RUN-TEMPLATE.md`. Nowhere else - not `handoff/`, not a `QA` folder. The one print a person reviews goes to `02 Sheets/_Check Prints/` (see "Done is checked on paper").
 - Drawing runs fill the measurement block in `RUN.md` - rounds to acceptance, defects reaching Tyler.
 - File a result in a numbered folder only when a person will read it: minutes, a code memo, a draft to send, an issued set. Name it `YYMMDD_Title.md`, in the section its subject belongs to. Most runs file nothing there.
 - Everything filed for a person gets a PDF beside it: `atlas pdf "<file.md>"` (re-run after every edit; the Markdown stays the source). Write decisions, actions, findings and open questions as short labelled lists; keep tables for numeric grids - occupant loads, areas, allowable vs actual - never sentences in table cells.

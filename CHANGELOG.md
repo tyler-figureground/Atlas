@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [Atlas 0.28.0] - 2026-11-07
+
+### Added
+
+- **Check prints have one home (ADR 0026, map v4.6).** `02 Sheets/_Check Prints` is seeded in every project with a filing card (`README.md`, template `CHECK-PRINTS-README.md`): one `YYMMDD_<Scope>/` folder per check holding `_Check.pdf`, `_Redline.pdf` and `NOTE.md`. The AGENTS.md block now says where every print goes: in-between prints in the run's `print/`, the hand-off set in `_Check Prints`, always to a named file. `scripts/migrate_map_v4_6.py` writes map v4.6 from v4.5, adding relocations for hand-made `Check Set(s)`, `Check Prints`, `Test Prints` and `Tylers Review` folders.
+
 ## [0.26.0] - 2026-10-31
 
 ### Added
