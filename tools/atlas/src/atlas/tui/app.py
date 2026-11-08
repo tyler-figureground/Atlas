@@ -807,10 +807,13 @@ class AddSectionModal(ModalScreen[list[str] | None]):
 
     BINDINGS = [Binding("escape", "cancel", "Cancel", show=False)]
 
-    def __init__(self, project: str, options: list[str]) -> None:
+    def __init__(self, project: str, options: list[str],
+                 descriptions: dict[str, str] | None = None) -> None:
         super().__init__()
         self._project = project
         self._options = options
+        # The map's one line per folder (ADR 0025): what goes in it.
+        self._descriptions = descriptions or {}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog", classes="selection-dialog"):
@@ -821,7 +824,8 @@ class AddSectionModal(ModalScreen[list[str] | None]):
                 markup=False,
             )
             yield SelectionList[str](
-                *[(self._option_label(option), option) for option in self._options]
+                *[(self._option_label(option, self._descriptions.get(option, "")), option)
+                  for option in self._options]
             )
             with Horizontal(classes="actions"):
                 yield Button("Create selected", variant="primary", id="ok", disabled=True)
@@ -831,13 +835,16 @@ class AddSectionModal(ModalScreen[list[str] | None]):
         self.query_one(SelectionList).focus()
 
     @staticmethod
-    def _option_label(option: str) -> Text:
+    def _option_label(option: str, about: str = "") -> Text:
         # Text, never str: an option list parses a str as markup, and a folder
         # named "[old] Archive" is a real folder name, not a style.
         if "/" not in option:
             return Text(f"{option}  (section)")
         section, child = option.split("/", 1)
-        return Text(f"  {section} / {child}")
+        label = Text(f"  {section} / {child}")
+        if about:
+            label.append(f"  {about}", style="dim")
+        return label
 
     def on_selection_list_selected_changed(self, _: SelectionList.SelectedChanged) -> None:
         selected = self.query_one(SelectionList).selected
@@ -2754,13 +2761,20 @@ class AtlasApp(App):
                 created = add_sections(root, fresh_map, project_path, picked)
                 return OperationOutcome(
                     title="Folders created",
-                    summary=f"Created {len(created)} folder(s) in {name}",
+                    summary=(f"Created {sum(1 for c in created if not c.lower().endswith('.md'))} "
+                             f"folder(s) and {sum(1 for c in created if c.lower().endswith('.md'))} "
+                             f"file(s) in {name}"),
                     lines=tuple(f"Created: {item}" for item in created) or ("Nothing changed.",),
                 )
 
             self._start_operation("Creating folders", root, create)
 
-        self.push_screen(AddSectionModal(name, options), done)
+        descriptions = {
+            f"{section.id}/{child}": text
+            for section in drive_map.sections
+            for child, text in section.descriptions
+        }
+        self.push_screen(AddSectionModal(name, options, descriptions), done)
 
     def action_clean(self) -> None:
         if self._busy or not self._inventory_fresh:

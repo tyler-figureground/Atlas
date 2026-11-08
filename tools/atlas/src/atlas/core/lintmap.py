@@ -181,6 +181,35 @@ def lint_map(m: DriveMap) -> list[Finding]:
                 Finding(WARN, "SEED-CHILD-UNSEEDED", f"section '{s.id}' seeds {', '.join(s.seed_children)} but is not itself seeded; a new project gets neither")
             )
 
+    # -- descriptions (ADR 0025): once a map uses them, every seeded child ------
+    # carries one, since a seeded folder is the one every project shows staff.
+    if any(s.descriptions for s in m.sections):
+        for s in m.sections:
+            if not s.seed:
+                continue
+            undescribed = [c for c in s.seed_children if not s.description(c)]
+            if undescribed:
+                findings.append(
+                    Finding(WARN, "CHILD-UNDESCRIBED", f"section '{s.id}' seeds {', '.join(undescribed)} without a description; staff see a name and nothing about what goes in it")
+                )
+
+    # -- a card section's undescribed children never reach its card ------------
+    for s in m.sections:
+        if s.filing_card:
+            missing_rows = [c for c in s.children if not s.description(c)]
+            if missing_rows:
+                findings.append(
+                    Finding(WARN, "CARD-CHILD-UNDESCRIBED", f"section '{s.id}' has a filing card, but {', '.join(missing_rows)} have no description and are left off it")
+                )
+
+    # -- on-create templates whose folder is seeded anyway ---------------------
+    seeded_paths = {s.id for s in m.sections if s.seed} | set(m.seed_child_paths())
+    for t in m.templates:
+        if t.on_create and t.folder in seeded_paths:
+            findings.append(
+                Finding(WARN, "TEMPLATE-ON-CREATE-SEEDED", f"template '{t.template}' is on-create, but '{t.folder}' is seeded, so every new project gets it; drop \"when\"")
+            )
+
     # -- templates: a real template, landing in a blessed place ----------------
     for t in m.templates:
         parent = t.path.rpartition("/")[0]

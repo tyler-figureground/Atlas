@@ -27,7 +27,8 @@ from datetime import date
 from pathlib import Path
 
 from .doctor import ProjectReport, report_project
-from .mapfile import DriveMap, TemplateFile, find_map, load_map
+from .filingcard import CardBlockError, card_lines, card_path, card_sections, with_card_block
+from .mapfile import DriveMap, Section, TemplateFile, find_map, load_map
 from .templates import TemplateError, render_template, template_values
 from .mcpjson import machine_mcp_server, write_mcp_json
 from .ops import OpsError, append_log, mkdir_below
@@ -763,6 +764,9 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
     if target in m.workspace_dirs:
         mkdir_below(project, target)
         return replace(action, status=DONE, note="agent workspace")
+    card_section = next((sec for sec in card_sections(m) if card_path(sec) == target), None)
+    if card_section is not None:
+        return _backfill_card(project, card_section, action)
     template = next((t for t in m.templates if t.path == target), None)
     if template is not None:
         return _backfill_template(project, template, action)
@@ -800,6 +804,32 @@ def _backfill_template(project: Path, template: TemplateFile, action: Action) ->
     if not create_crlf_no_bom(project / template.path, lines):
         return replace(action, status=SKIPPED, note="already there; left unchanged")
     return replace(action, status=DONE, note=f"from template {template.template}")
+
+
+def _backfill_card(project: Path, section: Section, action: Action) -> Action:
+    """Write or refresh a section's filing card (ADR 0025). Only the block
+    between the markers is Atlas's; every other line of the README stays."""
+    if not (project / section.id).is_dir():
+        return replace(action, status=SKIPPED, note="its section is gone; rerun")
+    path = project / card_path(section)
+    if not path.exists():
+        if not create_crlf_no_bom(path, card_lines(section)):
+            return replace(action, status=SKIPPED, note="appeared during apply; rerun")
+        return replace(action, status=DONE, note="filing card written")
+    read = _read_utf8(path)
+    if read is None:
+        return replace(action, status=CONFLICT, note="not UTF-8; left unchanged")
+    raw, text = read
+    try:
+        lines = with_card_block(text.splitlines(), section)
+    except CardBlockError as error:
+        return replace(action, status=CONFLICT, note=str(error))
+    if lines == text.splitlines():
+        return replace(action, status=SKIPPED, note="filing card already current")
+    if path.read_bytes() != raw:
+        return replace(action, status=SKIPPED, note="changed during apply; rerun")
+    write_crlf_no_bom(path, lines)
+    return replace(action, status=DONE, note="filing card refreshed")
 
 
 # ---- agent files (ADR 0010) ---------------------------------------------------

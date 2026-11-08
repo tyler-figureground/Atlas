@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .contacts import Contact, find_contact, load_contacts
 from .intake import ContactSnapshot, IntakeError, ProjectIntake, ResolvedProjectIntake
+from .filingcard import card_lines, card_path, card_sections
 from .mapfile import DriveMap
 from .naming import (
     NamingError,
@@ -173,12 +174,18 @@ def new_project(
     planned_paths.extend(section.id for section in m.sections if section.seed)
     planned_paths.extend(m.seed_child_paths())
     planned_paths.extend(m.agent_dirs)
-    planned_paths.extend(t.path for t in m.templates)
+    # On-create templates come only with a folder the project is seeded with
+    # (ADR 0025); the rest arrive when Add-Section makes their folder.
+    templates = m.seeded_templates()
+    planned_paths.extend(t.path for t in templates)
+    # A seeded section with a filing card gets it on day one (ADR 0025).
+    cards = [s for s in card_sections(m) if s.seed]
+    planned_paths.extend(card_path(s) for s in cards)
     values = template_values(folder_name, name, created.isoformat())
     try:
         # Read every template before anything is created: a missing one stops
         # the intake here, not half-way through a project folder.
-        rendered = [(t.path, render_template(t.template, values)) for t in m.templates]
+        rendered = [(t.path, render_template(t.template, values)) for t in templates]
     except TemplateError as error:
         raise OpsError(str(error)) from error
     try:
@@ -214,6 +221,9 @@ def new_project(
                 mkdir_below(project, parent)
             if not create_crlf_no_bom(project / relative, lines):
                 raise OpsError(f"{relative} appeared while creating the project; left unchanged")
+        for section in cards:
+            if not create_crlf_no_bom(project / card_path(section), card_lines(section)):
+                raise OpsError(f"{card_path(section)} appeared while creating the project; left unchanged")
 
         if not create_crlf_no_bom(
             project / m.project_file,
@@ -258,10 +268,22 @@ def add_sections(drive_root: Path, m: DriveMap, project: Path, requests: list[st
     if not project.is_dir():
         raise OpsError(f"project folder is no longer available: {project}")
     created: list[str] = []
-    for req in requests:
-        rel = _resolve_blessed(m, req)
+    resolved = [_resolve_blessed(m, req) for req in requests]
+    # An on-create template arrives with its folder (ADR 0025). Rendered before
+    # any folder is made: a missing template stops the add here, not half-way.
+    values = template_values(project.name, created=datetime.now().date().isoformat())
+    try:
+        rendered = [(t.path, render_template(t.template, values)) for t in m.templates
+                    if t.on_create and t.folder in resolved]
+    except TemplateError as error:
+        raise OpsError(str(error)) from error
+    for rel in resolved:
         if mkdir_below(project, rel):
             created.append(rel)
+    # Create-only, as every template is: a file already there is the project's own.
+    for relative, lines in rendered:
+        if create_crlf_no_bom(project / relative, lines):
+            created.append(relative)
     if created:
         append_log(drive_root, f"[{project.name}] add: {', '.join(created)}")
     return created

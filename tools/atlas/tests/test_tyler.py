@@ -202,13 +202,17 @@ def test_render_empty_queue_says_so(fixture_drive):
     assert "Nothing queued" in text
 
 
-def test_cli_json_carries_the_queue(fixture_drive, capsys, monkeypatch):
-    class FixedDate(date):
-        @classmethod
-        def today(cls):
-            return TODAY
+class _FrozenDate(date):
+    """The CLI reads date.today(); the fixture's due dates are fixed, so the
+    queue order is only stable on the fixture's own day."""
 
-    monkeypatch.setattr("atlas.cli.date", FixedDate)
+    @classmethod
+    def today(cls):
+        return TODAY
+
+
+def test_cli_json_carries_the_queue(fixture_drive, capsys, monkeypatch):
+    monkeypatch.setattr("atlas.cli.date", _FrozenDate)
     _queue(fixture_drive)
     assert main(["tyler", "--drive", str(fixture_drive), "--json"]) == 0
     data = json.loads(capsys.readouterr().out)

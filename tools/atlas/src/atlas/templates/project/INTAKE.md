@@ -19,3 +19,11 @@ Answers go into `PROJECT.md` as facts. Anything still unconfirmed when drawn bec
 10. Records you hold: surveys, prior permits, septic records, photos - send them now.
 11. AHJ, who submits, and any known checklist or format rules.
 12. Sheet list, deadline, and anything the agency has already asked for.
+
+Design questions. Answers go into `06 Research & Existing Conditions/Client Program/PROGRAM.md`,
+not `PROJECT.md`, unless they are code inputs (occupancy, occupant count, bedrooms).
+
+13. Who uses the place and how: people, a normal day, a busy day, anything that must not change.
+14. What they own that must fit: appliances, equipment, collections. Photos and sizes go in
+    `Client Program/Client Items` (add the folder with Atlas).
+15. Budget band and what it includes, and any hard dates.

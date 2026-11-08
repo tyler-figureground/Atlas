@@ -53,7 +53,11 @@ Before writing the minutes, look at a good one ([`rules/reference-sets.md`](../.
    A formatting/check failure leaves this step incomplete.
 
 3. **Facts.** Update `PROJECT.md` front matter and its mirror rows, each with
-   source and date. Facts only - no session narrative.
+   source and date. Facts only - no session narrative. A program change heard in
+   the meeting goes in `06 Research & Existing Conditions/Client Program/PROGRAM.md`
+   (the change itself, plus a dated line under Changes linking the minutes). A
+   selection made or changed updates its row in `05 Specs/00 Selections/SELECTIONS.md`;
+   no register yet: add the folder with Atlas, which brings the template.
 
 4. **Tasks.** Every action item goes to exactly one list, linked to the minutes
    (ADR 0016):

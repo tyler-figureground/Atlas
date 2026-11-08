@@ -270,7 +270,7 @@ the operation line. It has been recommended forward twice and taken neither time
 
 21, 07, 15 and 20 in that order, driven through `/tdd`. 339 tests pass, up from
 261 at the start of the day. Repo lint green throughout. Continuity for the run is
-in `.agent/handoff/atlas-tdd-four-tickets.md`.
+folded into this wayfinder.
 
 - **21, the core write surface.** `Move` and `Action.moved` give every applied
   action a manifest; `build_repair_plan` slices one Action out of the Plan conform

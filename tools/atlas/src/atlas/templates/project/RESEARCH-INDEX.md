@@ -16,3 +16,5 @@ delete one - mark it superseded instead. Read this before trusting any file in t
 - Raw captures the report cites (saved pages, downloads, API responses) go in a `_sources/`
   folder beside it.
 - Scripts and scratch go in `.agent/runs/`, never here.
+- A document someone sent us (survey, geotech, hazmat, title, as-builts) stays where it
+  arrived. Its row here points to that path; never copy it into this folder.
