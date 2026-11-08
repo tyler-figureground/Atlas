@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [Atlas 0.30.0] - 2026-11-07
+
+### Added
+
+- **Directory v2 Contact kinds (#50, CRM #126/#128).** Contacts are now either a Person with required first and last names and optional company, or an Organization with required display name and optional legal name. Both kinds keep stable UUIDs, case-insensitively unique email, optional phone, US mailing address, and unknown forward-compatible JSON fields. Organization records never receive synthetic person names.
+- **Pinned CRM Bridge fixtures.** `tools/atlas/tests/fixtures/contacts-v1.json`, `contacts-v2.json`, `project-contacts-v1.json`, and `project-contacts-v2.json` pin legacy and Directory v2 machine contracts.
+
+### Changed
+
+- **Nullable Project Client Contact (#50, CRM #126/#128).** `atlas new` no longer defaults Client Contact to Billing Contact and requires an explicit Client choice or `--no-client-contact`. `atlas project edit` accepts explicit `--clear-client-contact`; project command JSON and `atlas dossier --json` return `client_contact: null`. Billing Contact remains required, and an omitted Client argument on edit keeps the existing value.
+- **Upgrade note:** person-only v1 directory records stay schema v1 until an Organization or another v2 marker is written. Existing Project Contact snapshots are read in place and remain byte-for-byte unchanged until that project's contacts are edited. A 0.29 seat cannot read a v2 contacts store because schemaVersion 2 is unsupported. It also cannot read a dossier with a blank `client_contact_id`. Upgrade all seats before writing any Organization or null-Client record.
+
 ## [Atlas 0.29.0] - 2026-11-07
 
 ### Changed

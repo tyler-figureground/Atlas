@@ -14,6 +14,7 @@ Missing/malformed/legacy rendered headless at the measured widths: 179, 153,
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from textual.widgets import Static
 
@@ -130,9 +131,21 @@ def test_dossier_json_names_its_fields(fixture_drive, capsys):
     assert payload["description"] == "Kitchen"
     assert payload["created"] == "2026-08-13"
     assert payload["billing_contact"]["email"] == "oak-house@example.com"
+    assert payload["billing_contact"]["kind"] == "person"
     assert payload["client_contact"]["id"] == payload["billing_contact"]["id"]
     assert payload["decisions"] == {"count": 0, "latest": []}
     assert len(payload["source_digest"]) == 64
+
+
+def test_project_contact_contract_fixtures_pin_v1_and_v2_shapes():
+    fixtures = Path(__file__).parent / "fixtures"
+    v1 = json.loads((fixtures / "project-contacts-v1.json").read_text(encoding="utf-8"))
+    v2 = json.loads((fixtures / "project-contacts-v2.json").read_text(encoding="utf-8"))
+
+    assert "kind" not in v1["billing_contact"]
+    assert v1["client_contact"] is not None
+    assert v2["billing_contact"]["kind"] == "organization"
+    assert v2["client_contact"] is None
 
 
 def test_dossier_text_renders_the_facts_table(fixture_drive, capsys):

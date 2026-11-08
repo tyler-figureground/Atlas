@@ -207,7 +207,8 @@ def test_cli_new_reports_the_skip(fixture_drive, monkeypatch, capsys):
     assert main(["new", "--drive", str(fixture_drive), "--name", "Cli Seat",
                  "--street", "9 Elm Street", "--city", "Oakland", "--state", "CA",
                  "--zip", "94612", "--use-case", "Renovation",
-                 "--billing-contact", contact_id, "--json"]) == 0
+                 "--billing-contact", contact_id, "--client-contact", contact_id,
+                 "--json"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["mcp"]["status"] == SKIPPED
     assert MCP_SERVER_ENV in out["mcp"]["note"]

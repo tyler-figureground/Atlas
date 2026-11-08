@@ -51,6 +51,7 @@ from .core.contacts import (
 from .core.doctor import budget as doctor_budget
 from .core.doctor import report_drive, report_project, report_to_dict
 from .core.intake import (
+    ContactSnapshot,
     IntakeError,
     ProjectAddress,
     ProjectIntake,
@@ -303,16 +304,52 @@ def _resolve_project(root: Path, name: str) -> Path:
 
 
 def _contact_to_dict(contact: Contact) -> dict[str, object]:
+    address = None
+    if contact.address is not None:
+        address = {**contact._address_extra, **contact.address}
     return {
+        **contact._extra,
         "id": contact.id,
-        "first_name": contact.first_name,
-        "last_name": contact.last_name,
+        "kind": contact.kind,
+        **(
+            {"first_name": contact.first_name, "last_name": contact.last_name,
+             "company": contact.company}
+            if contact.kind == "person"
+            else {"display_name": contact.display_name, "legal_name": contact.legal_name}
+        ),
         "email": contact.email,
         "phone": contact.phone,
-        "company": contact.company,
-        "address": contact.address,
+        "address": address,
         "created_at": contact.created_at,
         "updated_at": contact.updated_at,
+    }
+
+
+def _contact_snapshot_to_dict(
+    snapshot: ContactSnapshot | None,
+) -> dict[str, object] | None:
+    if snapshot is None:
+        return None
+    return {
+        **snapshot.extra,
+        "id": snapshot.id,
+        "kind": snapshot.kind,
+        "name": snapshot.full_name,
+        **(
+            {
+                "first_name": snapshot.first_name,
+                "last_name": snapshot.last_name,
+                "company": snapshot.company,
+            }
+            if snapshot.kind == "person"
+            else {
+                "display_name": snapshot.display_name,
+                "legal_name": snapshot.legal_name,
+            }
+        ),
+        "email": snapshot.email,
+        "phone": snapshot.phone,
+        "address": snapshot.address,
     }
 
 
@@ -330,10 +367,10 @@ def _contact_address(contact: Contact) -> str:
 
 
 def _print_contact(contact: Contact, prefix: str = "") -> None:
-    print(
-        f"{prefix}{contact.first_name} {contact.last_name} "
-        f"<{contact.email}> ({contact.id})"
-    )
+    print(f"{prefix}{contact.full_name} <{contact.email}> ({contact.id})")
+    print(f"  kind: {contact.kind}")
+    if contact.legal_name:
+        print(f"  legal name: {contact.legal_name}")
     if contact.company:
         print(f"  company: {contact.company}")
     if contact.phone:
@@ -352,6 +389,16 @@ def _prompt_retain(label: str, current: str, *, clearable: bool = False) -> str:
     if clearable and value == "-":
         return ""
     return value
+
+
+def _prompt_optional_retain(label: str, current: str | None) -> tuple[str | None, bool]:
+    shown = current or "none"
+    value = input(f"{label} [{shown}] (Enter keeps current; '-' clears): ")
+    if not value:
+        return current, False
+    if value == "-":
+        return None, True
+    return value, False
 
 
 def _prompt_choice_retain(
@@ -393,8 +440,11 @@ def cmd_contacts_add(args: argparse.Namespace) -> int:
         contact = add_contact(
             root,
             ContactDraft(
-                first_name=args.first_name,
-                last_name=args.last_name,
+                kind=args.kind,
+                first_name=args.first_name or "",
+                last_name=args.last_name or "",
+                display_name=args.display_name,
+                legal_name=args.legal_name,
                 email=args.email,
                 phone=args.phone,
                 company=args.company,
@@ -448,6 +498,9 @@ def cmd_contacts_edit(args: argparse.Namespace) -> int:
     editable_values = (
         args.first_name,
         args.last_name,
+        args.kind,
+        args.display_name,
+        args.legal_name,
         args.email,
         args.phone,
         args.company,
@@ -472,8 +525,17 @@ def cmd_contacts_edit(args: argparse.Namespace) -> int:
         return 2
     if not scripted:
         previous = current.address or {}
-        args.first_name = _prompt_retain("First name", current.first_name)
-        args.last_name = _prompt_retain("Last name", current.last_name)
+        args.kind = _prompt_choice_retain(
+            "Contact kind", current.kind, ("person", "organization")
+        )
+        if args.kind == "person":
+            args.first_name = _prompt_retain("First name", current.first_name)
+            args.last_name = _prompt_retain("Last name", current.last_name)
+        else:
+            args.display_name = _prompt_retain("Display name", current.display_name)
+            args.legal_name = _prompt_retain(
+                "Legal name", current.legal_name or "", clearable=True
+            )
         args.email = _prompt_retain("Email", current.email)
         args.phone = _prompt_retain("Phone", current.phone or "", clearable=True)
         args.company = _prompt_retain("Company", current.company or "", clearable=True)
@@ -542,19 +604,44 @@ def cmd_contacts_edit(args: argparse.Namespace) -> int:
     else:
         address = current.address
 
+    target_kind = args.kind if args.kind is not None else current.kind
+    person = target_kind == "person"
     updated = update_contact(
         root,
         current.id,
         ContactDraft(
+            kind=target_kind,
             first_name=(
-                args.first_name if args.first_name is not None else current.first_name
+                args.first_name
+                if args.first_name is not None
+                else current.first_name if person and current.kind == "person" else ""
             ),
             last_name=(
-                args.last_name if args.last_name is not None else current.last_name
+                args.last_name
+                if args.last_name is not None
+                else current.last_name if person and current.kind == "person" else ""
+            ),
+            display_name=(
+                args.display_name
+                if args.display_name is not None
+                else current.display_name
+                if not person and current.kind == "organization"
+                else ""
+            ),
+            legal_name=(
+                args.legal_name
+                if args.legal_name is not None
+                else current.legal_name
+                if not person and current.kind == "organization"
+                else None
             ),
             email=args.email if args.email is not None else current.email,
             phone=args.phone if args.phone is not None else current.phone,
-            company=args.company if args.company is not None else current.company,
+            company=(
+                args.company
+                if args.company is not None
+                else current.company if person and current.kind == "person" else None
+            ),
             address=address,
         ),
         expected_updated_at=current.updated_at,
@@ -593,9 +680,13 @@ def cmd_new(args: argparse.Namespace) -> int:
         billing = find_contact(directory, args.billing_contact)
         if billing is None:
             raise OpsError(f"Billing Contact not found: {args.billing_contact}")
-        client_reference = args.client_contact or args.billing_contact
-        client = find_contact(directory, client_reference)
-        if client is None:
+        if args.client_contact is not None and args.no_client_contact:
+            raise OpsError("--client-contact cannot be combined with --no-client-contact")
+        if args.client_contact is None and not args.no_client_contact:
+            raise OpsError("choose --client-contact or --no-client-contact; Billing is never substituted")
+        client_reference = args.client_contact
+        client = find_contact(directory, client_reference) if client_reference else None
+        if client_reference is not None and client is None:
             raise OpsError(f"Client Contact not found: {client_reference}")
         intake = ProjectIntake(
             project_name=args.name,
@@ -608,7 +699,7 @@ def cmd_new(args: argparse.Namespace) -> int:
             ),
             project_use_case=ProjectUseCase(args.use_case, args.other_use_case or ""),
             billing_contact_id=billing.id,
-            client_contact_id=client.id,
+            client_contact_id=client.id if client is not None else None,
             description=args.desc or "",
             created=created,
         )
@@ -630,7 +721,17 @@ def cmd_new(args: argparse.Namespace) -> int:
                     "use_case": result.intake.project_use_case.display,
                     "use_case_category": result.intake.project_use_case.category,
                     "billing_contact_id": result.intake.billing_contact.id,
-                    "client_contact_id": result.intake.client_contact.id,
+                    "client_contact_id": (
+                        result.intake.client_contact.id
+                        if result.intake.client_contact is not None
+                        else None
+                    ),
+                    "billing_contact": _contact_snapshot_to_dict(
+                        result.intake.billing_contact
+                    ),
+                    "client_contact": _contact_snapshot_to_dict(
+                        result.intake.client_contact
+                    ),
                     "created_date": created.isoformat(),
                     "crm_id": args.crm_id or None,
                     "mcp": ({"status": result.mcp.status, "note": result.mcp.note}
@@ -644,7 +745,11 @@ def cmd_new(args: argparse.Namespace) -> int:
         print(f"address: {result.intake.project_address.formatted}")
         print(f"use case: {result.intake.project_use_case.display}")
         print(f"billing: {result.intake.billing_contact.full_name}")
-        print(f"client:  {result.intake.client_contact.full_name}")
+        print(
+            f"client:  {result.intake.client_contact.full_name}"
+            if result.intake.client_contact is not None
+            else "client:  none"
+        )
         if args.crm_id:
             print(f"crm id:  {args.crm_id}")
         print(f"seed:    {', '.join(result.seeded)}")
@@ -672,6 +777,8 @@ def _project_update_to_dict(result: ProjectUpdateResult) -> dict[str, object]:
         "use_case_category": intake.project_use_case.category,
         "billing_contact_id": intake.billing_contact_id,
         "client_contact_id": intake.client_contact_id,
+        "billing_contact": _contact_snapshot_to_dict(result.record.billing_contact),
+        "client_contact": _contact_snapshot_to_dict(result.record.client_contact),
     }
 
 
@@ -692,6 +799,8 @@ def _project_update_plan_to_dict(plan: ProjectUpdatePlan) -> dict[str, object]:
         "use_case_category": intake.project_use_case.category,
         "billing_contact_id": intake.billing_contact_id,
         "client_contact_id": intake.client_contact_id,
+        "billing_contact": _contact_snapshot_to_dict(plan.billing_contact),
+        "client_contact": _contact_snapshot_to_dict(plan.client_contact),
     }
 
 
@@ -718,6 +827,7 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         or args.yes
         or args.rename
         or args.dry_run
+        or args.clear_client_contact
         or any(value is not None for value in editable_values)
         or not sys.stdin.isatty()
     )
@@ -753,9 +863,14 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
             f"<{record.billing_contact.email}>)",
             current.billing_contact_id,
         )
-        args.client_contact = _prompt_retain(
-            f"Client Contact ID or email (now {record.client_contact.full_name} "
-            f"<{record.client_contact.email}>)",
+        current_client = record.client_contact
+        args.client_contact, args.clear_client_contact = _prompt_optional_retain(
+            (
+                f"Client Contact ID or email (now {current_client.full_name} "
+                f"<{current_client.email}>)"
+                if current_client is not None
+                else "Client Contact ID or email (now none)"
+            ),
             current.client_contact_id,
         )
         args.desc = _prompt_retain(
@@ -774,15 +889,23 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         custom_label = ""
     directory = load_contacts(root)
     billing_reference = args.billing_contact or current.billing_contact_id
-    client_reference = args.client_contact or current.client_contact_id
+    if args.clear_client_contact and args.client_contact is not None:
+        raise ProjectDataError(
+            "--clear-client-contact cannot be combined with --client-contact"
+        )
+    client_reference = (
+        None
+        if args.clear_client_contact
+        else args.client_contact if args.client_contact is not None else current.client_contact_id
+    )
     billing = find_contact(directory, billing_reference)
     if billing is None:
         raise ProjectDataError(
             f"Billing Contact not found: {billing_reference!r}. Run 'atlas contacts list' "
             "and retry with an existing contact ID or email."
         )
-    client = find_contact(directory, client_reference)
-    if client is None:
+    client = find_contact(directory, client_reference) if client_reference is not None else None
+    if client_reference is not None and client is None:
         raise ProjectDataError(
             f"Client Contact not found: {client_reference!r}. Run 'atlas contacts list' "
             "and retry with an existing contact ID or email."
@@ -812,7 +935,7 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         ),
         project_use_case=ProjectUseCase(category, custom_label),
         billing_contact_id=billing.id,
-        client_contact_id=client.id,
+        client_contact_id=client.id if client is not None else None,
         description=args.desc if args.desc is not None else current.description,
         created=current.created,
     )
@@ -833,7 +956,11 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
             print(f"address: {plan.intake.project_address.formatted}")
             print(f"use case: {plan.intake.project_use_case.display}")
             print(f"billing: {plan.billing_contact.full_name}")
-            print(f"client:  {plan.client_contact.full_name}")
+            print(
+                f"client:  {plan.client_contact.full_name}"
+                if plan.client_contact is not None
+                else "client:  none"
+            )
         return 0
     allow_rename = False
     if plan.rename_required:
@@ -872,7 +999,11 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
         print(f"address: {result.record.intake.project_address.formatted}")
         print(f"use case: {result.record.intake.project_use_case.display}")
         print(f"billing: {result.record.billing_contact.full_name}")
-        print(f"client:  {result.record.client_contact.full_name}")
+        print(
+            f"client:  {result.record.client_contact.full_name}"
+            if result.record.client_contact is not None
+            else "client:  none"
+        )
     return 0
 
 
@@ -1926,10 +2057,6 @@ def cmd_dossier(args: argparse.Namespace) -> int:
     record = load_project_record(project, project_file=drive_map.project_file)
     intake = record.intake
     if args.json:
-        def snapshot_dict(snapshot) -> dict[str, object]:
-            return {"id": snapshot.id, "name": snapshot.full_name,
-                    "email": snapshot.email, "phone": snapshot.phone,
-                    "company": snapshot.company, "address": snapshot.address}
         print(json.dumps({
             "drive": drive_map.drive,
             "project": project.name,
@@ -1941,8 +2068,8 @@ def cmd_dossier(args: argparse.Namespace) -> int:
             "description": intake.description,
             "created": intake.created.isoformat(),
             "crm_id": record.crm_id or None,
-            "billing_contact": snapshot_dict(record.billing_contact),
-            "client_contact": snapshot_dict(record.client_contact),
+            "billing_contact": _contact_snapshot_to_dict(record.billing_contact),
+            "client_contact": _contact_snapshot_to_dict(record.client_contact),
             "decisions": {"count": record.decisions.count,
                           "latest": list(record.decisions.latest)},
             "source_digest": record.source_digest,
@@ -2275,8 +2402,11 @@ def main(argv: list[str] | None = None) -> int:
         "--drive", help="drive root (default: walk up from cwd, else auto-discover)"
     )
     contacts_add.add_argument("--json", action="store_true", help="machine-readable output")
-    contacts_add.add_argument("--first-name", required=True)
-    contacts_add.add_argument("--last-name", required=True)
+    contacts_add.add_argument("--kind", choices=("person", "organization"), default="person")
+    contacts_add.add_argument("--first-name")
+    contacts_add.add_argument("--last-name")
+    contacts_add.add_argument("--display-name")
+    contacts_add.add_argument("--legal-name")
     contacts_add.add_argument("--email", required=True)
     contacts_add.add_argument("--phone")
     contacts_add.add_argument("--company")
@@ -2304,6 +2434,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     contacts_edit.add_argument("--first-name")
     contacts_edit.add_argument("--last-name")
+    contacts_edit.add_argument("--kind", choices=("person", "organization"))
+    contacts_edit.add_argument("--display-name")
+    contacts_edit.add_argument("--legal-name", help="use an empty value to clear")
     contacts_edit.add_argument("--email")
     contacts_edit.add_argument("--phone", help="use an empty value to clear")
     contacts_edit.add_argument("--company", help="use an empty value to clear")
@@ -2374,6 +2507,10 @@ def main(argv: list[str] | None = None) -> int:
     project_edit.add_argument("--other-use-case")
     project_edit.add_argument("--billing-contact", help="contact ID or email")
     project_edit.add_argument("--client-contact", help="contact ID or email")
+    project_edit.add_argument(
+        "--clear-client-contact", action="store_true",
+        help="explicitly remove the project's Client Contact",
+    )
     project_edit.add_argument(
         "--desc",
         "--description",
@@ -2474,7 +2611,11 @@ def main(argv: list[str] | None = None) -> int:
         "--billing-contact", required=True, help="contact ID or email"
     )
     sub.choices["new"].add_argument(
-        "--client-contact", help="contact ID or email (default: billing contact)"
+        "--client-contact", help="contact ID or email"
+    )
+    sub.choices["new"].add_argument(
+        "--no-client-contact", action="store_true",
+        help="explicitly create the project with no Client Contact"
     )
     sub.choices["new"].add_argument("--desc", default="", help="short descriptor (e.g. ADU, Renovation)")
     sub.choices["new"].add_argument(

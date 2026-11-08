@@ -30,6 +30,8 @@ KEYS_LINE = "e edit   o open"
 def _contact_lines(role: str, snapshot) -> list[str]:
     """One Contact Snapshot as labelled lines; absent parts are simply not
     drawn - never an empty label pretending to be a fact."""
+    if snapshot is None:
+        return [f"{role}: none"]
     lines = [f"{role}:"]
     lines.append(f"  {snapshot.full_name}")
     for value in (snapshot.email, snapshot.phone, snapshot.company, snapshot.address):

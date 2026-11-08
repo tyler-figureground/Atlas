@@ -58,6 +58,8 @@ def _new_project(fixture_drive: Path, capsys, billing_contact: str):
             "Renovation",
             "--billing-contact",
             billing_contact,
+            "--client-contact",
+            billing_contact,
             "--desc",
             "Kitchen",
             "--json",
@@ -167,7 +169,7 @@ def test_contacts_edit_interactive_prompts_retain_current_values(
         phone="510-555-0100",
         company="Analytical Engines",
     )
-    answers = iter(("", "", "ADA.NEW@example.com", "", "", "", "", "", "", ""))
+    answers = iter(("", "", "", "ADA.NEW@example.com", "", "", "", "", "", "", ""))
     prompts = []
 
     def answer(prompt):
@@ -188,7 +190,7 @@ def test_contacts_edit_interactive_prompts_retain_current_values(
     )
 
     assert status == 0
-    assert len(prompts) == 10
+    assert len(prompts) == 11
     assert all("Enter keeps current" in prompt for prompt in prompts)
     assert "updated: Ada Lovelace <ada.new@example.com>" in capsys.readouterr().out
     assert main(["contacts", "list", "--drive", str(fixture_drive), "--json"]) == 0
@@ -503,6 +505,68 @@ def test_project_edit_interactive_keeps_contacts_by_id_not_snapshot_email(
     assert record.client_contact.full_name == "Ada Lovelace"
 
 
+def test_project_edit_interactive_dash_clears_client_contact(
+    fixture_drive, capsys, monkeypatch
+):
+    from atlas.core.project_data import load_project_record
+
+    ada = _add_contact(fixture_drive, capsys)
+    created = _new_project(fixture_drive, capsys, ada["id"])
+    answers = iter(("", "", "", "", "", "", "", "", "-", ""))
+
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    status = main(["project", "edit", created["created"], "--drive", str(fixture_drive)])
+
+    assert status == 0
+    record = load_project_record(fixture_drive / created["created"])
+    assert record.intake.client_contact_id is None
+    assert record.client_contact is None
+
+
+def test_project_edit_interactive_enter_keeps_null_client(
+    fixture_drive, capsys, monkeypatch
+):
+    from atlas.core.project_data import load_project_record
+
+    ada = _add_contact(fixture_drive, capsys)
+    assert main(
+        [
+            "new",
+            "--drive",
+            str(fixture_drive),
+            "--name",
+            "Oak House",
+            "--street",
+            "1842 Oak Street",
+            "--city",
+            "Oakland",
+            "--state",
+            "CA",
+            "--zip",
+            "94612",
+            "--use-case",
+            "Renovation",
+            "--billing-contact",
+            ada["id"],
+            "--no-client-contact",
+            "--json",
+        ]
+    ) == 0
+    created = json.loads(capsys.readouterr().out)
+
+    monkeypatch.setattr("builtins.input", lambda _prompt: "")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    status = main(["project", "edit", created["created"], "--drive", str(fixture_drive)])
+
+    assert status == 0
+    record = load_project_record(fixture_drive / created["created"])
+    assert record.intake.client_contact_id is None
+    assert record.client_contact is None
+
+
 def test_project_edit_interactive_refuses_a_dossier_changed_while_prompting(
     fixture_drive, capsys, monkeypatch
 ):
@@ -735,7 +799,7 @@ def test_contacts_list_json_returns_sorted_contacts(fixture_drive, capsys):
     ]
 
 
-def test_new_json_creates_complete_intake_and_defaults_client_to_billing(
+def test_new_json_creates_complete_intake_with_explicit_client(
     fixture_drive, capsys
 ):
     assert main(
@@ -775,6 +839,8 @@ def test_new_json_creates_complete_intake_and_defaults_client_to_billing(
             "--use-case",
             "Renovation",
             "--billing-contact",
+            "ADA@example.com",
+            "--client-contact",
             "ADA@example.com",
             "--desc",
             "Kitchen",
@@ -888,6 +954,7 @@ def test_new_requires_every_complete_intake_flag(fixture_drive, capsys, required
         "Renovation",
         "--billing-contact",
         "ada@example.com",
+        "--no-client-contact",
     ]
     position = arguments.index(required_flag)
     del arguments[position : position + 2]
@@ -994,6 +1061,8 @@ def test_new_human_output_reports_complete_intake(fixture_drive, capsys):
             "Renovation",
             "--billing-contact",
             "ada@example.com",
+            "--client-contact",
+            "ada@example.com",
         ]
     ) == 0
 
@@ -1064,6 +1133,7 @@ def test_intake_error_returns_2(fixture_drive, capsys):
             "Renovation",
             "--billing-contact",
             "ada@example.com",
+            "--no-client-contact",
         ]
     )
 
@@ -1093,6 +1163,7 @@ def test_ops_error_returns_2(fixture_drive, capsys):
             "Renovation",
             "--billing-contact",
             "missing@example.com",
+            "--no-client-contact",
         ]
     )
 
@@ -1138,6 +1209,7 @@ def test_other_without_custom_label_returns_2(fixture_drive, capsys):
             "Other",
             "--billing-contact",
             "ada@example.com",
+            "--no-client-contact",
         ]
     )
 

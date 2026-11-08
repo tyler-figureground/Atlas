@@ -33,7 +33,7 @@ class DuplicateContactError(ContactError):
     def __init__(self, existing: "Contact") -> None:
         self.existing = existing
         super().__init__(
-            f"contact email already exists for {existing.first_name} {existing.last_name} "
+            f"contact email already exists for {existing.full_name} "
             f"({existing.email}); select that contact or use a different email"
         )
 
@@ -44,8 +44,8 @@ class DuplicateContactIdError(ContactError):
     def __init__(self, existing: "Contact") -> None:
         self.existing = existing
         super().__init__(
-            f"contact ID already exists: {existing.id} belongs to {existing.first_name} "
-            f"{existing.last_name} ({existing.email}); file not changed"
+            f"contact ID already exists: {existing.id} belongs to {existing.full_name} "
+            f"({existing.email}); file not changed"
         )
 
 
@@ -113,12 +113,15 @@ class MailingAddress:
 
 @dataclass(frozen=True)
 class ContactDraft:
-    first_name: str
-    last_name: str
-    email: str
+    first_name: str = ""
+    last_name: str = ""
+    email: str = ""
     phone: str | None = None
     company: str | None = None
     address: Mapping[str, str] | MailingAddress | None = None
+    kind: str = "person"
+    display_name: str | None = None
+    legal_name: str | None = None
 
 
 @dataclass(frozen=True)
@@ -132,6 +135,9 @@ class Contact:
     address: dict[str, str] | None
     created_at: str
     updated_at: str
+    kind: str = "person"
+    display_name: str = ""
+    legal_name: str | None = None
     # Keys this build does not know, carried through every write untouched so
     # a newer Atlas on another workstation never has its fields stripped.
     _extra: Mapping[str, object] = field(default_factory=dict, repr=False, compare=False)
@@ -139,16 +145,24 @@ class Contact:
         default_factory=dict, repr=False, compare=False
     )
 
+    @property
+    def full_name(self) -> str:
+        if self.kind == "organization":
+            return self.display_name
+        return f"{self.first_name} {self.last_name}".strip()
+
 
 @dataclass(frozen=True)
 class ContactDirectory:
     contacts: tuple[Contact, ...] = ()
     _digest: str | None = field(default=None, repr=False, compare=False)
     _extra: Mapping[str, object] = field(default_factory=dict, repr=False, compare=False)
+    _schema_version: int = field(default=1, repr=False, compare=False)
 
 
 _CONTACT_KEYS = frozenset(
-    ("id", "firstName", "lastName", "email", "phone", "company", "address", "createdAt", "updatedAt")
+    ("id", "kind", "firstName", "lastName", "displayName", "legalName", "email",
+     "phone", "company", "address", "createdAt", "updatedAt")
 )
 _ADDRESS_KEYS = frozenset(("street", "unit", "city", "state", "postalCode", "country"))
 _DIRECTORY_KEYS = frozenset(("schemaVersion", "contacts"))
@@ -160,8 +174,11 @@ def _unknown(raw: Mapping[str, object], known: frozenset[str]) -> dict[str, obje
 
 @dataclass(frozen=True)
 class _ContactValues:
+    kind: str
     first_name: str
     last_name: str
+    display_name: str
+    legal_name: str | None
     email: str
     phone: str | None
     company: str | None
@@ -238,8 +255,45 @@ def _contact_from_storage(item: object, path: Path, index: int) -> Contact:
         UUID(contact_id)
     except ValueError as error:
         raise _record_error(path, index, "'id' must be a UUID") from error
-    first_name = _required_record_text(item, "firstName", path, index)
-    last_name = _required_record_text(item, "lastName", path, index)
+    kind_value = item.get("kind", "person")
+    if kind_value not in ("person", "organization"):
+        raise _record_error(path, index, "has invalid 'kind'; expected 'person' or 'organization'")
+    kind = kind_value
+    first_name_value = item.get("firstName")
+    last_name_value = item.get("lastName")
+    display_name_value = item.get("displayName")
+    legal_name_value = item.get("legalName")
+    company_value = item.get("company")
+    if kind == "person":
+        if display_name_value is not None and not isinstance(display_name_value, str):
+            raise _record_error(path, index, "'displayName' must be text or null")
+        if legal_name_value is not None and not isinstance(legal_name_value, str):
+            raise _record_error(path, index, "'legalName' must be text or null")
+        first_name = _required_record_text(item, "firstName", path, index)
+        last_name = _required_record_text(item, "lastName", path, index)
+        if _optional_text(display_name_value if isinstance(display_name_value, str) else None):
+            raise _record_error(path, index, "person cannot have 'displayName'")
+        if _optional_text(legal_name_value if isinstance(legal_name_value, str) else None):
+            raise _record_error(path, index, "person cannot have 'legalName'")
+        display_name = ""
+        legal_name = None
+    else:
+        if first_name_value is not None and not isinstance(first_name_value, str):
+            raise _record_error(path, index, "'firstName' must be text or null")
+        if last_name_value is not None and not isinstance(last_name_value, str):
+            raise _record_error(path, index, "'lastName' must be text or null")
+        if _optional_text(first_name_value if isinstance(first_name_value, str) else None):
+            raise _record_error(path, index, "organization cannot have 'firstName'")
+        if _optional_text(last_name_value if isinstance(last_name_value, str) else None):
+            raise _record_error(path, index, "organization cannot have 'lastName'")
+        if _optional_text(company_value if isinstance(company_value, str) else None):
+            raise _record_error(path, index, "organization cannot have 'company'")
+        display_name = _required_record_text(item, "displayName", path, index)
+        if legal_name_value is not None and not isinstance(legal_name_value, str):
+            raise _record_error(path, index, "'legalName' must be text or null")
+        legal_name = _optional_text(legal_name_value)
+        first_name = ""
+        last_name = ""
     email = _required_record_text(item, "email", path, index)
     if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) is None:
         raise _record_error(path, index, "'email' is invalid")
@@ -249,7 +303,6 @@ def _contact_from_storage(item: object, path: Path, index: int) -> Contact:
     phone = _optional_text(phone_value)
     if phone is not None and not 7 <= sum(character.isdigit() for character in phone) <= 15:
         raise _record_error(path, index, "'phone' must contain between 7 and 15 digits")
-    company_value = item.get("company")
     if company_value is not None and not isinstance(company_value, str):
         raise _record_error(path, index, "'company' must be text or null")
     created_at = _required_record_text(item, "createdAt", path, index)
@@ -261,8 +314,11 @@ def _contact_from_storage(item: object, path: Path, index: int) -> Contact:
             _unknown(raw_address, _ADDRESS_KEYS) if isinstance(raw_address, dict) else {}
         ),
         id=contact_id,
+        kind=kind,
         first_name=first_name,
         last_name=last_name,
+        display_name=display_name,
+        legal_name=legal_name,
         email=email.casefold(),
         phone=phone,
         company=_optional_text(company_value),
@@ -320,17 +376,37 @@ def _normalize_address(
 
 
 def _validate_draft(draft: ContactDraft) -> _ContactValues:
+    kind = draft.kind.strip().casefold()
     first_name = draft.first_name.strip()
     last_name = draft.last_name.strip()
+    display_name = _optional_text(draft.display_name) or ""
+    legal_name = _optional_text(draft.legal_name)
     email = draft.email.strip()
     if any(
         CONTROL_PATTERN.search(value or "")
-        for value in (first_name, last_name, email, draft.phone, draft.company)
+        for value in (kind, first_name, last_name, display_name, legal_name, email,
+                      draft.phone, draft.company)
     ):
         raise ContactError("contact fields cannot contain control characters")
-    for field_name, value in (("first name", first_name), ("last name", last_name)):
-        if not value:
-            raise ContactError(f"{field_name} is required")
+    if kind not in ("person", "organization"):
+        raise ContactError("contact kind must be 'person' or 'organization'")
+    if kind == "person":
+        for field_name, value in (("first name", first_name), ("last name", last_name)):
+            if not value:
+                raise ContactError(f"{field_name} is required for a person")
+        if display_name:
+            raise ContactError("display name is not valid for a person")
+        if legal_name:
+            raise ContactError("legal name is not valid for a person")
+    else:
+        if not display_name:
+            raise ContactError("display name is required for an organization")
+        if first_name:
+            raise ContactError("first name is not valid for an organization")
+        if last_name:
+            raise ContactError("last name is not valid for an organization")
+        if _optional_text(draft.company):
+            raise ContactError("company is not valid for an organization")
     if not email:
         raise ContactError("email is required")
     if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) is None:
@@ -358,8 +434,11 @@ def _validate_draft(draft: ContactDraft) -> _ContactValues:
             )
         )
     return _ContactValues(
+        kind=kind,
         first_name=first_name,
         last_name=last_name,
+        display_name=display_name,
+        legal_name=legal_name,
         email=email.casefold(),
         phone=phone,
         company=_optional_text(draft.company),
@@ -368,19 +447,34 @@ def _validate_draft(draft: ContactDraft) -> _ContactValues:
 
 
 def _contacts_payload(
-    contacts: tuple[Contact, ...], extra: Mapping[str, object] | None = None
+    contacts: tuple[Contact, ...],
+    extra: Mapping[str, object] | None = None,
+    schema_version: int = 1,
 ) -> dict[str, object]:
+    version = 2 if schema_version == 2 or any(
+        item.kind == "organization" for item in contacts
+    ) else 1
     return {
-        "schemaVersion": 1,
+        "schemaVersion": version,
         **(extra or {}),
         "contacts": [
             {
                 "id": item.id,
-                "firstName": item.first_name,
-                "lastName": item.last_name,
+                **({"kind": item.kind} if version == 2 else {}),
+                **(
+                    {
+                        "firstName": item.first_name,
+                        "lastName": item.last_name,
+                        "company": item.company,
+                    }
+                    if item.kind == "person"
+                    else {
+                        "displayName": item.display_name,
+                        "legalName": item.legal_name,
+                    }
+                ),
                 "email": item.email,
                 "phone": item.phone,
-                "company": item.company,
                 "address": _address_to_storage(item.address, item._address_extra),
                 "createdAt": item.created_at,
                 "updatedAt": item.updated_at,
@@ -393,8 +487,8 @@ def _contacts_payload(
 
 def _sort_key(contact: Contact) -> tuple[str, str, str, str, str]:
     return (
-        contact.last_name.casefold(),
-        contact.first_name.casefold(),
+        (contact.last_name if contact.kind == "person" else contact.display_name).casefold(),
+        (contact.first_name if contact.kind == "person" else "").casefold(),
         (contact.company or "").casefold(),
         contact.email.casefold(),
         contact.id,
@@ -472,10 +566,10 @@ def load_contacts(drive_root: Path) -> ContactDirectory:
     if not isinstance(raw, dict):
         raise ContactError(f"{path} must contain a JSON object; file not changed")
     version = raw.get("schemaVersion")
-    if type(version) is not int or version != 1:
+    if type(version) is not int or version not in (1, 2):
         raise ContactError(
-            f"{path} has unsupported schemaVersion {version!r}; expected 1. "
-            "Upgrade Atlas or restore a schema v1 file; file not changed."
+            f"{path} has unsupported schemaVersion {version!r}; expected 1 or 2. "
+            "Upgrade Atlas or restore a schema v1/v2 file; file not changed."
         )
     if "contacts" not in raw:
         raise ContactError(f"{path} is missing required 'contacts' list; file not changed")
@@ -501,6 +595,7 @@ def load_contacts(drive_root: Path) -> ContactDirectory:
         contacts=contacts,
         _digest=hashlib.sha256(contents).hexdigest(),
         _extra=_unknown(raw, _DIRECTORY_KEYS),
+        _schema_version=version,
     )
 
 
@@ -600,8 +695,11 @@ def add_contact(
                 stamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
                 contact = Contact(
                     id=requested_id or str(uuid4()),
+                    kind=values.kind,
                     first_name=values.first_name,
                     last_name=values.last_name,
+                    display_name=values.display_name,
+                    legal_name=values.legal_name,
                     email=values.email,
                     phone=values.phone,
                     company=values.company,
@@ -612,7 +710,11 @@ def add_contact(
             contacts = tuple(sorted((*directory.contacts, contact), key=_sort_key))
             try:
                 _write_payload(
-                    path, _contacts_payload(contacts, directory._extra), directory._digest
+                    path,
+                    _contacts_payload(
+                        contacts, directory._extra, directory._schema_version
+                    ),
+                    directory._digest,
                 )
             except _ConcurrentContactWrite:
                 if attempt == 0:
@@ -656,7 +758,7 @@ def update_contact(
                 )
             if expected_updated_at is not None and current.updated_at != expected_updated_at:
                 raise ContactError(
-                    f"{current.first_name} {current.last_name} changed since you opened "
+                    f"{current.full_name} changed since you opened "
                     "the contact; reload it and make your edit again. File not changed."
                 )
             existing = next(
@@ -678,8 +780,11 @@ def update_contact(
                 updated_at = previous_updated_at + timedelta(microseconds=1)
             updated = Contact(
                 id=current.id,
+                kind=values.kind,
                 first_name=values.first_name,
                 last_name=values.last_name,
+                display_name=values.display_name,
+                legal_name=values.legal_name,
                 email=values.email,
                 phone=values.phone,
                 company=values.company,
@@ -697,7 +802,11 @@ def update_contact(
             )
             try:
                 _write_payload(
-                    path, _contacts_payload(contacts, directory._extra), directory._digest
+                    path,
+                    _contacts_payload(
+                        contacts, directory._extra, directory._schema_version
+                    ),
+                    directory._digest,
                 )
             except _ConcurrentContactWrite:
                 if attempt == 0:

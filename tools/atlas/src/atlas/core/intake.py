@@ -43,20 +43,31 @@ class ContactSnapshot:
     phone: str = ""
     company: str = ""
     address: str = ""
+    kind: str = "person"
+    display_name: str = ""
+    legal_name: str = ""
+    extra: dict[str, object] = field(default_factory=dict, compare=False, repr=False)
 
     def __post_init__(self) -> None:
-        for field_name in ("id", "first_name", "last_name", "email", "phone", "company", "address"):
+        for field_name in ("id", "first_name", "last_name", "email", "phone", "company",
+                           "address", "kind", "display_name", "legal_name"):
             object.__setattr__(self, field_name, getattr(self, field_name).strip())
         object.__setattr__(self, "email", self.email.casefold())
         if not self.id:
             raise IntakeError("contact ID is required")
-        if not self.first_name and not self.last_name:
+        if self.kind not in ("person", "organization"):
+            raise IntakeError("contact kind must be person or organization")
+        if self.kind == "person" and not (self.first_name or self.last_name):
             raise IntakeError("contact name is required")
+        if self.kind == "organization" and not self.display_name:
+            raise IntakeError("organization contact display name is required")
         if not EMAIL_PATTERN.fullmatch(self.email):
             raise IntakeError("contact email is invalid")
 
     @property
     def full_name(self) -> str:
+        if self.kind == "organization":
+            return self.display_name
         return f"{self.first_name} {self.last_name}".strip()
 
 
@@ -122,7 +133,7 @@ class ProjectIntake:
     project_address: ProjectAddress
     project_use_case: ProjectUseCase
     billing_contact_id: str
-    client_contact_id: str
+    client_contact_id: str | None
     description: str = ""
     created: date = field(default_factory=date.today)
 
@@ -130,15 +141,14 @@ class ProjectIntake:
         object.__setattr__(self, "project_name", self.project_name.strip())
         object.__setattr__(self, "description", self.description.strip())
         object.__setattr__(self, "billing_contact_id", self.billing_contact_id.strip())
-        object.__setattr__(self, "client_contact_id", self.client_contact_id.strip())
+        if self.client_contact_id is not None:
+            object.__setattr__(self, "client_contact_id", self.client_contact_id.strip() or None)
         if not self.project_name:
             raise IntakeError("Project Name is required")
         if CONTROL_PATTERN.search(self.project_name) or CONTROL_PATTERN.search(self.description):
             raise IntakeError("Project Name and Description cannot contain control characters")
         if not self.billing_contact_id:
             raise IntakeError("Billing Contact is required")
-        if not self.client_contact_id:
-            raise IntakeError("Client Contact is required")
 
 
 @dataclass(frozen=True)
@@ -147,12 +157,14 @@ class ResolvedProjectIntake:
 
     request: ProjectIntake
     billing_contact: ContactSnapshot
-    client_contact: ContactSnapshot
+    client_contact: ContactSnapshot | None
 
     def __post_init__(self) -> None:
         if self.billing_contact.id != self.request.billing_contact_id:
             raise IntakeError("Billing Contact snapshot does not match selected contact")
-        if self.client_contact.id != self.request.client_contact_id:
+        if (self.client_contact is None) != (self.request.client_contact_id is None):
+            raise IntakeError("Client Contact snapshot does not match selected contact")
+        if self.client_contact is not None and self.client_contact.id != self.request.client_contact_id:
             raise IntakeError("Client Contact snapshot does not match selected contact")
 
     @property
