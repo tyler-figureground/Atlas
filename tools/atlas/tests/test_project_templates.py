@@ -123,7 +123,7 @@ def test_the_same_template_path_twice_refuses_the_map(fixture_drive):
 # ---------------------------------------------------------------- templates
 
 def test_tasks_template_sweeps_the_set_before_every_issue():
-    text = "\n".join(read_template("TASKS.md"))
+    text = read_template("TASKS.md")
     assert "**Issuing a drawing set**" in text   # Atlas #19, Pyvoid #4840
     assert "`/jdp set sweep`" in text
 
