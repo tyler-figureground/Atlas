@@ -804,7 +804,11 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
                 )
                 return
             billing = find_contact(directory, request.billing_contact_id)
-            client = find_contact(directory, request.client_contact_id)
+            client = (
+                find_contact(directory, request.client_contact_id)
+                if request.client_contact_id is not None
+                else None
+            )
             reviewed_billing = next(
                 (item for item in self._contacts if item.id == request.billing_contact_id), None
             )
@@ -813,8 +817,8 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             )
             if (
                 billing is None
-                or client is None
                 or billing != reviewed_billing
+                or request.client_contact_id is not None and client is None
                 or client != reviewed_client
             ):
                 self._contacts = directory.contacts

@@ -114,7 +114,7 @@ def test_missing_store_returns_empty_directory_without_writing(fixture_drive):
     assert not (fixture_drive / "_tools" / "billing-contacts.json").exists()
 
 
-def test_first_contact_creates_schema_v2_person_and_round_trips(fixture_drive):
+def test_first_person_contact_keeps_schema_v1_and_round_trips(fixture_drive):
     created = add_contact(
         fixture_drive,
         ContactDraft(first_name=" Ada ", last_name=" Lovelace ", email=" ada@example.com "),
@@ -131,9 +131,33 @@ def test_first_contact_creates_schema_v2_person_and_round_trips(fixture_drive):
     stored = json.loads(
         (fixture_drive / "_tools" / "billing-contacts.json").read_text(encoding="utf-8")
     )
-    assert stored["schemaVersion"] == 2
-    assert stored["contacts"][0]["kind"] == "person"
+    assert stored["schemaVersion"] == 1
+    assert "kind" not in stored["contacts"][0]
     assert stored["contacts"][0]["id"] == created.id
+
+
+def test_organization_contact_bumps_store_to_schema_v2(fixture_drive):
+    add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com"),
+    )
+    add_contact(
+        fixture_drive,
+        ContactDraft(
+            kind="organization",
+            display_name="Figure Ground",
+            email="accounts@figureground.example",
+        ),
+    )
+
+    stored = json.loads(
+        (fixture_drive / "_tools" / "billing-contacts.json").read_text(encoding="utf-8")
+    )
+    assert stored["schemaVersion"] == 2
+    assert {item["kind"] for item in stored["contacts"]} == {
+        "person",
+        "organization",
+    }
 
 
 @pytest.mark.parametrize(
@@ -811,7 +835,16 @@ def test_v1_fixture_migrates_in_memory_then_persists_once_on_write(fixture_drive
     person = next(item for item in migrated["contacts"] if item["kind"] == "person")
     assert person["bridgeExtension"] == {"revision": 1}
     persisted = store.read_bytes()
-    assert load_contacts(fixture_drive) == load_contacts(fixture_drive)
+    reloaded = load_contacts(fixture_drive)
+    from atlas.core.contacts import _contacts_payload, _write_payload
+
+    _write_payload(
+        store,
+        _contacts_payload(
+            reloaded.contacts, reloaded._extra, reloaded._schema_version
+        ),
+        reloaded._digest,
+    )
     assert store.read_bytes() == persisted
 
 

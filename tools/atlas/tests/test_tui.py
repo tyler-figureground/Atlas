@@ -13,6 +13,7 @@ from atlas.core.conform import SKIPPED, Plan
 from atlas.core.contacts import ContactDraft, add_contact, load_contacts
 from atlas.core.mapfile import find_map, load_map
 from atlas.core.ops import new_project
+from atlas.core.project_data import load_project_record
 from textual.widgets import Button, DataTable, Input, ListView, Select, SelectionList, Static
 
 from atlas.tui.app import (
@@ -164,6 +165,45 @@ async def test_new_project_wizard_creates_complete_project(fixture_drive):
     assert (created / "11 Meetings").is_dir()
 
 
+async def test_new_project_wizard_creates_project_without_client(fixture_drive):
+    contact = add_contact(
+        fixture_drive,
+        ContactDraft(first_name="Ada", last_name="Lovelace", email="ada@example.com"),
+    )
+    app = AtlasApp(fixture_drive)
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await pilot.press("n")
+        await wait_for(app, pilot, modal_ready(app, NewProjectModal, "name"))
+        for field, value in (
+            ("#name", "No Client House"),
+            ("#street", "1842 Oak Street"),
+            ("#city", "Oakland"),
+            ("#state", "CA"),
+            ("#postal-code", "94612"),
+        ):
+            app.screen.query_one(field, Input).value = value
+        app.screen.query_one("#use-case", Select).value = "Renovation"
+        await pilot.pause()
+        app.screen.query_one("#next-project", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#billing-contact", Select).value = contact.id
+        app.screen.query_one("#client-contact", Select).value = NewProjectModal.NO_CLIENT
+        await pilot.pause()
+        app.screen.query_one("#next-contacts", Button).press()
+        await pilot.pause()
+        assert "Client Contact: none" in str(
+            app.screen.query_one("#review", Static).render()
+        )
+        app.screen.query_one("#create-project", Button).press()
+        await settle(app, pilot)
+
+    stamp = date.today().strftime("%y%m%d")
+    record = load_project_record(fixture_drive / f"{stamp}_1842 Oak Street")
+    assert record.intake.client_contact_id is None
+    assert record.client_contact is None
+
+
 async def test_edit_project_prepopulates_and_confirms_folder_rename(fixture_drive):
     intake = make_intake(
         fixture_drive,
@@ -202,6 +242,31 @@ async def test_edit_project_prepopulates_and_confirms_folder_rename(fixture_driv
     assert 'address_street: "1842 Oak Street"' in (renamed / "PROJECT.md").read_text(
         encoding="utf-8"
     )
+
+
+async def test_edit_project_keeps_null_client(fixture_drive):
+    intake = replace(
+        make_intake(fixture_drive, "No Client", created=date(2026, 9, 3)),
+        client_contact_id=None,
+    )
+    created = new_project(fixture_drive, load_map(find_map(fixture_drive)), intake)
+    app = AtlasApp(fixture_drive)
+
+    async with app.run_test() as pilot:
+        await settle(app, pilot)
+        await pilot.press("e")
+        await wait_for(app, pilot, modal_ready(app, NewProjectModal, "name"))
+        assert app.screen.query_one("#client-contact", Select).value == NewProjectModal.NO_CLIENT
+        app.screen.query_one("#next-project", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#next-contacts", Button).press()
+        await pilot.pause()
+        app.screen.query_one("#create-project", Button).press()
+        await settle(app, pilot)
+
+    record = load_project_record(created.path)
+    assert record.intake.client_contact_id is None
+    assert record.client_contact is None
 
 
 async def test_new_project_refuses_pasted_control_characters_inline(fixture_drive):

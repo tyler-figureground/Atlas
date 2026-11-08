@@ -157,6 +157,7 @@ class ContactDirectory:
     contacts: tuple[Contact, ...] = ()
     _digest: str | None = field(default=None, repr=False, compare=False)
     _extra: Mapping[str, object] = field(default_factory=dict, repr=False, compare=False)
+    _schema_version: int = field(default=1, repr=False, compare=False)
 
 
 _CONTACT_KEYS = frozenset(
@@ -446,15 +447,20 @@ def _validate_draft(draft: ContactDraft) -> _ContactValues:
 
 
 def _contacts_payload(
-    contacts: tuple[Contact, ...], extra: Mapping[str, object] | None = None
+    contacts: tuple[Contact, ...],
+    extra: Mapping[str, object] | None = None,
+    schema_version: int = 1,
 ) -> dict[str, object]:
+    version = 2 if schema_version == 2 or any(
+        item.kind == "organization" for item in contacts
+    ) else 1
     return {
-        "schemaVersion": 2,
+        "schemaVersion": version,
         **(extra or {}),
         "contacts": [
             {
                 "id": item.id,
-                "kind": item.kind,
+                **({"kind": item.kind} if version == 2 else {}),
                 **(
                     {
                         "firstName": item.first_name,
@@ -589,6 +595,7 @@ def load_contacts(drive_root: Path) -> ContactDirectory:
         contacts=contacts,
         _digest=hashlib.sha256(contents).hexdigest(),
         _extra=_unknown(raw, _DIRECTORY_KEYS),
+        _schema_version=version,
     )
 
 
@@ -703,7 +710,11 @@ def add_contact(
             contacts = tuple(sorted((*directory.contacts, contact), key=_sort_key))
             try:
                 _write_payload(
-                    path, _contacts_payload(contacts, directory._extra), directory._digest
+                    path,
+                    _contacts_payload(
+                        contacts, directory._extra, directory._schema_version
+                    ),
+                    directory._digest,
                 )
             except _ConcurrentContactWrite:
                 if attempt == 0:
@@ -791,7 +802,11 @@ def update_contact(
             )
             try:
                 _write_payload(
-                    path, _contacts_payload(contacts, directory._extra), directory._digest
+                    path,
+                    _contacts_payload(
+                        contacts, directory._extra, directory._schema_version
+                    ),
+                    directory._digest,
                 )
             except _ConcurrentContactWrite:
                 if attempt == 0:

@@ -505,6 +505,68 @@ def test_project_edit_interactive_keeps_contacts_by_id_not_snapshot_email(
     assert record.client_contact.full_name == "Ada Lovelace"
 
 
+def test_project_edit_interactive_dash_clears_client_contact(
+    fixture_drive, capsys, monkeypatch
+):
+    from atlas.core.project_data import load_project_record
+
+    ada = _add_contact(fixture_drive, capsys)
+    created = _new_project(fixture_drive, capsys, ada["id"])
+    answers = iter(("", "", "", "", "", "", "", "", "-", ""))
+
+    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    status = main(["project", "edit", created["created"], "--drive", str(fixture_drive)])
+
+    assert status == 0
+    record = load_project_record(fixture_drive / created["created"])
+    assert record.intake.client_contact_id is None
+    assert record.client_contact is None
+
+
+def test_project_edit_interactive_enter_keeps_null_client(
+    fixture_drive, capsys, monkeypatch
+):
+    from atlas.core.project_data import load_project_record
+
+    ada = _add_contact(fixture_drive, capsys)
+    assert main(
+        [
+            "new",
+            "--drive",
+            str(fixture_drive),
+            "--name",
+            "Oak House",
+            "--street",
+            "1842 Oak Street",
+            "--city",
+            "Oakland",
+            "--state",
+            "CA",
+            "--zip",
+            "94612",
+            "--use-case",
+            "Renovation",
+            "--billing-contact",
+            ada["id"],
+            "--no-client-contact",
+            "--json",
+        ]
+    ) == 0
+    created = json.loads(capsys.readouterr().out)
+
+    monkeypatch.setattr("builtins.input", lambda _prompt: "")
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    status = main(["project", "edit", created["created"], "--drive", str(fixture_drive)])
+
+    assert status == 0
+    record = load_project_record(fixture_drive / created["created"])
+    assert record.intake.client_contact_id is None
+    assert record.client_contact is None
+
+
 def test_project_edit_interactive_refuses_a_dossier_changed_while_prompting(
     fixture_drive, capsys, monkeypatch
 ):

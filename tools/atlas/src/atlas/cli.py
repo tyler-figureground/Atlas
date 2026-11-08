@@ -391,6 +391,16 @@ def _prompt_retain(label: str, current: str, *, clearable: bool = False) -> str:
     return value
 
 
+def _prompt_optional_retain(label: str, current: str | None) -> tuple[str | None, bool]:
+    shown = current or "none"
+    value = input(f"{label} [{shown}] (Enter keeps current; '-' clears): ")
+    if not value:
+        return current, False
+    if value == "-":
+        return None, True
+    return value, False
+
+
 def _prompt_choice_retain(
     label: str, current: str, choices: tuple[str, ...]
 ) -> str:
@@ -854,17 +864,15 @@ def cmd_project_edit(args: argparse.Namespace) -> int:
             current.billing_contact_id,
         )
         current_client = record.client_contact
-        args.client_contact = _prompt_retain(
+        args.client_contact, args.clear_client_contact = _prompt_optional_retain(
             (
                 f"Client Contact ID or email (now {current_client.full_name} "
                 f"<{current_client.email}>)"
                 if current_client is not None
                 else "Client Contact ID or email (now none)"
             ),
-            current.client_contact_id or "",
-            clearable=True,
+            current.client_contact_id,
         )
-        args.clear_client_contact = args.client_contact == ""
         args.desc = _prompt_retain(
             "Description", current.description, clearable=True
         )
