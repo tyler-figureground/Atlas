@@ -122,6 +122,12 @@ def test_the_same_template_path_twice_refuses_the_map(fixture_drive):
 
 # ---------------------------------------------------------------- templates
 
+def test_tasks_template_sweeps_the_set_before_every_issue():
+    text = "\n".join(read_template("TASKS.md"))
+    assert "**Issuing a drawing set**" in text   # Atlas #19, Pyvoid #4840
+    assert "`/jdp set sweep`" in text
+
+
 def test_every_bundled_template_renders_without_leftover_placeholders():
     values = {"project_folder": "261002_1 Main St-Test", "project_name": "Test", "created": "2026-10-02"}
     names = sorted(p.name for p in template_dir().iterdir() if p.suffix == ".md")
