@@ -162,7 +162,7 @@ current remote release state. Policy snapshot: Pyvoid `3d14c191b5139e71de3d1b4a4
   header/firm naming and the isolated eighth-inch precision answer remain unresolved;
   do not guess either. Standards/engine changes are tracked in #3195, not certified
   by this Atlas patch. Issued-number exceptions remain project-specific.
-- **Deliberately unchanged:** A101 numbering, face-of-stud/quarter-inch defaults,
+- **Deliberately unchanged:** A101 numbering (withdrawn 2026-10-08: exact NCS form, ADR 0017 amendment 2026-11-07), face-of-stud/quarter-inch defaults,
   no autonomous sync, foreign-borrow protection, project-specific standing rulings.
   Product launch/branding and unmerged visual work are not studio-project rules;
   no Atlas rebrand or product-roadmap work is implied by this synchronization.

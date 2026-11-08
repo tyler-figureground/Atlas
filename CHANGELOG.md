@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- **Sheet numbers take the exact NCS form (#6, ADR 0017 amendment).** The baseline block now says `A-101`, `AD101`, `G-001`: a hyphen holds the place of an omitted second discipline letter, five characters. Tyler withdrew the no-hyphen reversal on 2026-10-08 (Pyvoid b5e987a79). Run `atlas conform --all` (dry run first) to re-render each project's `AGENTS.md` block; an issued sheet keeps its number.
+- **Sheet numbers take the exact NCS form (#6, ADR 0017 amendment).** The baseline block now says `A-101`, `AD101`, `G-001`: a hyphen holds the place of an omitted second discipline letter, five characters. Tyler withdrew the no-hyphen reversal on 2026-10-08 (Pyvoid b5e987a79, e5a73c5be). Run `atlas conform --all` (dry run first) to re-render each project's `AGENTS.md` block; an issued sheet keeps its number.
 
 ### Added
 
