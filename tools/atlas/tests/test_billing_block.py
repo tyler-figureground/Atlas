@@ -30,7 +30,7 @@ def _new(drive: Path, capsys) -> Path:
     assert main(["new", "--drive", str(drive), "--name", "Oak House", "--street",
                  "1842 Oak Street", "--city", "Oakland", "--state", "CA", "--zip", "94612",
                  "--use-case", "Renovation", "--billing-contact", "ada@example.com",
-                 "--desc", "Kitchen", "--json"]) == 0
+                 "--client-contact", "ada@example.com", "--desc", "Kitchen", "--json"]) == 0
     created = json.loads(capsys.readouterr().out)["created"]
     return drive / created
 

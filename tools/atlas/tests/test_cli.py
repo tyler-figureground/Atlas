@@ -58,6 +58,8 @@ def _new_project(fixture_drive: Path, capsys, billing_contact: str):
             "Renovation",
             "--billing-contact",
             billing_contact,
+            "--client-contact",
+            billing_contact,
             "--desc",
             "Kitchen",
             "--json",
@@ -167,7 +169,7 @@ def test_contacts_edit_interactive_prompts_retain_current_values(
         phone="510-555-0100",
         company="Analytical Engines",
     )
-    answers = iter(("", "", "ADA.NEW@example.com", "", "", "", "", "", "", ""))
+    answers = iter(("", "", "", "ADA.NEW@example.com", "", "", "", "", "", "", ""))
     prompts = []
 
     def answer(prompt):
@@ -188,7 +190,7 @@ def test_contacts_edit_interactive_prompts_retain_current_values(
     )
 
     assert status == 0
-    assert len(prompts) == 10
+    assert len(prompts) == 11
     assert all("Enter keeps current" in prompt for prompt in prompts)
     assert "updated: Ada Lovelace <ada.new@example.com>" in capsys.readouterr().out
     assert main(["contacts", "list", "--drive", str(fixture_drive), "--json"]) == 0
@@ -735,7 +737,7 @@ def test_contacts_list_json_returns_sorted_contacts(fixture_drive, capsys):
     ]
 
 
-def test_new_json_creates_complete_intake_and_defaults_client_to_billing(
+def test_new_json_creates_complete_intake_with_explicit_client(
     fixture_drive, capsys
 ):
     assert main(
@@ -775,6 +777,8 @@ def test_new_json_creates_complete_intake_and_defaults_client_to_billing(
             "--use-case",
             "Renovation",
             "--billing-contact",
+            "ADA@example.com",
+            "--client-contact",
             "ADA@example.com",
             "--desc",
             "Kitchen",
@@ -888,6 +892,7 @@ def test_new_requires_every_complete_intake_flag(fixture_drive, capsys, required
         "Renovation",
         "--billing-contact",
         "ada@example.com",
+        "--no-client-contact",
     ]
     position = arguments.index(required_flag)
     del arguments[position : position + 2]
@@ -994,6 +999,8 @@ def test_new_human_output_reports_complete_intake(fixture_drive, capsys):
             "Renovation",
             "--billing-contact",
             "ada@example.com",
+            "--client-contact",
+            "ada@example.com",
         ]
     ) == 0
 
@@ -1064,6 +1071,7 @@ def test_intake_error_returns_2(fixture_drive, capsys):
             "Renovation",
             "--billing-contact",
             "ada@example.com",
+            "--no-client-contact",
         ]
     )
 
@@ -1093,6 +1101,7 @@ def test_ops_error_returns_2(fixture_drive, capsys):
             "Renovation",
             "--billing-contact",
             "missing@example.com",
+            "--no-client-contact",
         ]
     )
 
@@ -1138,6 +1147,7 @@ def test_other_without_custom_label_returns_2(fixture_drive, capsys):
             "Other",
             "--billing-contact",
             "ada@example.com",
+            "--no-client-contact",
         ]
     )
 

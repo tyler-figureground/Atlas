@@ -101,7 +101,7 @@ class ProjectRecord:
     path: Path
     intake: ProjectIntake
     billing_contact: ContactSnapshot
-    client_contact: ContactSnapshot
+    client_contact: ContactSnapshot | None
     source_digest: str
     _source: bytes = field(repr=False, compare=False)
     # The CRM's stable Project id (`crm_id`, ADR 0001 amendment); "" when the
@@ -121,7 +121,7 @@ class ProjectUpdatePlan:
     new_path: Path
     intake: ProjectIntake
     billing_contact: ContactSnapshot
-    client_contact: ContactSnapshot
+    client_contact: ContactSnapshot | None
     source_digest: str
     contacts_digest: str | None
     index_digest: str | None
@@ -195,7 +195,10 @@ _ATLAS_KEYS = frozenset(
         *(
             f"{role}_contact_{suffix}"
             for role in ("billing", "client")
-            for suffix in ("id", "name", "email", "phone", "company", "address")
+            for suffix in (
+                "id", "kind", "name", "display_name", "legal_name", "email",
+                "phone", "company", "address",
+            )
         ),
     )
 )
@@ -471,16 +474,38 @@ def _required(values: dict[str, str], key: str, dossier: Path) -> str:
     return value
 
 
-def _snapshot(values: dict[str, str], role: str, dossier: Path) -> ContactSnapshot:
+def _snapshot(
+    values: dict[str, str], role: str, dossier: Path
+) -> ContactSnapshot | None:
+    contact_id = values.get(f"{role}_contact_id", "").strip()
+    if role == "client" and not contact_id:
+        client_values = [
+            value
+            for key, value in values.items()
+            if key.startswith("client_contact_")
+        ]
+        if not any(value.strip() for value in client_values):
+            return None
+        raise ProjectDataError(
+            f"{dossier} has Client Contact snapshot fields but no client_contact_id"
+        )
     name = _required(values, f"{role}_contact_name", dossier)
     # A snapshot is history, not a directory record: a one-word name ("Cher",
     # a firm) reads as a first name rather than making the project uneditable.
     pieces = name.rsplit(maxsplit=1)
+    kind = values.get(f"{role}_contact_kind", "") or "person"
     try:
         return ContactSnapshot(
             id=_required(values, f"{role}_contact_id", dossier),
-            first_name=pieces[0],
-            last_name=pieces[1] if len(pieces) == 2 else "",
+            kind=kind,
+            first_name=pieces[0] if kind == "person" else "",
+            last_name=pieces[1] if kind == "person" and len(pieces) == 2 else "",
+            display_name=(
+                values.get(f"{role}_contact_display_name", "") or name
+                if kind == "organization"
+                else ""
+            ),
+            legal_name=values.get(f"{role}_contact_legal_name", ""),
             email=_required(values, f"{role}_contact_email", dossier),
             phone=values.get(f"{role}_contact_phone", ""),
             company=values.get(f"{role}_contact_company", ""),
@@ -566,7 +591,7 @@ def _record_from_source(project: Path, dossier: Path, source: bytes) -> ProjectR
             project_address=address,
             project_use_case=use_case,
             billing_contact_id=billing.id,
-            client_contact_id=client.id,
+            client_contact_id=client.id if client is not None else None,
             description=values.get("description", ""),
             created=created,
         )
@@ -596,12 +621,16 @@ def _contact_snapshot(contact: Contact) -> ContactSnapshot:
         address = ", ".join(parts)
     return ContactSnapshot(
         id=contact.id,
+        kind=contact.kind,
         first_name=contact.first_name,
         last_name=contact.last_name,
+        display_name=contact.display_name,
+        legal_name=contact.legal_name or "",
         email=contact.email,
         phone=contact.phone or "",
         company=contact.company or "",
         address=address,
+        extra=dict(contact._extra),
     )
 
 
@@ -654,12 +683,16 @@ def preview_project_update(
     except ContactError as error:
         raise ProjectDataError(str(error)) from error
     billing = find_contact(directory, planned_intake.billing_contact_id)
-    client = find_contact(directory, planned_intake.client_contact_id)
+    client = (
+        find_contact(directory, planned_intake.client_contact_id)
+        if planned_intake.client_contact_id is not None
+        else None
+    )
     if billing is None:
         raise ProjectDataError(
             "selected Billing Contact is no longer available; review contacts and retry"
         )
-    if client is None:
+    if planned_intake.client_contact_id is not None and client is None:
         raise ProjectDataError(
             "selected Client Contact is no longer available; review contacts and retry"
         )
@@ -677,7 +710,7 @@ def preview_project_update(
         new_path=new_path,
         intake=planned_intake,
         billing_contact=_contact_snapshot(billing),
-        client_contact=_contact_snapshot(client),
+        client_contact=_contact_snapshot(client) if client is not None else None,
         source_digest=record.source_digest,
         contacts_digest=directory._digest,
         index_digest=index_digest,
@@ -692,10 +725,25 @@ _yaml = yaml_quote
 _table = table_cell
 
 
-def _contact_values(role: str, contact: ContactSnapshot) -> dict[str, str]:
+def _contact_values(role: str, contact: ContactSnapshot | None) -> dict[str, str]:
+    if contact is None:
+        return {
+            f"{role}_contact_id": "",
+            f"{role}_contact_kind": "",
+            f"{role}_contact_name": "",
+            f"{role}_contact_display_name": "",
+            f"{role}_contact_legal_name": "",
+            f"{role}_contact_email": "",
+            f"{role}_contact_phone": "",
+            f"{role}_contact_company": "",
+            f"{role}_contact_address": "",
+        }
     return {
         f"{role}_contact_id": contact.id,
+        f"{role}_contact_kind": contact.kind,
         f"{role}_contact_name": contact.full_name,
+        f"{role}_contact_display_name": contact.display_name,
+        f"{role}_contact_legal_name": contact.legal_name,
         f"{role}_contact_email": contact.email,
         f"{role}_contact_phone": contact.phone,
         f"{role}_contact_company": contact.company,
@@ -704,7 +752,7 @@ def _contact_values(role: str, contact: ContactSnapshot) -> dict[str, str]:
 
 
 def _identity_values(
-    intake: ProjectIntake, billing: ContactSnapshot, client: ContactSnapshot
+    intake: ProjectIntake, billing: ContactSnapshot, client: ContactSnapshot | None
 ) -> dict[str, str]:
     """The Identity rows Atlas owns, and the value each mirrors.
 
@@ -717,17 +765,17 @@ def _identity_values(
         "Project": intake.project_name,
         "Address / BBL": intake.project_address.formatted,
         "Project Use Case": intake.project_use_case.display,
-        "Client": client.full_name,
+        "Client": client.full_name if client else "",
         "Billing Contact": billing.full_name,
         "Billing Email": billing.email,
         "Billing Phone": billing.phone,
         "Billing Company": billing.company,
         "Billing Address": billing.address,
-        "Client Contact": client.full_name,
-        "Client Email": client.email,
-        "Client Phone": client.phone,
-        "Client Company": client.company,
-        "Client Address": client.address,
+        "Client Contact": client.full_name if client else "",
+        "Client Email": client.email if client else "",
+        "Client Phone": client.phone if client else "",
+        "Client Company": client.company if client else "",
+        "Client Address": client.address if client else "",
         "Descriptor": intake.description,
     }
 

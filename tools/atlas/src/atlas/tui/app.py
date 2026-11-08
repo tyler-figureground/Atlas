@@ -258,9 +258,17 @@ class AddContactModal(ModalScreen[Contact | None]):
     def compose(self) -> ComposeResult:
         with VerticalScroll(id="dialog"):
             yield Label("Add contact", classes="dialog-title")
+            yield Label("Kind *", classes="field-label")
+            yield Select(
+                [("Person", "person"), ("Organization", "organization")],
+                value="person",
+                id="contact-kind",
+            )
             for label, field_id, placeholder in (
                 ("First name *", "contact-first", "Ada"),
                 ("Last name *", "contact-last", "Lovelace"),
+                ("Display name", "contact-display", "Organization name"),
+                ("Legal name", "contact-legal", "Legal organization name"),
                 ("Email *", "contact-email", "ada@example.com"),
                 ("Phone", "contact-phone", "+1 510 555 0100"),
                 ("Company", "contact-company", "Company name"),
@@ -294,8 +302,11 @@ class AddContactModal(ModalScreen[Contact | None]):
         }
         address = address_values if any(value.strip() for value in address_values.values() if value != "US") else None
         draft = ContactDraft(
+            kind=str(self.query_one("#contact-kind", Select).value),
             first_name=self.query_one("#contact-first", Input).value,
             last_name=self.query_one("#contact-last", Input).value,
+            display_name=self.query_one("#contact-display", Input).value,
+            legal_name=self.query_one("#contact-legal", Input).value,
             email=self.query_one("#contact-email", Input).value,
             phone=self.query_one("#contact-phone", Input).value,
             company=self.query_one("#contact-company", Input).value,
@@ -306,7 +317,7 @@ class AddContactModal(ModalScreen[Contact | None]):
         except DuplicateContactError as error:
             existing = error.existing
             self.query_one("#contact-error", Static).update(
-                f"Email already belongs to {existing.first_name} {existing.last_name}. "
+                f"Email already belongs to {existing.full_name}. "
                 "Cancel and select that contact, or enter a different email."
             )
             return
@@ -335,9 +346,18 @@ class ContactManagerModal(ModalScreen[Contact | None]):
             yield Label("Manage contacts", classes="dialog-title")
             yield Label("Contact", classes="field-label")
             yield Select([], prompt="Select contact to edit", id="manager-contact")
+            yield Label("Kind *", classes="field-label")
+            yield Select(
+                [("Person", "person"), ("Organization", "organization")],
+                value="person",
+                id="manager-kind",
+                disabled=True,
+            )
             for label, field_id, placeholder in (
                 ("First name *", "manager-first", "Ada"),
                 ("Last name *", "manager-last", "Lovelace"),
+                ("Display name", "manager-display", "Organization name"),
+                ("Legal name", "manager-legal", "Legal organization name"),
                 ("Email *", "manager-email", "ada@example.com"),
                 ("Phone", "manager-phone", "+1 510 555 0100"),
                 ("Company", "manager-company", "Company name"),
@@ -361,7 +381,7 @@ class ContactManagerModal(ModalScreen[Contact | None]):
             self.query_one("#manager-error", Static).update(str(error))
             return
         self.query_one("#manager-contact", Select).set_options([
-            (Text(f"{contact.first_name} {contact.last_name} · {contact.email}"), contact.id)
+            (Text(f"{contact.full_name} · {contact.email}"), contact.id)
             for contact in self._contacts
         ])
         self.query_one("#manager-contact", Select).focus()
@@ -378,10 +398,15 @@ class ContactManagerModal(ModalScreen[Contact | None]):
             self.query_one("#manager-error", Static).update("Contact is no longer available.")
             return
         self._opened_updated_at = contact.updated_at
+        kind = self.query_one("#manager-kind", Select)
+        kind.disabled = False
+        kind.value = contact.kind
         address = contact.address or {}
         values = {
             "manager-first": contact.first_name,
             "manager-last": contact.last_name,
+            "manager-display": contact.display_name,
+            "manager-legal": contact.legal_name or "",
             "manager-email": contact.email,
             "manager-phone": contact.phone or "",
             "manager-company": contact.company or "",
@@ -421,8 +446,11 @@ class ContactManagerModal(ModalScreen[Contact | None]):
                 self._drive_root,
                 selected,
                 ContactDraft(
+                    kind=str(self.query_one("#manager-kind", Select).value),
                     first_name=self.query_one("#manager-first", Input).value,
                     last_name=self.query_one("#manager-last", Input).value,
+                    display_name=self.query_one("#manager-display", Input).value,
+                    legal_name=self.query_one("#manager-legal", Input).value,
                     email=self.query_one("#manager-email", Input).value,
                     phone=self.query_one("#manager-phone", Input).value,
                     company=self.query_one("#manager-company", Input).value,
@@ -443,6 +471,7 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
     """Three-step project intake: project, contacts, and exact review."""
 
     ADD_NEW = "__add_new_contact__"
+    NO_CLIENT = "__no_client_contact__"
     BINDINGS = [Binding("escape", "cancel", "Cancel", show=False)]
 
     def __init__(
@@ -499,8 +528,8 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             with Vertical(id="step-contacts"):
                 yield Label("Billing Contact *", classes="field-label")
                 yield Select([], prompt="Select billing contact", id="billing-contact")
-                yield Label("Client Contact *", classes="field-label")
-                yield Static("Defaults to Billing Contact. Override when client and billing contacts differ.", classes="supporting", markup=False)
+                yield Label("Client Contact", classes="field-label")
+                yield Static("Choose a contact or explicitly choose No Client Contact.", classes="supporting", markup=False)
                 yield Select([], prompt="Select client contact", id="client-contact")
                 yield Static("", id="contact-selection-error", classes="supporting", markup=False)
                 with Horizontal(classes="actions"):
@@ -543,16 +572,17 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             contact_ids = {contact.id for contact in self._contacts}
             if initial.billing_contact_id in contact_ids:
                 self.query_one("#billing-contact", Select).value = initial.billing_contact_id
-            if initial.client_contact_id in contact_ids:
+            if initial.client_contact_id is None:
+                self.query_one("#client-contact", Select).value = self.NO_CLIENT
+            elif initial.client_contact_id in contact_ids:
                 self.query_one("#client-contact", Select).value = initial.client_contact_id
-            self._client_overridden = initial.client_contact_id != initial.billing_contact_id
         self._show_step(1)
         self._sync_project()
         self.query_one("#name", Input).focus()
 
     def _options(self) -> list[tuple[str, str]]:
         options = [
-            (Text(f"{contact.first_name} {contact.last_name} · {contact.email}"), contact.id)
+            (Text(f"{contact.full_name} · {contact.email}"), contact.id)
             for contact in self._contacts
         ]
         options.append(("Add new contact…", self.ADD_NEW))
@@ -563,9 +593,14 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
         for role in ("billing", "client"):
             select = self.query_one(f"#{role}-contact", Select)
             previous = select.value
-            select.set_options(self._options())
+            options = self._options()
+            if role == "client":
+                options.insert(0, ("No Client Contact", self.NO_CLIENT))
+            select.set_options(options)
             value = contact_id if role == selected_role else previous
-            if isinstance(value, str) and value in valid_ids:
+            if isinstance(value, str) and (
+                value in valid_ids or role == "client" and value == self.NO_CLIENT
+            ):
                 select.value = value
 
     def on_input_changed(self, _: Input.Changed) -> None:
@@ -590,14 +625,6 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
                 lambda contact: self._contact_added(role, contact),
             )
             return
-        if role == "billing" and isinstance(event.value, str) and not self._client_overridden:
-            self._setting_client = True
-            self.query_one("#client-contact", Select).value = event.value
-            self._setting_client = False
-        elif role == "client" and not self._setting_client and isinstance(event.value, str):
-            billing_value = self.query_one("#billing-contact", Select).value
-            if event.value != billing_value:
-                self._client_overridden = True
         self._sync_contacts()
 
     def _contact_added(self, role: str, contact: Contact | None) -> None:
@@ -609,10 +636,6 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             self.query_one("#contact-selection-error", Static).update(str(error))
             return
         self._refresh_contact_selects(role, contact.id)
-        if role == "billing" and not self._client_overridden:
-            self._setting_client = True
-            self.query_one("#client-contact", Select).value = contact.id
-            self._setting_client = False
         self._sync_contacts()
 
     def _project_values(self) -> tuple[ProjectAddress, ProjectUseCase] | None:
@@ -680,13 +703,13 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
         billing = self.query_one("#billing-contact", Select).value
         client = self.query_one("#client-contact", Select).value
         if not isinstance(billing, str) or not isinstance(client, str):
-            raise IntakeError("Billing Contact and Client Contact are required")
+            raise IntakeError("Billing Contact and an explicit Client choice are required")
         return ProjectIntake(
             project_name=self.query_one("#name", Input).value,
             project_address=address,
             project_use_case=use_case,
             billing_contact_id=billing,
-            client_contact_id=client,
+            client_contact_id=None if client == self.NO_CLIENT else client,
             description=self.query_one("#desc", Input).value,
             created=self._created,
         )
@@ -708,7 +731,9 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
     def _show_review(self) -> None:
         request = self._request()
         billing = next(item for item in self._contacts if item.id == request.billing_contact_id)
-        client = next(item for item in self._contacts if item.id == request.client_contact_id)
+        client = next(
+            (item for item in self._contacts if item.id == request.client_contact_id), None
+        )
         folder = build_folder_name(
             request.created,
             clean_name_part(request.project_address.short),
@@ -725,8 +750,12 @@ class NewProjectModal(ModalScreen[ReviewedProjectCreation | None]):
             f"Address: {request.project_address.formatted}",
             f"Description: {request.description or '(none)'}",
             f"Use case: {request.project_use_case.display}",
-            f"Billing Contact: {billing.first_name} {billing.last_name} · {billing.email}",
-            f"Client Contact: {client.first_name} {client.last_name} · {client.email}",
+            f"Billing Contact: {billing.full_name} · {billing.email}",
+            (
+                f"Client Contact: {client.full_name} · {client.email}"
+                if client is not None
+                else "Client Contact: none"
+            ),
             "Contact details will be copied into PROJECT.md.",
         )))
 
@@ -2576,7 +2605,7 @@ class AtlasApp(App):
         def done(contact: Contact | None) -> None:
             if contact is None:
                 return
-            summary = f"Updated {contact.first_name} {contact.last_name}"
+            summary = f"Updated {contact.full_name}"
             self._last_result = OperationOutcome(
                 title="Contact updated",
                 summary=summary,

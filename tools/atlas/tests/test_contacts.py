@@ -4,6 +4,7 @@ import json
 import os
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -113,7 +114,7 @@ def test_missing_store_returns_empty_directory_without_writing(fixture_drive):
     assert not (fixture_drive / "_tools" / "billing-contacts.json").exists()
 
 
-def test_first_contact_creates_schema_v1_and_round_trips(fixture_drive):
+def test_first_contact_creates_schema_v2_person_and_round_trips(fixture_drive):
     created = add_contact(
         fixture_drive,
         ContactDraft(first_name=" Ada ", last_name=" Lovelace ", email=" ada@example.com "),
@@ -130,7 +131,8 @@ def test_first_contact_creates_schema_v1_and_round_trips(fixture_drive):
     stored = json.loads(
         (fixture_drive / "_tools" / "billing-contacts.json").read_text(encoding="utf-8")
     )
-    assert stored["schemaVersion"] == 1
+    assert stored["schemaVersion"] == 2
+    assert stored["contacts"][0]["kind"] == "person"
     assert stored["contacts"][0]["id"] == created.id
 
 
@@ -337,7 +339,7 @@ def test_update_contact_refuses_malformed_store_without_rewriting(fixture_drive)
     ("contents", "message"),
     [
         (b"{not json", "not valid JSON"),
-        (b'{"schemaVersion": 2, "contacts": []}\n', "unsupported schemaVersion 2"),
+        (b'{"schemaVersion": 3, "contacts": []}\n', "unsupported schemaVersion 3"),
         (b'{"schemaVersion": 1}\n', "missing.*contacts"),
     ],
 )
@@ -781,3 +783,134 @@ def test_update_keeps_unknown_fields_of_the_edited_contact(fixture_drive):
     edited = payload["contacts"][0]
     assert (edited["lastName"], edited["title"]) == ("King", "Principal")
     assert edited["address"]["attention"] == "Accounts"
+
+
+def test_v1_fixture_migrates_in_memory_then_persists_once_on_write(fixture_drive):
+    fixture = Path(__file__).parent / "fixtures" / "contacts-v1.json"
+    store = fixture_drive / "_tools" / "billing-contacts.json"
+    before = fixture.read_bytes()
+    store.write_bytes(before)
+
+    loaded = load_contacts(fixture_drive)
+    assert loaded.contacts[0].kind == "person"
+    assert loaded.contacts[0].full_name == "Ada Lovelace"
+    assert store.read_bytes() == before
+
+    add_contact(
+        fixture_drive,
+        ContactDraft(
+            kind="organization",
+            display_name="Figure Ground",
+            legal_name="Figure Ground Architecture, Inc.",
+            email="accounts@figureground.example",
+        ),
+    )
+    migrated = json.loads(store.read_text(encoding="utf-8"))
+    assert migrated["schemaVersion"] == 2
+    assert {item["kind"] for item in migrated["contacts"]} == {"person", "organization"}
+    person = next(item for item in migrated["contacts"] if item["kind"] == "person")
+    assert person["bridgeExtension"] == {"revision": 1}
+    persisted = store.read_bytes()
+    assert load_contacts(fixture_drive) == load_contacts(fixture_drive)
+    assert store.read_bytes() == persisted
+
+
+def test_organization_round_trips_without_synthetic_person_fields(fixture_drive):
+    created = add_contact(
+        fixture_drive,
+        ContactDraft(
+            kind="organization",
+            display_name=" Figure Ground ",
+            legal_name=" Figure Ground Architecture, Inc. ",
+            email=" Accounts@FigureGround.example ",
+        ),
+    )
+
+    assert created.kind == "organization"
+    assert created.first_name == ""
+    assert created.last_name == ""
+    assert created.display_name == "Figure Ground"
+    assert created.legal_name == "Figure Ground Architecture, Inc."
+    stored = json.loads(
+        (fixture_drive / "_tools" / "billing-contacts.json").read_text(encoding="utf-8")
+    )["contacts"][0]
+    assert stored["kind"] == "organization"
+    assert stored["displayName"] == "Figure Ground"
+    assert "firstName" not in stored and "lastName" not in stored
+
+
+@pytest.mark.parametrize(
+    ("draft", "message"),
+    [
+        (ContactDraft(kind="person", email="person@example.com"), "first name"),
+        (ContactDraft(kind="organization", display_name="", email="org@example.com"),
+         "display name"),
+        (ContactDraft(kind="organization", display_name="Firm", first_name="Fake",
+                      email="org@example.com"), "first name.*organization"),
+        (ContactDraft(kind="person", first_name="Ada", last_name="Lovelace",
+                      display_name="Not allowed", email="person@example.com"),
+         "display name.*person"),
+    ],
+)
+def test_kind_specific_contact_fields_are_validated(fixture_drive, draft, message):
+    with pytest.raises(ContactError, match=message):
+        add_contact(fixture_drive, draft)
+
+
+def test_v2_fixture_and_machine_json_preserve_unknown_fields(fixture_drive, capsys):
+    fixture = Path(__file__).parent / "fixtures" / "contacts-v2.json"
+    store = fixture_drive / "_tools" / "billing-contacts.json"
+    store.write_bytes(fixture.read_bytes())
+
+    from atlas.cli import main
+
+    assert main(["contacts", "list", "--drive", str(fixture_drive), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    person = next(item for item in payload if item["kind"] == "person")
+    organization = next(item for item in payload if item["kind"] == "organization")
+    assert person["bridgeExtension"] == {"revision": 2}
+    assert organization["display_name"] == "Figure Ground"
+    assert organization["legal_name"] == "Figure Ground Architecture, Inc."
+    assert "first_name" not in organization and "last_name" not in organization
+
+
+def test_contacts_cli_adds_and_converts_organization_without_person_names(
+    fixture_drive, capsys
+):
+    from atlas.cli import main
+
+    assert main([
+        "contacts", "add", "--drive", str(fixture_drive), "--kind", "organization",
+        "--display-name", "Figure Ground", "--legal-name",
+        "Figure Ground Architecture, Inc.", "--email", "accounts@example.com", "--json",
+    ]) == 0
+    organization = json.loads(capsys.readouterr().out)
+    assert organization["kind"] == "organization"
+    assert "first_name" not in organization
+
+    assert main([
+        "contacts", "edit", organization["id"], "--drive", str(fixture_drive),
+        "--kind", "person", "--first-name", "Ada", "--last-name", "Lovelace",
+        "--yes", "--json",
+    ]) == 0
+    person = json.loads(capsys.readouterr().out)
+    assert person["kind"] == "person"
+    assert person["first_name"] == "Ada"
+    assert "display_name" not in person
+
+
+def test_duplicate_email_is_shared_across_person_and_organization(fixture_drive):
+    add_contact(
+        fixture_drive,
+        ContactDraft(
+            kind="organization", display_name="Figure Ground", email="INFO@example.com"
+        ),
+    )
+    with pytest.raises(DuplicateContactError):
+        add_contact(
+            fixture_drive,
+            ContactDraft(
+                kind="person", first_name="Info", last_name="Desk",
+                email=" info@EXAMPLE.com ",
+            ),
+        )

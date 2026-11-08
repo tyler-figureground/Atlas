@@ -146,7 +146,9 @@ async def test_new_project_wizard_creates_complete_project(fixture_drive):
         await pilot.pause()
         app.screen.query_one("#billing-contact", Select).value = contact.id
         await pilot.pause()
-        assert app.screen.query_one("#client-contact", Select).value == contact.id
+        assert app.screen.query_one("#client-contact", Select).value == Select.NULL
+        app.screen.query_one("#client-contact", Select).value = contact.id
+        await pilot.pause()
         app.screen.query_one("#next-contacts", Button).press()
         await pilot.pause()
         assert date.today().strftime("%y%m%d") in str(app.screen.query_one("#review", Static).render())
@@ -240,6 +242,7 @@ async def test_new_project_refuses_pasted_control_characters_inline(fixture_driv
         app.screen.query_one("#next-project", Button).press()
         await pilot.pause()
         app.screen.query_one("#billing-contact", Select).value = contact.id
+        app.screen.query_one("#client-contact", Select).value = contact.id
         await pilot.pause()
         app.screen.query_one("#next-contacts", Button).press()
         await pilot.pause()
@@ -385,7 +388,7 @@ async def test_add_contact_duplicate_email_requires_explicit_choice(fixture_driv
         assert app.screen.query_one("#contact-first", Input).value == "Wrong"
 
 
-async def test_wizard_adds_shared_contact_and_defaults_client(fixture_drive):
+async def test_wizard_adds_shared_contact_and_requires_explicit_client(fixture_drive):
     app = AtlasApp(fixture_drive)
     async with app.run_test() as pilot:
         await settle(app, pilot)
@@ -414,7 +417,10 @@ async def test_wizard_adds_shared_contact_and_defaults_client(fixture_drive):
         assert isinstance(wizard, NewProjectModal)
         billing = wizard.query_one("#billing-contact", Select).value
         assert isinstance(billing, str)
-        assert wizard.query_one("#client-contact", Select).value == billing
+        assert wizard.query_one("#client-contact", Select).value == Select.NULL
+        wizard.query_one("#client-contact", Select).value = NewProjectModal.NO_CLIENT
+        await pilot.pause()
+        assert not wizard.query_one("#next-contacts", Button).disabled
         assert load_contacts(fixture_drive).contacts[0].email == "grace@example.com"
 
 
@@ -654,6 +660,7 @@ async def test_new_project_refuses_changed_drive_map(fixture_drive):
         wizard.query_one("#next-project", Button).press()
         await wait_for(app, pilot, lambda: wizard.query_one("#step-contacts").display)
         wizard.query_one("#billing-contact", Select).value = contact.id
+        wizard.query_one("#client-contact", Select).value = contact.id
         await wait_for(app, pilot, lambda: not wizard.query_one("#next-contacts", Button).disabled)
         wizard.query_one("#next-contacts", Button).press()
         await wait_for(app, pilot, lambda: wizard.query_one("#step-review").display)

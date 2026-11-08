@@ -191,7 +191,10 @@ def blank_intake_front_matter(project: str) -> list[str]:
     for role in ("billing", "client"):
         lines += [
             f"{role}_contact_id:",
+            f"{role}_contact_kind:",
             f"{role}_contact_name:",
+            f"{role}_contact_display_name:",
+            f"{role}_contact_legal_name:",
             f"{role}_contact_email:",
             f"{role}_contact_phone:",
             f"{role}_contact_company:",
@@ -223,10 +226,25 @@ def blank_intake_identity_rows(project: str) -> list[str]:
     ]
 
 
-def _contact_front_matter(role: str, contact: ContactSnapshot) -> list[str]:
+def _contact_front_matter(role: str, contact: ContactSnapshot | None) -> list[str]:
+    if contact is None:
+        return [
+            f"{role}_contact_id:",
+            f"{role}_contact_kind:",
+            f"{role}_contact_name:",
+            f"{role}_contact_display_name:",
+            f"{role}_contact_legal_name:",
+            f"{role}_contact_email:",
+            f"{role}_contact_phone:",
+            f"{role}_contact_company:",
+            f"{role}_contact_address:",
+        ]
     return [
         f"{role}_contact_id: {_yaml(contact.id)}",
+        f"{role}_contact_kind: {_yaml(contact.kind)}",
         f"{role}_contact_name: {_yaml(contact.full_name)}",
+        f"{role}_contact_display_name: {_yaml(contact.display_name)}",
+        f"{role}_contact_legal_name: {_yaml(contact.legal_name)}",
         f"{role}_contact_email: {_yaml(contact.email)}",
         f"{role}_contact_phone: {_yaml(contact.phone)}",
         f"{role}_contact_company: {_yaml(contact.company)}",
@@ -278,17 +296,17 @@ def project_md_lines(
         f"| Project | {_table(name)} |",
         f"| Address / BBL | {_table(full_address)} |",
         f"| Project Use Case | {_table(intake.project_use_case.display)} |",
-        f"| Client | {_table(intake.client_contact.full_name)} |",
+        f"| Client | {_table(intake.client_contact.full_name if intake.client_contact else '')} |",
         f"| Billing Contact | {_table(intake.billing_contact.full_name)} |",
         f"| Billing Email | {_table(intake.billing_contact.email)} |",
         f"| Billing Phone | {_table(intake.billing_contact.phone)} |",
         f"| Billing Company | {_table(intake.billing_contact.company)} |",
         f"| Billing Address | {_table(intake.billing_contact.address)} |",
-        f"| Client Contact | {_table(intake.client_contact.full_name)} |",
-        f"| Client Email | {_table(intake.client_contact.email)} |",
-        f"| Client Phone | {_table(intake.client_contact.phone)} |",
-        f"| Client Company | {_table(intake.client_contact.company)} |",
-        f"| Client Address | {_table(intake.client_contact.address)} |",
+        f"| Client Contact | {_table(intake.client_contact.full_name if intake.client_contact else '')} |",
+        f"| Client Email | {_table(intake.client_contact.email if intake.client_contact else '')} |",
+        f"| Client Phone | {_table(intake.client_contact.phone if intake.client_contact else '')} |",
+        f"| Client Company | {_table(intake.client_contact.company if intake.client_contact else '')} |",
+        f"| Client Address | {_table(intake.client_contact.address if intake.client_contact else '')} |",
         "| Jurisdiction | |",
         "| Virtual tour | |",
         f"| Descriptor | {_table(desc)} |",

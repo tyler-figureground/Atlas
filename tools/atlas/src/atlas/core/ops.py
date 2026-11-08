@@ -113,28 +113,36 @@ def _contact_snapshot(contact: Contact) -> ContactSnapshot:
         address = ", ".join(parts)
     return ContactSnapshot(
         id=contact.id,
+        kind=contact.kind,
         first_name=contact.first_name,
         last_name=contact.last_name,
+        display_name=contact.display_name,
+        legal_name=contact.legal_name or "",
         email=contact.email,
         phone=contact.phone or "",
         company=contact.company or "",
         address=address,
+        extra=dict(contact._extra),
     )
 
 
 def _resolve_intake(drive_root: Path, request: ProjectIntake) -> ResolvedProjectIntake:
     directory = load_contacts(drive_root)
     billing = find_contact(directory, request.billing_contact_id)
-    client = find_contact(directory, request.client_contact_id)
+    client = (
+        find_contact(directory, request.client_contact_id)
+        if request.client_contact_id is not None
+        else None
+    )
     if billing is None:
         raise OpsError("selected Billing Contact is no longer available; review contacts and retry")
-    if client is None:
+    if request.client_contact_id is not None and client is None:
         raise OpsError("selected Client Contact is no longer available; review contacts and retry")
     try:
         return ResolvedProjectIntake(
             request=request,
             billing_contact=_contact_snapshot(billing),
-            client_contact=_contact_snapshot(client),
+            client_contact=_contact_snapshot(client) if client is not None else None,
         )
     except IntakeError as error:
         raise OpsError(str(error)) from error

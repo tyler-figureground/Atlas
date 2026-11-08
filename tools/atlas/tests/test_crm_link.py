@@ -29,7 +29,8 @@ def _new(drive: Path, capsys, *extra: str) -> tuple[int, dict | None, str]:
     status = main([
         "new", "--drive", str(drive), "--name", "Oak House", "--street", "1842 Oak Street",
         "--city", "Oakland", "--state", "CA", "--zip", "94612", "--use-case", "Renovation",
-        "--billing-contact", contact, "--desc", "Kitchen", "--json", *extra,
+        "--billing-contact", contact, "--client-contact", contact,
+        "--desc", "Kitchen", "--json", *extra,
     ])
     captured = capsys.readouterr()
     return status, (json.loads(captured.out) if status == 0 else None), captured.err
@@ -219,3 +220,105 @@ def test_dossier_json_crm_id_is_null_when_unlinked(fixture_drive, capsys):
 
     assert main(["dossier", created["created"], "--drive", str(fixture_drive), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["crm_id"] is None
+
+
+def test_new_explicit_no_client_round_trips_null(fixture_drive, capsys):
+    contact = _contact(fixture_drive, capsys)
+    status = main([
+        "new", "--drive", str(fixture_drive), "--name", "No Client", "--street",
+        "1842 Oak Street", "--city", "Oakland", "--state", "CA", "--zip", "94612",
+        "--use-case", "Renovation", "--billing-contact", contact,
+        "--no-client-contact", "--date", "260415", "--json", "--yes",
+    ])
+    created = json.loads(capsys.readouterr().out)
+
+    assert status == 0
+    assert created["client_contact_id"] is None
+    assert created["billing_contact"]["kind"] == "person"
+    assert created["client_contact"] is None
+    assert main(["dossier", created["created"], "--drive", str(fixture_drive), "--json"]) == 0
+    dossier = json.loads(capsys.readouterr().out)
+    assert dossier["billing_contact"]["kind"] == "person"
+    assert dossier["client_contact"] is None
+
+
+def test_organization_billing_round_trips_without_synthetic_names(fixture_drive, capsys):
+    assert main([
+        "contacts", "add", "--drive", str(fixture_drive), "--kind", "organization",
+        "--display-name", "Figure Ground", "--legal-name",
+        "Figure Ground Architecture, Inc.", "--email", "accounts@example.com", "--json",
+    ]) == 0
+    organization = json.loads(capsys.readouterr().out)
+    status = main([
+        "new", "--drive", str(fixture_drive), "--name", "Organization Billing",
+        "--street", "1842 Oak Street", "--city", "Oakland", "--state", "CA",
+        "--zip", "94612", "--use-case", "Renovation", "--billing-contact",
+        organization["id"], "--no-client-contact", "--date", "260415", "--json", "--yes",
+    ])
+    created = json.loads(capsys.readouterr().out)
+
+    assert status == 0
+    assert created["billing_contact"]["kind"] == "organization"
+    assert created["client_contact"] is None
+    assert main(["dossier", created["created"], "--drive", str(fixture_drive), "--json"]) == 0
+    billing = json.loads(capsys.readouterr().out)["billing_contact"]
+    assert billing["kind"] == "organization"
+    assert billing["display_name"] == "Figure Ground"
+    assert "first_name" not in billing and "last_name" not in billing
+
+
+def test_new_never_defaults_client_to_billing(fixture_drive, capsys):
+    contact = _contact(fixture_drive, capsys)
+    status = main([
+        "new", "--drive", str(fixture_drive), "--name", "Ambiguous", "--street",
+        "1842 Oak Street", "--city", "Oakland", "--state", "CA", "--zip", "94612",
+        "--use-case", "Renovation", "--billing-contact", contact, "--json", "--yes",
+    ])
+
+    assert status == 2
+    assert "--client-contact or --no-client-contact" in capsys.readouterr().err
+
+
+def test_project_edit_omits_to_keep_and_explicitly_clears_client(fixture_drive, capsys):
+    _, created, _ = _new(fixture_drive, capsys, "--date", "260415", "--yes")
+    folder = created["created"]
+
+    assert main([
+        "project", "edit", folder, "--drive", str(fixture_drive), "--use-case", "Addition",
+        "--yes", "--json",
+    ]) == 0
+    kept = json.loads(capsys.readouterr().out)
+    assert kept["client_contact_id"] == kept["billing_contact_id"]
+    assert kept["client_contact"]["kind"] == "person"
+
+    assert main([
+        "project", "edit", folder, "--drive", str(fixture_drive),
+        "--clear-client-contact", "--yes", "--json",
+    ]) == 0
+    cleared = json.loads(capsys.readouterr().out)
+    assert cleared["client_contact_id"] is None
+    assert cleared["client_contact"] is None
+    assert load_project_record(fixture_drive / folder).client_contact is None
+
+
+def test_reading_legacy_project_snapshot_never_rewrites_it(fixture_drive, capsys):
+    _, created, _ = _new(fixture_drive, capsys, "--date", "260415", "--yes")
+    dossier = fixture_drive / created["created"] / "PROJECT.md"
+    source = dossier.read_bytes()
+    legacy = b"\r\n".join(
+        line
+        for line in source.split(b"\r\n")
+        if not any(
+            marker in line
+            for marker in (
+                b"_contact_kind:", b"_contact_display_name:", b"_contact_legal_name:"
+            )
+        )
+    )
+    dossier.write_bytes(legacy)
+    before = dossier.read_bytes()
+
+    assert main(["dossier", created["created"], "--drive", str(fixture_drive), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["billing_contact"]["kind"] == "person"
+    assert dossier.read_bytes() == before
