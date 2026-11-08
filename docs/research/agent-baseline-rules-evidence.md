@@ -118,7 +118,7 @@ what Tyler asked for, no direct correction.
 ## Settled 2026-10-06 (Tyler)
 
 - Sheet numbering `A101`, no hyphen (Monte Vista and Silverado form; vault and RS-005 D10
-  said `A-101`).
+  said `A-101`). Withdrawn 2026-10-08: exact NCS form (ADR 0017 amendment 2026-11-07).
 - Dimensions 1/4" display precision, face of stud; centerline in Concept and Schematic
   Design only.
 - Monte Vista's project-level "sync at natural checkpoints" stays.
@@ -162,7 +162,7 @@ current remote release state. Policy snapshot: Pyvoid `3d14c191b5139e71de3d1b4a4
   header/firm naming and the isolated eighth-inch precision answer remain unresolved;
   do not guess either. Standards/engine changes are tracked in #3195, not certified
   by this Atlas patch. Issued-number exceptions remain project-specific.
-- **Deliberately unchanged:** A101 numbering, face-of-stud/quarter-inch defaults,
+- **Deliberately unchanged:** A101 numbering (withdrawn 2026-10-08: exact NCS form, ADR 0017 amendment 2026-11-07), face-of-stud/quarter-inch defaults,
   no autonomous sync, foreign-borrow protection, project-specific standing rulings.
   Product launch/branding and unmerged visual work are not studio-project rules;
   no Atlas rebrand or product-roadmap work is implied by this synchronization.
