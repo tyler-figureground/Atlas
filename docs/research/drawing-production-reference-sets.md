@@ -197,14 +197,15 @@ it targets is the one that reached the County, and the test fixture is already l
 | VS-006 sheet composition standard | Pyvoid | #769, #770 | Tyler's rulings, then every rule gap and every practice-vs-S+V conflict found building the sets, posted 2026-10-05 |
 | Model-side compliance check | Pyvoid | #3095 | Filed; per-sheet-type model checks and fixtures posted 2026-10-05 |
 | Internal standards corrections | Tyler | - | - |
-| Drawing reference sets | This side | Library drive | **Built 2026-10-05, all candidate:** Floor Plans, Schedules, RCPs, Details, Elevations; G-Series retrofitted to rule ids. Each: E1-E3, a before/after R1 (64L Rev 4 vs the 09-23 export), checklist lines tagged print / model / tyler with S+V rule ids |
-| Conformance | This side | Library drive | Every drawing card states the S+V standards govern; card-vs-S+V disagreements fixed in the card (G-Series "addressed to a party"); ruling-vs-S+V conflicts filed to #769, not to Tyler |
+| Drawing reference sets | This side | Library drive | **Built 2026-10-05; approved by Tyler.** Schedules, RCPs, Details, Elevations and G-Series (retrofitted to rule ids) approved 2026-10-07; Floor Plans approved 2026-10-16, its open item (no clean issued plan sheet as E1) carried on the card. Each: E1-E3, a before/after R1 (64L Rev 4 vs the 09-23 export), checklist lines tagged print / model / tyler with S+V rule ids. Live status: `docs/plans/2026-10-project-structure-robustness-plan.md` Phase 3 and its log |
+| Conformance | This side | Library drive | Every drawing card states the S+V standards govern; card-vs-S+V disagreements fixed in the card (G-Series "addressed to a party"). Tyler settled the open S+V conflicts on #769 on 2026-10-07 (Floor Plans clouds, witness lines, view numbering; uniform 1/4" precision; Solid + Void naming); ADR 0017 records the last two |
 
-Follow-through: when Pyvoid rules on a #769 conflict or lands a rule id, update the cards that
-cite it; when #2888 or #3095 ships a check, run it on each set's R1 `before.pdf` - every tagged
-defect must fire. No R1 is a Tyler markup (none exists on the drive); a real redline print per
-sheet type is the one input only Tyler can supply. Phases A, B and D in section 5 are Pyvoid's;
-C, E and F stay here.
+Follow-through: approval is Tyler's review alone, with no Pyvoid gate (plan task 3.1, amended
+2026-10-07); a cited rule id Pyvoid has not shipped yet goes under the card's Known issues. When
+Pyvoid lands a rule id, update the cards that cite it; when #2888 or #3095 ships a check, run it on
+each set's R1 `before.pdf` - every tagged defect must fire. No R1 is a Tyler markup (none exists on
+the drive); a real redline print per sheet type is the one input only Tyler can supply. Phases A, B
+and D in section 5 are Pyvoid's; C, E and F stay here.
 
 ## 8. Sources
 
