@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Set sweep before every drawing-set issue (#19, Pyvoid #4840).** The project `TASKS.md` template gains an **Issuing a drawing set** rule: each issue gets a `MODEL` set-sweep task (prompt `/jdp set sweep`) as the last step before the export, which carries `after:` it; covered P1/P2 defects are fixed, residuals reviewed with crops. The `/tasks` skill files it when minutes add an issue. Matches Pyvoid's `PYVOID-ISSUE:I-07` readiness row.
+
 ## [Atlas 0.28.0] - 2026-11-07
 
 ### Added
