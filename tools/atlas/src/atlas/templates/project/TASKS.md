@@ -41,6 +41,15 @@ actionable is blocked, say so and name the blockers. Close with evidence and a r
 receipt in `.agent/runs/`. A claim stale more than 7 days with no run receipt may be
 reclaimed - check `.agent/handoff/CURRENT.md` first.
 
+**Issuing a drawing set**
+
+Every drawing-set issue gets a `MODEL` set-sweep task, the last step before the issue
+export; the export task carries `after:` it. Run the JDP set sweep on the issue export,
+fix every P1/P2 drafting defect it covers, and review the residuals with their crops
+before issuing - never route a covered defect to Tyler as a question. After fixes,
+re-export and re-sweep. Done when the sweep record names the export being issued. Prompt, in a `text` fence under the task:
+`/jdp set sweep`.
+
 ## In progress
 
 <!-- Claimed items. Format: - [ ] T-NNN `LANE` <task> - claimed YYYY-MM-DD by <name> -->

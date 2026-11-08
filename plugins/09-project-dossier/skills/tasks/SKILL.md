@@ -87,6 +87,9 @@ Each action item goes to exactly one list, linked to the minutes:
 - Tyler's own errand (call, email, send, sign-off) → `TYLER.md`; pre-draft the
   artifact if possible and link `ready:`.
 - Someone outside → `WAIT`, naming who.
+- A drawing-set issue → also a `MODEL` set-sweep task (prompt `/jdp set sweep`), the
+  last step before the export; the export task carries `after:` it. See the
+  **Issuing a drawing set** rule in `TASKS.md`.
 - Every new line: `added:` today; `due:` if the minutes give a date; `after:T-NNN`
   on each task the new `DECISION` holds up.
 
