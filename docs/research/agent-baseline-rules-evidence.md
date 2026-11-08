@@ -118,7 +118,7 @@ what Tyler asked for, no direct correction.
 ## Settled 2026-10-06 (Tyler)
 
 - Sheet numbering `A101`, no hyphen (Monte Vista and Silverado form; vault and RS-005 D10
-  said `A-101`).
+  said `A-101`). Withdrawn 2026-10-08: exact NCS form (ADR 0017 amendment 2026-11-07).
 - Dimensions 1/4" display precision, face of stud; centerline in Concept and Schematic
   Design only.
 - Monte Vista's project-level "sync at natural checkpoints" stays.

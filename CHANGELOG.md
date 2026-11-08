@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [Atlas 0.29.0] - 2026-11-07
+
+### Changed
+
+- **Sheet numbers take the exact NCS form (#6, ADR 0017 amendment).** The baseline block now says `A-101`, `AD101`, `G-001`: a hyphen holds the place of an omitted second discipline letter, five characters. Tyler withdrew the no-hyphen reversal on 2026-10-08 (Pyvoid b5e987a79). Run `atlas conform --all` (dry run first) to re-render each project's `AGENTS.md` block; an issued sheet keeps its number.
+
 ### Added
 
 - **Set sweep before every drawing-set issue (#19, Pyvoid #4840).** The project `TASKS.md` template gains an **Issuing a drawing set** rule: each issue gets a `MODEL` set-sweep task (prompt `/jdp set sweep`) as the last step before the export, which carries `after:` it; covered P1/P2 defects are fixed, residuals reviewed with crops. The `/tasks` skill files it when minutes add an issue. Matches Pyvoid's `PYVOID-ISSUE:I-07` readiness row.

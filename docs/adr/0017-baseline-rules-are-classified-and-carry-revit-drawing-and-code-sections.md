@@ -73,6 +73,7 @@ entitled to direct.
   cost of reading is smaller than one re-drawn sheet.
 - Studio defaults set by Tyler, 2026-10-06, and written into the S+V standards:
   - Sheet numbers `A101`, no hyphen (S+V-RS-005; D10's NCS `A-101` default reversed).
+    Withdrawn 2026-10-08: exact NCS form - see the 2026-11-07 amendment.
   - Dimensions 1/4" display precision, face of stud. Centerline allowed in Concept and
     Schematic Design; Construction Documents are face of stud (S+V-DS-002 v1.5, Rule
     5.2.11). Shipped to JDP through the firm config `%PROGRAMDATA%\Pyvoid\jdp\jdp.yaml`.
@@ -110,3 +111,13 @@ are 1/4" uniform, fix the model (S+V-DS-002 Rule 6.5.1); **the firm name is
 Solid + Void** on every title block and document, standards headers renamed in
 Pyvoid #3204. Nothing remains open from the original S+V conflict list. The
 Atlas baseline template carried both from 0.11.2 onward.
+
+## Amendment (2026-11-07)
+
+Sheet numbers take the exact NCS form: `A-101` and `G-001` for one-letter
+disciplines, `AD101` and `AS101` for two-letter ones - a hyphen holds the place of an
+omitted second discipline letter, five characters. Tyler withdrew the 2026-10-06
+no-hyphen reversal ("standard first", 2026-10-07, confirmed 2026-10-08); Pyvoid
+b5e987a79 and e5a73c5be carry it in S+V-RS-005. The baseline template carries it from
+Atlas 0.29.0 (Atlas #6); `atlas conform` re-renders each project's block. An issued
+sheet number is still never reassigned: a sheet already issued as `A101` keeps it.
