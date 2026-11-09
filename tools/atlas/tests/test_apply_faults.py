@@ -210,9 +210,11 @@ def test_a_non_os_error_fails_that_action_and_the_rest_still_apply(fixture_drive
     monkeypatch.setattr(conform, "_apply_backfill", backfill)
     result = apply_plan(fixture_drive, inv.path, m, plan)
 
-    failed = [a for a in result.actions if a.status == FAILED]
-    assert [a.dst for a in failed] == [m.decisions_dir]
-    assert "a file exists" in failed[0].note
+    from atlas.core.conform import CONFLICT
+
+    stuck = [a for a in result.actions if a.status in (FAILED, CONFLICT)]
+    assert [(a.dst, a.status) for a in stuck] == [(m.decisions_dir, CONFLICT)]
+    assert "a file exists" in stuck[0].note
     assert (project / "11 Meetings" / "kickoff.md").is_file()
 
 

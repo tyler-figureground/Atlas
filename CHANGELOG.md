@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- **Conform no longer stops a whole-drive run on one bad project (#54).** A hand-made `CLAUDE.md` with broken Atlas markers is now a conflict naming `CLAUDE.md`, a file where a seeded folder belongs fails that one action, and a project that vanished mid-run is recorded as failed. `atlas conform --all --apply --json` keeps going and still prints every Move Manifest, so `--revert` can undo what moved.
+- **Conform no longer stops a whole-drive run on one bad project (#54).** A hand-made `CLAUDE.md` with broken Atlas markers is now a conflict naming `CLAUDE.md`, a file where a seeded folder belongs is a conflict on that one action, and a project that vanished mid-run is recorded as failed. `atlas conform --all --apply --json` keeps going and prints every project's Move Manifest.
 
 ## [Atlas 0.31.0] - 2026-11-09
 

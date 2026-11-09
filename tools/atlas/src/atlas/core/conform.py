@@ -606,10 +606,11 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
             except OSError as error:
                 applied.append(replace(action, status=FAILED, note=_os_note(error)))
                 continue
-            except (OpsError, ValueError) as error:
+            except (OpsError, AgentsBlockError, CardBlockError) as error:
                 # A file where a seeded folder belongs, or markers a person
-                # broke: still one action, never the whole run (#54).
-                applied.append(replace(action, status=FAILED, note=str(error)))
+                # broke: a person resolves it, and it is one action, never the
+                # whole run (#54).
+                applied.append(replace(action, status=CONFLICT, note=str(error)))
                 continue
             created = tuple(rel for rel in absent if (project / rel).exists())
             if created:
