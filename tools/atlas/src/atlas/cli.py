@@ -6,6 +6,7 @@ Exit codes: 0 = clean, 1 = findings/pending work, 2 = error.
 from __future__ import annotations
 
 import argparse
+import codecs
 import json
 import os
 import re
@@ -95,7 +96,9 @@ from .core.project_data import (
     preview_project_update,
     read_crm_id,
 )
+from .core.projectmd import dossier_lines as split_lines
 from .core.scan import (
+    long_path,
     DEFAULT_MOUNT_ROOT,
     READ,
     UNREADABLE,
@@ -1490,9 +1493,16 @@ def cmd_refs_index(args: argparse.Namespace) -> int:
     if not readme.is_file():
         raise UsageError(f"no README.md under {root}")
     raw = readme.read_bytes()
-    text = raw.decode("utf-8", errors="replace")
+    # Strict, and the BOM kept as found: a lossy decode written back as UTF-8
+    # replaced every non-UTF-8 byte in the file with U+FFFD for good (#62).
+    bom = codecs.BOM_UTF8 if raw.startswith(codecs.BOM_UTF8) else b""
+    try:
+        text = raw[len(bom):].decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise UsageError(f"{readme} is not UTF-8 ({error.reason} at byte {error.start}); "
+                         "save it as UTF-8 and rerun - nothing written") from None
     newline = "\r\n" if "\r\n" in text else "\n"
-    lines = text.splitlines()
+    lines = split_lines(text)  # CR/LF only: U+2028 and friends are text (#61)
     block = contents_lines(list_sets(root), date.today())
     new_lines = splice_contents(lines, block)
     changed = new_lines != lines
@@ -1501,7 +1511,15 @@ def cmd_refs_index(args: argparse.Namespace) -> int:
         out = newline.join(new_lines)
         if text.endswith(("\n", "\r")):
             out += newline
-        readme.write_bytes(out.encode("utf-8"))
+        # Temp file beside it, then one replace: a reader on the shared drive
+        # never meets half a README.
+        tmp = readme.with_name(f"{readme.name}.atlas-{os.getpid()}.tmp")
+        try:
+            Path(long_path(tmp)).write_bytes(bom + out.encode("utf-8"))
+            os.replace(long_path(tmp), long_path(readme))
+        finally:
+            if os.path.exists(long_path(tmp)):
+                os.remove(long_path(tmp))
         applied = True
     if args.json:
         print(json.dumps({
