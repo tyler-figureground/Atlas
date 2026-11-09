@@ -229,7 +229,6 @@ def test_carried_by_wants_every_line_in_order():
     assert not carried_by("a\nc", "a\nb")
 
 
-
 def test_a_refresh_keeps_unicode_line_separators_in_the_notes(fixture_drive):
     """#61: str.splitlines() broke on U+2028, form feed, U+0085 and 0x1C-0x1E,
     and the CRLF rewrite made them real line breaks in the person's notes."""

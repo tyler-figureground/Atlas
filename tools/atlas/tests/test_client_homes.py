@@ -198,6 +198,7 @@ def test_a_card_refresh_keeps_unicode_line_separators_in_the_notes(drive):
     assert CARD_BEGIN in text and note in text
     assert "06 Research/README.md" not in _report(project, m).missing_control_plane
 
+
 def test_broken_card_markers_are_a_conflict_not_a_rewrite(drive):
     m = _load(drive)
     broken = f"# Research\n{CARD_BEGIN}\nhalf a card\n"
