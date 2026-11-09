@@ -145,7 +145,7 @@ class Queue:
         return self._get("oldest")
 
 
-def _read(path: Path) -> tuple[str | None, str | None]:
+def read_task_list(path: Path):
     """(text, None) when read; (None, None) when absent; (None, why) when the
     file is there but cannot be read - never folded into absent (#57)."""
     try:
@@ -190,8 +190,8 @@ def collect(inventory: DriveInventory) -> Digest:
     permit_rule = inventory.map.permits
     projects = []
     for inv in sorted(inventory.projects, key=lambda p: p.name):
-        tyler_text, tyler_error = _read(inv.path / TYLER_PATH)
-        tasks_text, tasks_error = _read(inv.path / TASKS_PATH)
+        tyler_text, tyler_error = read_task_list(inv.path / TYLER_PATH)
+        tasks_text, tasks_error = read_task_list(inv.path / TASKS_PATH)
         project = _project(inv.name, tyler_text, tasks_text,
                            tyler_error=tyler_error, tasks_error=tasks_error)
         if rule is not None:

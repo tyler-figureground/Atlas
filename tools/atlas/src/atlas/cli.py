@@ -1560,8 +1560,11 @@ def cmd_tyler(args: argparse.Namespace) -> int:
     if args.write:
         out = digest_path(root)
         out.write_text(text, encoding="utf-8")
+        unreadable = sum(bool(p.tyler_unreadable) + bool(p.tasks_unreadable)
+                         for p in digest.projects)
+        note = f"; {unreadable} list(s) unreadable, counts incomplete" if unreadable else ""
         print(f"wrote {out} ({digest.errand_count} errands / "
-              f"{digest.decision_count} decisions)")
+              f"{digest.decision_count} decisions{note})")
     else:
         print(text, end="")
     return 0
