@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [Atlas 0.31.0] - 2026-11-09
+
+### Added
+
+- **Revit families and the reference library.** Every project's `AGENTS.md` block gains a section pointing agents at the family library (`G:\Shared drives\Config\3 3D\0_Revit\Families`, start at `Library Catalog.md`) and its `_INBOX` of new families, both usable on live projects. A family in neither is downloaded from BIMobject or BIMsmith and filed in the matching `_INBOX` domain folder, named in the run receipt. Also points at `G:\Shared drives\LIBRARY - Reference` (read its `README.md`; only `00` is ours). Run `atlas conform --all --only backfill` (dry run first) to re-render each project's block.
+
 ## [Atlas 0.30.0] - 2026-11-07
 
 ### Added
