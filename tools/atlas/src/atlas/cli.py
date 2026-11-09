@@ -98,7 +98,6 @@ from .core.project_data import (
 )
 from .core.projectmd import dossier_lines as split_lines
 from .core.scan import (
-    long_path,
     DEFAULT_MOUNT_ROOT,
     READ,
     UNREADABLE,
@@ -107,6 +106,7 @@ from .core.scan import (
     exists_exact,
     is_project_dir,
     list_entries,
+    long_path,
     scan_drive,
 )
 from .core.search import RESULT_CAP, build_name_index, search_names
@@ -1511,15 +1511,10 @@ def cmd_refs_index(args: argparse.Namespace) -> int:
         out = newline.join(new_lines)
         if text.endswith(("\n", "\r")):
             out += newline
-        # Temp file beside it, then one replace: a reader on the shared drive
-        # never meets half a README.
-        tmp = readme.with_name(f"{readme.name}.atlas-{os.getpid()}.tmp")
-        try:
-            Path(long_path(tmp)).write_bytes(bom + out.encode("utf-8"))
-            os.replace(long_path(tmp), long_path(readme))
-        finally:
-            if os.path.exists(long_path(tmp)):
-                os.remove(long_path(tmp))
+        # In place, as every drive write Atlas makes: a temp-and-rename can
+        # land on Drive as delete-and-create, losing the file's revision
+        # history and comments, and fails while anyone holds the README open.
+        Path(long_path(readme)).write_bytes(bom + out.encode("utf-8"))
         applied = True
     if args.json:
         print(json.dumps({
