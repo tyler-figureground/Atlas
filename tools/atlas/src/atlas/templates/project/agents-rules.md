@@ -84,6 +84,18 @@ Orientation for Pyvoid work from this folder (Pyvoid PRD-220). Six topics, in th
 - Model work is billed through a JDP run: open one before the first write. A stray session auto-started on another project's model: close it at once.
 - Tool detail lives in the `maestro` and `jdp` skills; never copy their trap tables here. Check the connected runtime's actual capabilities before using a newly merged operation: repository code, a deployed add-in and a live verified tool are different evidence. Missing support is a capability gap, not permission to draw an imitation or bypass targeting/trust checks. This model's own traps go in `PROJECT.md` under "Model traps" - add one when you find it.
 
+## Revit families and the reference library
+
+Need a family? The studio already owns thousands. Use them before you look anywhere else, and never model or draw a stand-in for one that exists.
+
+- Family library: `G:\Shared drives\Config\3 3D\0_Revit\Families`. Start at its `Library Catalog.md` (collections, showrooms, entry points) and follow its `AGENTS.md`. Category folders (`Doors`, `Casework`, `FF+E`, `Electrical`, ...), the showroom containers and `Autodesk OOTB Family Library` are all usable on this project.
+- New and incoming families: `G:\Shared drives\Config\3 3D\0_Revit\Families\_INBOX`, mostly by domain (`Kitchen`, `Bathroom`, `Lighting`, `Plumbing`, `FFE`, ...). Everything in `_INBOX` is usable on live projects now; search it, loose files and vendor folders included, as well as the main library.
+- Load from the library into this model and change the project copy. Editing a library family in place is Tyler's call.
+- Not in either: download it from BIMobject (`bimobject.com`) or BIMsmith (`bimsmith.com`) - manufacturer content first, then generic. Save the original `.rfa` into the nearest existing domain folder under `_INBOX`, keeping the vendor file name; if none fits, use `_INBOX` itself and propose a folder in the receipt's asks. Name each download in the run receipt with its source URL and `_INBOX` path. Never file a download in this project folder only, and never in the main library outside `_INBOX`.
+- `_INBOX\_Acquisition_Map\README.md` lists categories that are purchased or owned elsewhere (doors, windows, casework, trim, railings, stairs, kitchen): for those, use what the library holds and ask Tyler rather than download. Never write another effort's domain checklist, status file or manifest.
+- A download that needs an account, licence click-through or payment is Tyler's call: name the product, source and why in the receipt's asks.
+- Reference library: `G:\Shared drives\LIBRARY - Reference` - manuals, codes, standards, technical references, precedent, BIM content. Read its `README.md` first. Only `00 Office Standards and Administration` is ours; `REF-` folders and `90 Other Firms` are other people's. Use it in place; never copy its contents into this project.
+
 ## Drawings - native over drawn
 
 Everything on a sheet has a native Revit object. Use it. A drawn imitation looks right and breaks at the next change.

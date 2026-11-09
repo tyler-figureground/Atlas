@@ -384,6 +384,13 @@ def test_brief_and_ask_last_rules_reach_every_project(v3_drive):
                     "## Drawings - native over drawn", "## Code work"):
         assert heading in agents, heading
     assert "**Hard line**" in agents and "**Project input**" in agents
+    # Family library: where families live, where downloads go, the reference library.
+    assert agents.count("## Revit families and the reference library") == 1
+    assert agents.index("## Working in the Revit model") < agents.index("## Revit families and the reference library") < agents.index("## Drawings - native over drawn")
+    for required in ("G:\\Shared drives\\Config\\3 3D\\0_Revit\\Families`",
+                     "G:\\Shared drives\\Config\\3 3D\\0_Revit\\Families\\_INBOX`",
+                     "bimobject.com", "bimsmith.com", "G:\\Shared drives\\LIBRARY - Reference`"):
+        assert required in agents, required
     # California permit routing: one conditional section after the code basis,
     # Napa scoped, never a statewide claim, filed under ADR 0021 paths.
     assert agents.count("## California permit requirements") == 1
