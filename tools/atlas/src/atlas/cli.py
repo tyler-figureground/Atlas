@@ -2026,6 +2026,7 @@ def cmd_index_status(args: argparse.Namespace) -> int:
                 "files": len(index.files),
                 "skipped": len(index.skipped),
                 "unreadable": len(index.unreadable),
+                "complete": index.complete,
             })
         print(json.dumps(payload, indent=2))
         return 0 if index is not None else 1
@@ -2038,6 +2039,8 @@ def cmd_index_status(args: argparse.Namespace) -> int:
     print(f"indexed at {index.indexed_at}; {len(index.files)} {noun}, "
           f"{len(index.skipped)} skipped, "
           f"{len(index.unreadable)} unreadable folder(s)")
+    if not index.complete:
+        print("partial: a build was interrupted - `atlas index build` reads the rest")
     return 0
 
 

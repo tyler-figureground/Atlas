@@ -126,6 +126,10 @@ class ContentIndex:
     # entry from a live one without the map. An index written before the
     # archive was in scope has none under it, so the default is honest.
     archive_root: str = DEFAULT_ARCHIVE_ROOT
+    # False on a periodic or interrupted save: files the build never reached
+    # are absent, not stale, so a consumer must top it up rather than trust
+    # it (#56). Caches written before the flag were full builds.
+    complete: bool = True
 
     def is_archived(self, path: str) -> bool:
         return path.startswith(f"{self.archive_root}/")
@@ -176,6 +180,7 @@ def _save(path: Path, index: ContentIndex) -> None:
         "files": [vars(f) for f in index.files],
         "skipped": [vars(s) for s in index.skipped],
         "unreadable": [list(u) for u in index.unreadable],
+        "complete": index.complete,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -203,7 +208,8 @@ def load_index(root: Path | str, *,
         return ContentIndex(root=Path(payload["root"]), drive=payload["drive"],
                             indexed_at=payload["indexed_at"], files=files,
                             skipped=skipped, unreadable=unreadable,
-                            archive_root=payload.get("archive_root", DEFAULT_ARCHIVE_ROOT))
+                            archive_root=payload.get("archive_root", DEFAULT_ARCHIVE_ROOT),
+                            complete=bool(payload.get("complete", True)))
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -308,12 +314,12 @@ def build_index(root: Path | str, *,
     )
     path = index_path(base, cache_dir)
 
-    def snapshot() -> ContentIndex:
+    def snapshot(complete: bool) -> ContentIndex:
         return ContentIndex(
             root=Path(base), drive=_drive_label(base), indexed_at=_stamp(),
             files=tuple(sorted(kept, key=lambda f: f.path.casefold())),
             skipped=tuple(sorted(skipped, key=lambda s: s.path.casefold())),
-            unreadable=unreadable, archive_root=archive_root)
+            unreadable=unreadable, archive_root=archive_root, complete=complete)
 
     total = len(to_read)
     try:
@@ -326,14 +332,14 @@ def build_index(root: Path | str, *,
             if progress is not None:
                 progress(done, total)
             if save_every and done % save_every == 0:
-                _save(path, snapshot())
+                _save(path, snapshot(complete=False))
     except BaseException:
         # Resumable by key: what was extracted is kept, and the next run
         # re-reads only the remainder. The stamp stays honest - this save is
         # a partial build, stamped when it ran.
-        _save(path, snapshot())
+        _save(path, snapshot(complete=False))
         raise
-    index = snapshot()
+    index = snapshot(complete=True)
     _save(path, index)
     return index
 

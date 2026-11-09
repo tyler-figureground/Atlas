@@ -537,3 +537,59 @@ async def test_a_rescan_mid_first_build_still_lands_the_index(fixture_drive, mon
         await settle(app, pilot)
         assert not app._content_building
         assert app._content_index is not None
+
+
+async def test_an_interrupted_build_is_topped_up_when_the_console_opens(
+        fixture_drive, monkeypatch):
+    """#56: a partial index (console closed mid-build) was loaded as if
+    complete and never built again; search silently missed the rest."""
+    import pytest
+
+    from atlas.core import contentindex
+
+    _drive(fixture_drive)
+    real = contentindex._extract
+    calls = []
+
+    def dying(path, kind):
+        if calls:
+            raise KeyboardInterrupt
+        calls.append(path)
+        return real(path, kind)
+
+    monkeypatch.setattr(contentindex, "_extract", dying)
+    with pytest.raises(KeyboardInterrupt):
+        build_index(fixture_drive)
+    monkeypatch.setattr(contentindex, "_extract", real)
+    partial = load_index(fixture_drive)
+    assert partial is not None and not partial.complete and len(partial.files) == 1
+
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        assert not app._content_building
+        assert app._content_index.complete
+        assert len(app._content_index.files) > 1
+        assert load_index(fixture_drive).complete
+        await pilot.press("g")
+        await settle(app, pilot)
+        assert "partial" not in _content_line(_overlay(app))
+
+
+async def test_the_overlay_says_partial_for_a_partial_index(fixture_drive):
+    from dataclasses import replace
+
+    _drive(fixture_drive)
+    index = replace(build_index(fixture_drive), complete=False)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        overlay = SearchOverlay(build_name_index(fixture_drive))
+        app.push_screen(overlay)
+        await settle(app, pilot)
+        overlay.set_content_index(index)
+        await pilot.pause()
+        assert "partial" in _content_line(overlay)
+        overlay.set_content_building((3, 9))
+        await pilot.pause()
+        assert "finishing 3/9" in _content_line(overlay)

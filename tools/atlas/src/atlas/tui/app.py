@@ -1604,16 +1604,27 @@ class AtlasApp(App):
         stored = load_index(root)
         if stored is not None:
             self._content_index = stored
-            self._content_building = False
             self._content_error = None
             if isinstance(self.screen, SearchOverlay):
                 self.screen.set_content_index(stored)
-        elif not self._content_building:
-            self._content_building = True
-            self._content_progress = None
-            if isinstance(self.screen, SearchOverlay):
-                self.screen.set_content_building()
-            self._content_build_worker(root)
+            if stored.complete:
+                self._content_building = False
+                return
+            # A partial index: an interrupted build, or the periodic save of
+            # one still running. Search what it holds and read the rest - the
+            # build is incremental, so only the remainder (#56). A build
+            # already running keeps going; none starts twice.
+            if self._content_building:
+                if isinstance(self.screen, SearchOverlay):
+                    self.screen.set_content_building(self._content_progress)
+                return
+        elif self._content_building:
+            return
+        self._content_building = True
+        self._content_progress = None
+        if isinstance(self.screen, SearchOverlay):
+            self.screen.set_content_building()
+        self._content_build_worker(root)
 
     @work(thread=True, exclusive=True, group="content-index", exit_on_error=False)
     def _content_build_worker(self, root: Path) -> None:

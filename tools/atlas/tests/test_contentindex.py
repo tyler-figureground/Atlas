@@ -405,12 +405,14 @@ def test_an_interrupted_build_saves_what_it_extracted(
     assert partial is not None
     assert len(partial.files) == 2
     assert partial.indexed_at  # the stamp is honest: a partial build, stamped
+    assert partial.complete is False  # #56: never mistaken for a full build
 
     monkeypatch.setattr(contentindex, "_extract", real)
     reads = _extract_spy(monkeypatch)
     index = build_index(fixture_drive, cache_dir=cache_dir)
     assert len(reads) == 3
     assert len(index.files) == 5
+    assert index.complete and load_index(fixture_drive, cache_dir=cache_dir).complete
 
 
 def test_progress_is_reported_as_done_over_total(fixture_drive, cache_dir):
@@ -568,3 +570,36 @@ def test_cli_errors_exit_2(fixture_drive, cache_dir, capsys, tmp_path):
     assert main(["index", "build", "--drive", str(stray)]) == 2
     capsys.readouterr()
     assert main(["index", "status", "--drive", str(stray)]) == 2
+
+
+def test_an_index_written_before_the_complete_flag_loads_as_complete(
+        fixture_drive, cache_dir):
+    """#56: older caches carry no flag; they were full builds."""
+    _drive(fixture_drive)
+    build_index(fixture_drive, cache_dir=cache_dir)
+    path = contentindex.index_path(fixture_drive, cache_dir)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload.pop("complete")
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    assert load_index(fixture_drive, cache_dir=cache_dir).complete
+
+
+def test_status_reports_a_partial_index(fixture_drive, cache_dir, monkeypatch, capsys):
+    _drive(fixture_drive)
+    real = contentindex._extract
+    calls = []
+
+    def dying(path, kind):
+        if calls:
+            raise KeyboardInterrupt
+        calls.append(path)
+        return real(path, kind)
+
+    monkeypatch.setattr(contentindex, "_extract", dying)
+    with pytest.raises(KeyboardInterrupt):
+        build_index(fixture_drive, cache_dir=cache_dir)
+
+    assert main(["index", "status", "--drive", str(fixture_drive), "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["complete"] is False
+    main(["index", "status", "--drive", str(fixture_drive)])
+    assert "partial" in capsys.readouterr().out
