@@ -52,16 +52,36 @@ _LONG_PREFIX = "\\\\?\\"
 _DEVICE_PREFIXES = (_LONG_PREFIX, "\\\\.\\", "//?/", "//./")
 
 
+def ends_in_space_or_dot(raw: str) -> bool:
+    """Whether a component of ``raw`` ends in a space or dot, which Win32
+    strips on every unprefixed call."""
+    return any(part not in (".", "..") and part[-1:] in (" ", ".")
+               for part in raw.replace("/", "\\").split("\\"))
+
+
 def long_path(path: Path | str) -> str:
     """Path as a string Windows will accept, even past MAX_PATH."""
     raw = os.fspath(path)
     if sys.platform != "win32" or raw.startswith(_DEVICE_PREFIXES):
         return raw
-    # Measure what Windows will see, not the string given: a 41-character
-    # relative path can be 308 once the working directory is in front of it.
-    absolute = os.path.abspath(raw)
-    if len(absolute) < _MAX_PATH:
-        return raw
+    if ends_in_space_or_dot(raw):
+        # Win32 strips a trailing space or dot from every name it parses, so
+        # 'Punch List ' would address 'Punch List' - or nothing (#59). Only
+        # the extended prefix names it exactly. abspath strips them too, so
+        # the absolute form is built without it.
+        if os.path.isabs(raw):
+            absolute = os.path.normpath(raw)
+        else:
+            # Relative, root-relative or drive-relative ('G:foo '): resolve the
+            # base through abspath, then join the untouched rest to it.
+            drive, rest = os.path.splitdrive(raw)
+            absolute = os.path.normpath(os.path.join(os.path.abspath(drive or os.curdir), rest))
+    else:
+        # Measure what Windows will see, not the string given: a 41-character
+        # relative path can be 308 once the working directory is in front of it.
+        absolute = os.path.abspath(raw)
+        if len(absolute) < _MAX_PATH:
+            return raw
     if absolute.startswith("\\\\"):  # UNC
         return _LONG_PREFIX + "UNC" + absolute[1:]
     return _LONG_PREFIX + absolute

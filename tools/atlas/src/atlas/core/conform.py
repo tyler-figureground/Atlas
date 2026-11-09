@@ -20,6 +20,7 @@ conflict and a person merges it.
 
 from __future__ import annotations
 
+import errno
 import os
 import re
 from dataclasses import dataclass, replace
@@ -54,6 +55,7 @@ from .scan import (
     Listing,
     ProjectInventory,
     list_entries,
+    ends_in_space_or_dot,
     long_path,
     scan_drive,
     tally_files,
@@ -184,7 +186,7 @@ def _path_length(project: Path | None, action: Action) -> int:
     if action.kind == SWEEP:
         return len(str(project / dst / Path(action.src).name))
     src = project / action.src
-    if not src.is_dir():
+    if not _isdir(src):
         return len(str(project / dst))
     return len(str(project / dst)) + deepest_tail(src)
 
@@ -980,7 +982,7 @@ def _remove_if_file_empty(path: Path) -> bool:
     for root, dirs, _files, _links in levels:
         for d in dirs:
             os.rmdir(long_path(os.path.join(root, d)))
-    path.rmdir()
+    os.rmdir(long_path(path))
     return True
 
 
@@ -993,9 +995,39 @@ def _same_folder(src: Path, dst: Path) -> bool:
     """Whether two spellings name one folder - a case-only rename on a
     case-insensitive mount, where ``dst.exists()`` is true of the source itself."""
     try:
-        return os.path.samefile(src, dst)
+        return os.path.samefile(long_path(src), long_path(dst))
     except OSError:
         return False
+
+
+# Reads and the source side of a move go through long_path, so a source past
+# MAX_PATH or named with a trailing space or dot is found and moved rather
+# than reported gone (#59). The destination stays unprefixed: Atlas never
+# routes a write around the limit, or the Path Length Warning would lie
+# (ADR 0006, ticket 19).
+def _dest(path: Path) -> str:
+    """A write target, named exactly. A name ending in a space or dot is
+    prefixed so Win32 does not silently strip it - otherwise the Move Manifest
+    would record a name that is not on disk and undo could not find it. Only
+    under MAX_PATH: past it the write is refused, never routed around the
+    limit (ADR 0006)."""
+    raw = os.fspath(path)
+    exact = long_path(raw)
+    if exact == raw or not ends_in_space_or_dot(raw):
+        return raw
+    if len(exact) - len("\\\\?\\") >= WINDOWS_MAX_PATH:
+        raise OSError(errno.ENAMETOOLONG,
+                      "name ends in a space or dot and the path is past Windows' limit; "
+                      "move it by hand", raw)
+    return exact
+
+
+def _exists(path: Path) -> bool:
+    return os.path.exists(long_path(path))
+
+
+def _isdir(path: Path) -> bool:
+    return os.path.isdir(long_path(path))
 
 
 def move_effect(project: Path, action: Action, *, inverse: bool = False) -> str:
@@ -1008,9 +1040,9 @@ def move_effect(project: Path, action: Action, *, inverse: bool = False) -> str:
     """
     src = project / action.src
     dst = project / action.dst
-    if not dst.exists() or _same_folder(src, dst):
+    if not _exists(dst) or _same_folder(src, dst):
         return MOVE
-    if not inverse and src.is_dir() and _empty_levels(src) is not None:
+    if not inverse and _isdir(src) and _empty_levels(src) is not None:
         return REMOVE
     return MERGE
 
@@ -1019,7 +1051,7 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
                 remove_empty_duplicate: bool = True) -> Action:
     src = project / action.src
     dst = project / action.dst
-    if not src.is_dir():
+    if not _isdir(src):
         return replace(action, status=SKIPPED, note="source gone")
 
     # A source with a folder Atlas cannot read is not known to be empty, and
@@ -1033,13 +1065,13 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
     if _same_folder(src, dst) and action.src != action.dst:
         # Case-only rename on a case-insensitive mount: two-step via temp.
         tmp = src.with_name(src.name + ".atlas-tmp")
-        src.rename(tmp)
+        os.rename(long_path(src), _dest(tmp))  # never a prefixed write past the limit
         try:
-            tmp.rename(dst)
+            os.rename(long_path(tmp), _dest(dst))
         except OSError as error:
             # Never strand the folder under its temp name: put it back first.
             try:
-                tmp.rename(src)
+                os.rename(long_path(tmp), long_path(src))
             except OSError:
                 return replace(action, status=FAILED, note=(
                     f"{_os_note(error, action.src)}; left as {tmp.name}"),
@@ -1048,9 +1080,9 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
         return replace(action, status=DONE, note="case-only rename",
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
 
-    if not dst.exists():
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        src.rename(dst)
+    if not _exists(dst):
+        os.makedirs(_dest(dst.parent), exist_ok=True)
+        os.rename(long_path(src), _dest(dst))
         return replace(action, status=DONE,
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
 
@@ -1068,15 +1100,17 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
     manifest: list[Move] = []
     left = 0
     try:
-        for child in list(src.iterdir()):
-            target = dst / child.name
-            if target.exists():
+        with os.scandir(long_path(src)) as listing:
+            names = [entry.name for entry in listing]
+        for name in names:
+            child, target = src / name, dst / name
+            if _exists(target):
                 left += 1
                 continue
-            is_dir = child.is_dir()
-            child.rename(target)
-            manifest.append(Move(src=child_key(action.src, child.name),
-                                 dst=child_key(action.dst, child.name), is_dir=is_dir))
+            is_dir = _isdir(child)
+            os.rename(long_path(child), _dest(target))
+            manifest.append(Move(src=child_key(action.src, name),
+                                 dst=child_key(action.dst, name), is_dir=is_dir))
         emptied = left == 0 and _remove_if_file_empty(src)
     except OSError as error:
         # Earlier children already moved. The manifest is the only record of
@@ -1094,14 +1128,14 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
 
 def _apply_sweep(project: Path, action: Action) -> Action:
     src = project / action.src
-    if not src.is_file():
+    if not os.path.isfile(long_path(src)):
         return replace(action, status=SKIPPED, note="source gone")
     dst_rel = action.dst.replace("\\", "/").rstrip("/")
     dst_dir = project / dst_rel
-    dst_dir.mkdir(parents=True, exist_ok=True)
+    os.makedirs(_dest(dst_dir), exist_ok=True)
     target = dst_dir / src.name
-    if target.exists():
+    if _exists(target):
         return replace(action, status=CONFLICT, note="name exists at target")
-    src.rename(target)
+    os.rename(long_path(src), _dest(target))
     return replace(action, status=DONE,
                    moved=(Move(src=action.src, dst=child_key(dst_rel, src.name), is_dir=False),))
