@@ -871,6 +871,12 @@ def _canonical_spelling(project: Path, name: str) -> tuple[bool, str]:
     steps through a temp name, as for folders: a one-step case-only rename is a
     no-op on a case-insensitive mount.
     """
+    # A temp left by an interrupted rename holds the person's words. Never
+    # write a stock file beside it, and never rename over it (#63).
+    stray = _root_spelling(project, f"{name}.atlas-tmp")
+    if stray is not None:
+        raise OpsError(f"found {stray} from an interrupted rename; "
+                       f"rename it back to {name} by hand")
     found = _root_spelling(project, name)
     if found is None:
         return False, ""
@@ -879,14 +885,19 @@ def _canonical_spelling(project: Path, name: str) -> tuple[bool, str]:
     tmp = project / f"{found}.atlas-tmp"
     # Drive's transient locks (WinError 5/32) are retried, as project_data
     # does. A second step that still fails puts the file back under its own
-    # name: stranded as .atlas-tmp, the next conform would find no AGENTS.md
-    # and write a stock one beside the person's words (#63).
+    # name; if even that fails, the note says where it is (#63).
     _rename_with_retry(project / found, tmp)
     try:
         _rename_with_retry(tmp, project / name)
-    except OSError:
-        _rename_with_retry(tmp, project / found)
-        raise
+    except OSError as error:
+        reason = error.strerror or str(error)
+        try:
+            _rename_with_retry(tmp, project / found)
+        except OSError:
+            raise OpsError(f"could not rename {found} -> {name} ({reason}); "
+                           f"left as {tmp.name} - rename it back by hand") from None
+        raise OSError(error.errno, f"could not rename {found} -> {name} ({reason}); "
+                                   f"left as {found}") from None
     return True, f"renamed {found} -> {name}"
 
 
