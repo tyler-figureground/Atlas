@@ -33,6 +33,7 @@ from .mapfile import DriveMap, Section, TemplateFile, find_map, load_map
 from .templates import TemplateError, render_template, template_values
 from .mcpjson import machine_mcp_server, write_mcp_json
 from .ops import OpsError, append_log, mkdir_below
+from .project_data import _rename_with_retry
 from .projectmd import (
     dossier_lines,
     FRONT_MATTER_HEAD,
@@ -870,14 +871,33 @@ def _canonical_spelling(project: Path, name: str) -> tuple[bool, str]:
     steps through a temp name, as for folders: a one-step case-only rename is a
     no-op on a case-insensitive mount.
     """
+    # A temp left by an interrupted rename holds the person's words. Never
+    # write a stock file beside it, and never rename over it (#63).
+    stray = _root_spelling(project, f"{name}.atlas-tmp")
+    if stray is not None:
+        raise OpsError(f"found {stray} from an interrupted rename; "
+                       f"rename it back to {name} by hand")
     found = _root_spelling(project, name)
     if found is None:
         return False, ""
     if found == name:
         return True, ""
     tmp = project / f"{found}.atlas-tmp"
-    (project / found).rename(tmp)
-    tmp.rename(project / name)
+    # Drive's transient locks (WinError 5/32) are retried, as project_data
+    # does. A second step that still fails puts the file back under its own
+    # name; if even that fails, the note says where it is (#63).
+    _rename_with_retry(project / found, tmp)
+    try:
+        _rename_with_retry(tmp, project / name)
+    except OSError as error:
+        reason = error.strerror or str(error)
+        try:
+            _rename_with_retry(tmp, project / found)
+        except OSError:
+            raise OpsError(f"could not rename {found} -> {name} ({reason}); "
+                           f"left as {tmp.name} - rename it back by hand") from None
+        raise OSError(error.errno, f"could not rename {found} -> {name} ({reason}); "
+                                   f"left as {found}") from None
     return True, f"renamed {found} -> {name}"
 
 

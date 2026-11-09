@@ -253,3 +253,103 @@ def test_a_current_block_with_separators_in_the_notes_is_current(fixture_drive):
     _m = drive_map(fixture_drive)
     text = text_of(fixture_drive / "260314_Settle" / "AGENTS.md")
     assert agents_block_current(text, _m)
+
+
+
+def test_a_failed_case_rename_puts_the_file_back_under_its_own_name(fixture_drive, monkeypatch):
+    """#63: Agents.md -> Agents.md.atlas-tmp, then the rename to AGENTS.md
+    failed; the file stayed hidden under the temp name and the next conform
+    wrote a stock AGENTS.md beside it."""
+    import os
+
+    from atlas.core.conform import FAILED
+
+    hand = "# workspace\n\nHand written.\n"
+    make_project(fixture_drive, "260315_Stuck", sections=["01 Model"],
+                 files={"Agents.md": hand, "CLAUDE.md": POINTER + "\n"})
+    real_rename = os.rename
+
+    def refuse_final(src, dst):
+        if os.fspath(dst).endswith("AGENTS.md") and os.fspath(src).endswith(".atlas-tmp"):
+            raise PermissionError(13, "Access is denied", os.fspath(src))
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", refuse_final)
+    result, inv, _m = conform(fixture_drive, "260315_Stuck")
+
+    action = next(a for a in result.actions if a.dst == "AGENTS.md")
+    assert action.status == FAILED
+    assert "left as Agents.md" in action.note and ".atlas-tmp" not in action.note
+    names = sorted(p.name for p in inv.path.iterdir() if p.is_file())
+    assert "Agents.md" in names and not any(n.endswith(".atlas-tmp") for n in names)
+    assert text_of(inv.path / "Agents.md") == hand
+
+
+def test_a_transient_lock_on_the_case_rename_is_retried(fixture_drive, monkeypatch):
+    """Drive's WinError 32 (sharing violation) passes; retry like project_data."""
+    import os
+
+    import atlas.core.project_data as project_data
+
+    monkeypatch.setattr(project_data, "_RENAME_RETRY_DELAYS", (0.001, 0.001))
+    make_project(fixture_drive, "260316_Flaky", sections=["01 Model"],
+                 files={"Agents.md": "# workspace\n", "CLAUDE.md": POINTER + "\n"})
+    real_rename = os.rename
+    fails = [1]
+
+    def once_locked(src, dst):
+        if fails and os.fspath(dst).endswith("AGENTS.md"):
+            fails.pop()
+            error = PermissionError(13, "The process cannot access the file", os.fspath(src))
+            error.winerror = 32
+            raise error
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", once_locked)
+    result, inv, _m = conform(fixture_drive, "260316_Flaky")
+    assert "AGENTS.md" in sorted(p.name for p in inv.path.iterdir())
+    assert next(a for a in result.actions if a.dst == "AGENTS.md").status == "done"
+
+
+
+def test_a_rename_whose_rollback_also_fails_says_where_the_file_is(fixture_drive, monkeypatch):
+    """#63 review: Drive held the temp, so both the rename and the put-back
+    failed - and the next run wrote a stock AGENTS.md beside the temp."""
+    import os
+
+    from atlas.core.conform import CONFLICT
+
+    hand = "# workspace\n\nHand written.\n"
+    make_project(fixture_drive, "260317_Held", sections=["01 Model"],
+                 files={"Agents.md": hand, "CLAUDE.md": POINTER + "\n"})
+    real_rename = os.rename
+
+    def temp_held(src, dst):
+        if os.fspath(src).endswith(".atlas-tmp"):
+            raise PermissionError(13, "Access is denied", os.fspath(src))
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", temp_held)
+    result, inv, _m = conform(fixture_drive, "260317_Held")
+    action = next(a for a in result.actions if a.dst == "AGENTS.md")
+    assert action.status == CONFLICT
+    assert "left as Agents.md.atlas-tmp" in action.note
+
+    monkeypatch.setattr(os, "rename", real_rename)
+    again, _inv, _m = conform(fixture_drive, "260317_Held")
+    action = next(a for a in again.actions if a.dst == "AGENTS.md")
+    assert action.status == CONFLICT and "interrupted rename" in action.note
+    assert text_of(inv.path / "Agents.md.atlas-tmp") == hand
+    names = sorted(p.name for p in inv.path.iterdir() if p.is_file())
+    assert "AGENTS.md" not in names, "no stock file beside the stranded words"
+
+
+def test_a_stray_temp_from_an_old_crash_blocks_and_is_named(fixture_drive):
+    make_project(fixture_drive, "260318_Old", sections=["01 Model"],
+                 files={"Agents.md.atlas-tmp": "# older words\n", "CLAUDE.md": POINTER + "\n"})
+    from atlas.core.conform import CONFLICT
+
+    result, inv, _m = conform(fixture_drive, "260318_Old")
+    action = next(a for a in result.actions if a.dst == "AGENTS.md")
+    assert action.status == CONFLICT and "Agents.md.atlas-tmp" in action.note
+    assert text_of(inv.path / "Agents.md.atlas-tmp") == "# older words\n"
