@@ -257,6 +257,28 @@ def test_index_keeps_crlf(banded_root: Path):
     assert b"\r\n" in raw and b"\n" not in raw.replace(b"\r\n", b"")
 
 
+def test_index_refuses_a_readme_that_is_not_utf8(banded_root: Path, capsys):
+    """#62: errors="replace" then a UTF-8 write turned every cp1252 byte -
+    even outside the block - into U+FFFD for good."""
+    readme = banded_root / "README.md"
+    readme.write_bytes(_readme().replace("# Reference Sets", "# R\u00e9f\u00e9rences").encode("cp1252"))
+    before = readme.read_bytes()
+    assert main(["refs", "index", "--root", str(banded_root), "--apply"]) == 2
+    assert "UTF-8" in capsys.readouterr().err
+    assert readme.read_bytes() == before
+
+
+def test_index_keeps_separators_and_a_bom_outside_the_block(banded_root: Path):
+    readme = banded_root / "README.md"
+    text = _readme().replace("## Rules\n", "## Rules\n\none\u2028line\x0cstill\n")
+    readme.write_bytes(b"\xef\xbb\xbf" + text.encode("utf-8"))
+    assert main(["refs", "index", "--root", str(banded_root), "--apply"]) == 0
+    raw = readme.read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf") and raw.count(b"\xef\xbb\xbf") == 1
+    assert "one\u2028line\x0cstill" in raw.decode("utf-8-sig")
+    assert not list(banded_root.glob("README.md.*")), "no temp file left behind"
+
+
 def test_index_missing_readme_or_markers(tmp_path: Path, banded_root: Path):
     bare = tmp_path / "bare"
     bare.mkdir()
