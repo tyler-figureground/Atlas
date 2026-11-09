@@ -52,16 +52,28 @@ _LONG_PREFIX = "\\\\?\\"
 _DEVICE_PREFIXES = (_LONG_PREFIX, "\\\\.\\", "//?/", "//./")
 
 
+def _trailing_space_or_dot(raw: str) -> bool:
+    return any(part not in (".", "..") and part[-1:] in (" ", ".")
+               for part in raw.replace("/", "\\").split("\\"))
+
+
 def long_path(path: Path | str) -> str:
     """Path as a string Windows will accept, even past MAX_PATH."""
     raw = os.fspath(path)
     if sys.platform != "win32" or raw.startswith(_DEVICE_PREFIXES):
         return raw
-    # Measure what Windows will see, not the string given: a 41-character
-    # relative path can be 308 once the working directory is in front of it.
-    absolute = os.path.abspath(raw)
-    if len(absolute) < _MAX_PATH:
-        return raw
+    if _trailing_space_or_dot(raw):
+        # Win32 strips a trailing space or dot from every name it parses, so
+        # 'Punch List ' would address 'Punch List' - or nothing (#59). Only
+        # the extended prefix names it exactly. abspath strips them too, so
+        # the absolute form is built without it.
+        absolute = os.path.normpath(raw if os.path.isabs(raw) else os.path.join(os.getcwd(), raw))
+    else:
+        # Measure what Windows will see, not the string given: a 41-character
+        # relative path can be 308 once the working directory is in front of it.
+        absolute = os.path.abspath(raw)
+        if len(absolute) < _MAX_PATH:
+            return raw
     if absolute.startswith("\\\\"):  # UNC
         return _LONG_PREFIX + "UNC" + absolute[1:]
     return _LONG_PREFIX + absolute

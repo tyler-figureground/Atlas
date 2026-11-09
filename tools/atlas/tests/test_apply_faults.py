@@ -83,14 +83,16 @@ def test_one_failed_action_does_not_stop_the_others(fixture_drive, monkeypatch):
         files={"Meetings/kickoff.md": "z", "08 OUT/Invoices/INV-1.pdf": "z"},
     )
     plan, inv, m = _plan(fixture_drive, "260702_Two")
-    real_rename = Path.rename
+    import os
 
-    def rename(self, target):
-        if self.name == "Meetings":
-            raise PermissionError(32, "The process cannot access the file", str(self))
-        return real_rename(self, target)
+    real_rename = os.rename
 
-    monkeypatch.setattr(Path, "rename", rename)
+    def rename(src, dst):
+        if os.path.basename(os.fspath(src)) == "Meetings":
+            raise PermissionError(32, "The process cannot access the file", os.fspath(src))
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", rename)
     result = apply_plan(fixture_drive, inv.path, m, plan, only={"rename", "relocate"})
 
     by_kind = {a.kind: a for a in result.actions}

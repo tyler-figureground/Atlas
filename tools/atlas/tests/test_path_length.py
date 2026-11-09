@@ -139,3 +139,72 @@ def test_the_multi_action_preview_carries_the_warning():
     assert _path_warning(Action(kind="relocate", src="a", dst="b", path_length=300)) == \
         "  [path 300 > 260]"
     assert _path_warning(Action(kind="relocate", src="a", dst="b", path_length=100)) == ""
+
+
+
+def _refuse_unprefixed_long_writes(monkeypatch) -> None:
+    """As _refuse_unprefixed_long_paths, for the calls a move makes (#59)."""
+    def too_long(path) -> bool:
+        raw = os.fspath(path)
+        return not raw.startswith("\\\\?\\") and len(os.path.abspath(raw)) >= WINDOWS_MAX_PATH
+
+    for name in ("isfile", "isdir", "exists"):
+        real_check = getattr(os.path, name)
+        monkeypatch.setattr(os.path, name,
+                            lambda path, _real=real_check: False if too_long(path) else _real(path))
+    real_rename = os.rename
+
+    def rename(src, dst):
+        if too_long(src) or too_long(dst):
+            raise FileNotFoundError(3, "The system cannot find the path specified", os.fspath(src))
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", rename)
+
+
+@windows_only
+def test_a_receipt_past_max_path_is_swept_not_reported_gone(fixture_drive, monkeypatch):
+    """#59: the deep pass found it, apply said 'source gone'."""
+    from atlas.core.conform import DONE, SWEEP, Action, _apply_sweep
+
+    project, leaf = _deep_project(fixture_drive, "260902_DeepSweep")
+    _refuse_unprefixed_long_paths(monkeypatch)
+    _refuse_unprefixed_long_writes(monkeypatch)
+    src = os.path.relpath(leaf, project).replace("\\", "/")
+    result = _apply_sweep(project, Action(kind=SWEEP, src=src, dst="10 Legal"))
+
+    assert result.status == DONE, result.note
+    assert (project / "10 Legal" / leaf.name).is_file()
+    assert not os.path.exists(long_path(leaf))
+
+
+@windows_only
+def test_a_folder_with_a_trailing_space_is_moved_not_reported_gone(fixture_drive):
+    """#59: Win32 strips the trailing space of 'Punch List ', so the folder the
+    map relocates was never found; preview said move, apply said gone."""
+    from atlas.core.conform import DONE, MOVE, RELOCATE, Action, _apply_move, move_effect
+
+    project = make_project(fixture_drive, "260903_Space", sections=["01 Model", "10 Legal"])
+    odd = project / "08 OUT" / "Punch List "
+    os.makedirs(long_path(odd))
+    Path(long_path(odd / "list.pdf")).write_text("x", encoding="utf-8")
+    action = Action(kind=RELOCATE, src="08 OUT/Punch List ", dst="10 Legal/Punch List")
+
+    assert move_effect(project, action) == MOVE
+    result = _apply_move(project, action, merge_into_existing=True)
+
+    assert result.status == DONE, result.note
+    assert (project / "10 Legal" / "Punch List" / "list.pdf").is_file()
+    assert not os.path.exists(long_path(odd))
+
+
+def test_long_path_names_a_trailing_space_exactly(monkeypatch):
+    import ntpath
+
+    from atlas.core import scan
+
+    monkeypatch.setattr(scan.sys, "platform", "win32")
+    monkeypatch.setattr(scan.os, "path", ntpath)
+    assert scan.long_path("G:\\Proj\\08 OUT\\Punch List ") == "\\\\?\\G:\\Proj\\08 OUT\\Punch List "
+    assert scan.long_path("G:\\Proj\\notes.") == "\\\\?\\G:\\Proj\\notes."
+    assert scan.long_path("G:\\Proj\\..\\Other") == "G:\\Proj\\..\\Other"
