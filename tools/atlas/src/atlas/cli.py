@@ -1545,6 +1545,8 @@ def cmd_tyler(args: argparse.Namespace) -> int:
                 {"name": p.name,
                  "tyler_missing": p.tyler_missing,
                  "tasks_missing": p.tasks_missing,
+                 "tyler_unreadable": p.tyler_unreadable,
+                 "tasks_unreadable": p.tasks_unreadable,
                  "errands": [item_dict(i) for i in p.errands],
                  "decisions": [{**item_dict(i), "blocks": p.blocks(i)} for i in p.decisions],
                  "meetings": scan_dict(p.meetings) if p.meetings is not None else None,

@@ -35,7 +35,7 @@ from .permits import (
     describe,
     scan_permits,
 )
-from .scan import DriveInventory
+from .scan import DriveInventory, long_path
 from .tasks import TaskItem, normalize_id, parse_open
 
 TYLER_PATH = "00 Tasks/TYLER.md"
@@ -62,6 +62,10 @@ class ProjectDigest:
     decisions: tuple[TaskItem, ...] = ()
     tyler_missing: bool = False
     tasks_missing: bool = False
+    # Why a list that exists could not be read (OS error, not UTF-8); None
+    # when it read or is absent. Unreadable is never missing (ADR 0004, #57).
+    tyler_unreadable: str | None = None
+    tasks_unreadable: str | None = None
     # Open production tasks per decision id that names it with ``after:``.
     blocked_by: dict[str, int] = field(default_factory=dict)
     # Whether this project's TASKS.md uses ``after:`` at all; without it a
@@ -141,11 +145,15 @@ class Queue:
         return self._get("oldest")
 
 
-def _read(path: Path) -> str | None:
+def _read(path: Path) -> tuple[str | None, str | None]:
+    """(text, None) when read; (None, None) when absent; (None, why) when the
+    file is there but cannot be read - never folded into absent (#57)."""
     try:
-        return path.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return None
+        return Path(long_path(path)).read_text(encoding="utf-8-sig"), None
+    except FileNotFoundError:
+        return None, None
+    except (OSError, UnicodeDecodeError) as exc:
+        return None, f"{type(exc).__name__}: {getattr(exc, 'strerror', None) or exc}"
 
 
 def open_items(text: str, *, lane: str | None = None) -> tuple[TaskItem, ...]:
@@ -155,7 +163,8 @@ def open_items(text: str, *, lane: str | None = None) -> tuple[TaskItem, ...]:
     return parse_open(text, lane=lane)
 
 
-def _project(name: str, tyler_text: str | None, tasks_text: str | None) -> ProjectDigest:
+def _project(name: str, tyler_text: str | None, tasks_text: str | None, *,
+             tyler_error: str | None = None, tasks_error: str | None = None) -> ProjectDigest:
     tasks = parse_open(tasks_text) if tasks_text is not None else ()
     blocked_by: dict[str, int] = {}
     for task in tasks:
@@ -166,8 +175,10 @@ def _project(name: str, tyler_text: str | None, tasks_text: str | None) -> Proje
         errands=parse_open(tyler_text) if tyler_text is not None else (),
         # Same rule as before the queue: a `DECISION` tag anywhere on the line.
         decisions=parse_open(tasks_text, lane="DECISION") if tasks_text is not None else (),
-        tyler_missing=tyler_text is None,
-        tasks_missing=tasks_text is None,
+        tyler_missing=tyler_text is None and tyler_error is None,
+        tasks_missing=tasks_text is None and tasks_error is None,
+        tyler_unreadable=tyler_error,
+        tasks_unreadable=tasks_error,
         blocked_by=blocked_by,
         tracks_blocks=any(t.after for t in tasks),
     )
@@ -179,8 +190,10 @@ def collect(inventory: DriveInventory) -> Digest:
     permit_rule = inventory.map.permits
     projects = []
     for inv in sorted(inventory.projects, key=lambda p: p.name):
-        project = _project(inv.name, _read(inv.path / TYLER_PATH),
-                           _read(inv.path / TASKS_PATH))
+        tyler_text, tyler_error = _read(inv.path / TYLER_PATH)
+        tasks_text, tasks_error = _read(inv.path / TASKS_PATH)
+        project = _project(inv.name, tyler_text, tasks_text,
+                           tyler_error=tyler_error, tasks_error=tasks_error)
         if rule is not None:
             project = replace(project, meetings=scan_meetings(inv.path, rule))
         if permit_rule is not None:
@@ -409,12 +422,19 @@ def render(digest: Digest, *, generated: date | None = None) -> str:
         "",
         f"**{digest.errand_count} errands / {digest.decision_count} decisions blocking production**",
     ]
+    unreadable = sum(bool(p.tyler_unreadable) + bool(p.tasks_unreadable) for p in digest.projects)
+    if unreadable:
+        lines += ["", f"**{unreadable} task list(s) cannot be read - counts are incomplete; "
+                      "see the projects below.**"]
     lines += _render_queue(digest, generated)
     lines += _render_meetings(digest)
     lines += _render_permits(digest, generated)
     for project in digest.projects:
         lines += ["", f"## {project.name}"]
-        if project.tyler_missing:
+        if project.tyler_unreadable:
+            lines.append(f"- TYLER.md cannot be read ({project.tyler_unreadable}) - "
+                         "its errands are not counted")
+        elif project.tyler_missing:
             lines.append("- TYLER.md missing - run conform to backfill it")
         elif not project.errands:
             lines.append("- no open errands")
@@ -422,7 +442,10 @@ def render(digest: Digest, *, generated: date | None = None) -> str:
             for item in project.errands:
                 where = f" _({item.section})_" if item.section not in ("Now", "") else ""
                 lines.append(f"- [ ] {item.text}{where}")
-        if project.tasks_missing:
+        if project.tasks_unreadable:
+            lines.append(f"- TASKS.md cannot be read ({project.tasks_unreadable}) - "
+                         "its decisions are not counted")
+        elif project.tasks_missing:
             lines.append("- TASKS.md missing")
         elif project.decisions:
             lines.append("")
