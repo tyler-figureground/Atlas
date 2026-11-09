@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Content search no longer sticks on "building" after a rescan (#55).** A rescan (`r`, or any write) during the first content-index build used to discard the finished build and leave search waiting forever. The finished index now lands for the drive it read.
 - **Conform no longer stops a whole-drive run on one bad project (#54).** A hand-made `CLAUDE.md` with broken Atlas markers is now a conflict naming `CLAUDE.md`, a file where a seeded folder belongs is a conflict on that one action, and a project that vanished mid-run is recorded as failed. `atlas conform --all --apply --json` keeps going and prints every project's Move Manifest.
 
 ## [Atlas 0.31.0] - 2026-11-09
