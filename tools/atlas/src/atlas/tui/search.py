@@ -224,6 +224,12 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
         """The Content Index's one honest line: stamp, building, absent or
         failed - never a silent nothing (ADR 0004). Fitted to the dialog."""
         if self._content_error is not None:
+            if self._content_index is not None:
+                # A failed top-up: the partial index still answers (#56).
+                return _fit_line([
+                    f"content index failed: {self._content_error} - partial results",
+                    f"content index failed: {self._content_error}",
+                ], cells)
             return _fit_line([
                 f"content index failed: {self._content_error} - name matches only",
                 f"content index failed: {self._content_error}",
@@ -233,6 +239,13 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
             if self._content_progress is not None:
                 done, total = self._content_progress
                 progress = f" {done}/{total} files" if total else ""
+            if self._content_index is not None:
+                # Topping up a partial index: what it holds is searched (#56).
+                return _fit_line([
+                    f"content index finishing{progress} - partial results",
+                    f"content index finishing{progress}",
+                    "content index finishing",
+                ], cells)
             return _fit_line([
                 f"content index building{progress} - name matches for now",
                 f"content index building{progress}",
@@ -246,6 +259,9 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
             ], cells)
         stamp = _stamp_short(self._content_index.indexed_at)
         date = _stamp_short(self._content_index.indexed_at, date_only=True)
+        if not self._content_index.complete:
+            # An interrupted build, never presented as a full one (#56).
+            stamp, date = f"{stamp}, partial", f"{date}, partial"
         if not self.query_one("#search-input", Input).value.strip():
             return _fit_line([f"content: indexed {stamp}", f"content: indexed {date}"],
                              cells)

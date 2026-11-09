@@ -1912,6 +1912,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             # is the pending work - never a silently empty result list.
             payload["content"] = None if content_result is None else {
                 "indexed_at": content_index.indexed_at,
+                "complete": content_index.complete,
                 "total": content_result.total,
                 "shown": len(content_result.hits),
                 "cap": RESULT_CAP,
@@ -1942,6 +1943,8 @@ def cmd_search(args: argparse.Namespace) -> int:
                       "to search file contents; the matches above are names only")
             else:
                 stamp = content_index.indexed_at
+                if not content_index.complete:
+                    stamp += "; partial - `atlas index build` reads the rest"
                 print(f"content matches (indexed at {stamp}):")
                 for hit in content_hits:
                     snippet = f'  "{hit.snippet}"' if hit.snippet else ""
@@ -2026,6 +2029,7 @@ def cmd_index_status(args: argparse.Namespace) -> int:
                 "files": len(index.files),
                 "skipped": len(index.skipped),
                 "unreadable": len(index.unreadable),
+                "complete": index.complete,
             })
         print(json.dumps(payload, indent=2))
         return 0 if index is not None else 1
@@ -2038,6 +2042,8 @@ def cmd_index_status(args: argparse.Namespace) -> int:
     print(f"indexed at {index.indexed_at}; {len(index.files)} {noun}, "
           f"{len(index.skipped)} skipped, "
           f"{len(index.unreadable)} unreadable folder(s)")
+    if not index.complete:
+        print("partial: a build was interrupted - `atlas index build` reads the rest")
     return 0
 
 

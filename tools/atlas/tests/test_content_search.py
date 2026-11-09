@@ -537,3 +537,123 @@ async def test_a_rescan_mid_first_build_still_lands_the_index(fixture_drive, mon
         await settle(app, pilot)
         assert not app._content_building
         assert app._content_index is not None
+
+
+async def test_an_interrupted_build_is_topped_up_when_the_console_opens(
+        fixture_drive, monkeypatch):
+    """#56: a partial index (console closed mid-build) was loaded as if
+    complete and never built again; search silently missed the rest."""
+    import pytest
+
+    from atlas.core import contentindex
+
+    _drive(fixture_drive)
+    real = contentindex._extract
+    calls = []
+
+    def dying(path, kind):
+        if calls:
+            raise KeyboardInterrupt
+        calls.append(path)
+        return real(path, kind)
+
+    monkeypatch.setattr(contentindex, "_extract", dying)
+    with pytest.raises(KeyboardInterrupt):
+        build_index(fixture_drive)
+    monkeypatch.setattr(contentindex, "_extract", real)
+    partial = load_index(fixture_drive)
+    assert partial is not None and not partial.complete and len(partial.files) == 1
+
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        assert not app._content_building
+        assert app._content_index.complete
+        assert len(app._content_index.files) > 1
+        assert load_index(fixture_drive).complete
+        await pilot.press("g")
+        await settle(app, pilot)
+        assert "partial" not in _content_line(_overlay(app))
+
+
+async def test_the_overlay_says_partial_for_a_partial_index(fixture_drive):
+    from dataclasses import replace
+
+    _drive(fixture_drive)
+    index = replace(build_index(fixture_drive), complete=False)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+    async with app.run_test(size=(120, 51)) as pilot:
+        await settle(app, pilot)
+        overlay = SearchOverlay(build_name_index(fixture_drive))
+        app.push_screen(overlay)
+        await settle(app, pilot)
+        overlay.set_content_index(index)
+        await pilot.pause()
+        assert "partial" in _content_line(overlay)
+        overlay.set_content_building((3, 9))
+        await pilot.pause()
+        assert "finishing 3/9" in _content_line(overlay)
+
+
+async def test_no_second_build_starts_beside_a_live_one(fixture_drive, monkeypatch):
+    """#56 review: a thread worker outlives cancel and drive switches; a
+    rescan that loads a partial or complete cache must not start another
+    build of the same root while one is still reading."""
+    import asyncio
+    import threading
+    from dataclasses import replace as dc_replace
+
+    import atlas.tui.app as app_module
+    from atlas.core import contentindex
+
+    _drive(fixture_drive)
+    started, release = threading.Event(), threading.Event()
+    real = app_module.build_index
+    builds = []
+
+    def gated(root, **kwargs):
+        builds.append(root)
+        started.set()
+        release.wait(10)
+        return real(root, **kwargs)
+
+    monkeypatch.setattr(app_module, "build_index", gated)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async def rescan():
+        app._name_index = None
+        app.action_refresh()
+        for _ in range(200):
+            if app._name_index is not None:
+                return
+            await asyncio.sleep(0.05)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        for _ in range(100):
+            if started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        assert started.is_set()
+
+        # The running build's periodic save: a partial cache on disk.
+        contentindex._save(contentindex.index_path(fixture_drive),
+                           dc_replace(real(fixture_drive), complete=False))
+        await rescan()
+        assert app._content_building and len(builds) == 1
+
+        # A CLI build landed meanwhile: whole, served, and still no restart.
+        real(fixture_drive)
+        await rescan()
+        assert not app._content_building and len(builds) == 1
+
+        # The live thread's next periodic save downgrades that cache.
+        contentindex._save(contentindex.index_path(fixture_drive),
+                           dc_replace(real(fixture_drive), complete=False))
+        await rescan()
+        assert app._content_building and len(builds) == 1
+
+        release.set()
+        await settle(app, pilot)
+        await settle(app, pilot)
+        assert len(builds) == 1
+        assert app._content_index.complete and not app._content_live
