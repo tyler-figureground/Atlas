@@ -282,7 +282,11 @@ def build_index(root: Path | str, *,
 
     kept: list[IndexedFile] = []
     skipped: list[SkippedFile] = []
+    # A run that carries the archive unread is only as complete as the index
+    # it carried it from (#56 review).
+    carried_complete = True
     if not archived and prior is not None and prior.archive_root == archive_root:
+        carried_complete = prior.complete
         # The archive was not walked this run: carry what is stored, unread.
         # Queries still revalidate every match against the disk.
         kept.extend(f for f in prior.files if prior.is_archived(f.path))
@@ -339,7 +343,7 @@ def build_index(root: Path | str, *,
         # a partial build, stamped when it ran.
         _save(path, snapshot(complete=False))
         raise
-    index = snapshot(complete=True)
+    index = snapshot(complete=carried_complete)
     _save(path, index)
     return index
 

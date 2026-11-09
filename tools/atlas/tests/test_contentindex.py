@@ -603,3 +603,40 @@ def test_status_reports_a_partial_index(fixture_drive, cache_dir, monkeypatch, c
     assert json.loads(capsys.readouterr().out)["complete"] is False
     main(["index", "status", "--drive", str(fixture_drive)])
     assert "partial" in capsys.readouterr().out
+
+
+def _interrupt_after_one(monkeypatch, drive, cache_dir, **kwargs):
+    real = contentindex._extract
+    calls = []
+
+    def dying(path, kind):
+        if calls:
+            raise KeyboardInterrupt
+        calls.append(path)
+        return real(path, kind)
+
+    monkeypatch.setattr(contentindex, "_extract", dying)
+    with pytest.raises(KeyboardInterrupt):
+        build_index(drive, cache_dir=cache_dir, **kwargs)
+    monkeypatch.setattr(contentindex, "_extract", real)
+
+
+def test_a_no_archive_run_over_a_partial_index_stays_partial(
+        fixture_drive, cache_dir, monkeypatch):
+    """#56 review: carrying a half-read archive must not stamp complete."""
+    _drive(fixture_drive)
+    _archive(fixture_drive)
+    _interrupt_after_one(monkeypatch, fixture_drive, cache_dir)
+    index = build_index(fixture_drive, cache_dir=cache_dir, archived=False)
+    assert not index.complete
+    assert build_index(fixture_drive, cache_dir=cache_dir).complete
+
+
+def test_search_content_marks_a_partial_index(fixture_drive, cache_dir, monkeypatch, capsys):
+    """#56 review: the CLI reader showed a partial index as a full one."""
+    _drive(fixture_drive)
+    _interrupt_after_one(monkeypatch, fixture_drive, cache_dir)
+    main(["search", "--drive", str(fixture_drive), "--content", "--json", "a"])
+    assert json.loads(capsys.readouterr().out)["content"]["complete"] is False
+    main(["search", "--drive", str(fixture_drive), "--content", "a"])
+    assert "partial" in capsys.readouterr().out

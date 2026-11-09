@@ -593,3 +593,67 @@ async def test_the_overlay_says_partial_for_a_partial_index(fixture_drive):
         overlay.set_content_building((3, 9))
         await pilot.pause()
         assert "finishing 3/9" in _content_line(overlay)
+
+
+async def test_no_second_build_starts_beside_a_live_one(fixture_drive, monkeypatch):
+    """#56 review: a thread worker outlives cancel and drive switches; a
+    rescan that loads a partial or complete cache must not start another
+    build of the same root while one is still reading."""
+    import asyncio
+    import threading
+    from dataclasses import replace as dc_replace
+
+    import atlas.tui.app as app_module
+    from atlas.core import contentindex
+
+    _drive(fixture_drive)
+    started, release = threading.Event(), threading.Event()
+    real = app_module.build_index
+    builds = []
+
+    def gated(root, **kwargs):
+        builds.append(root)
+        started.set()
+        release.wait(10)
+        return real(root, **kwargs)
+
+    monkeypatch.setattr(app_module, "build_index", gated)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async def rescan():
+        app._name_index = None
+        app.action_refresh()
+        for _ in range(200):
+            if app._name_index is not None:
+                return
+            await asyncio.sleep(0.05)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        for _ in range(100):
+            if started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        assert started.is_set()
+
+        # The running build's periodic save: a partial cache on disk.
+        contentindex._save(contentindex.index_path(fixture_drive),
+                           dc_replace(real(fixture_drive), complete=False))
+        await rescan()
+        assert app._content_building and len(builds) == 1
+
+        # A CLI build landed meanwhile: whole, served, and still no restart.
+        real(fixture_drive)
+        await rescan()
+        assert not app._content_building and len(builds) == 1
+
+        # The live thread's next periodic save downgrades that cache.
+        contentindex._save(contentindex.index_path(fixture_drive),
+                           dc_replace(real(fixture_drive), complete=False))
+        await rescan()
+        assert app._content_building and len(builds) == 1
+
+        release.set()
+        await settle(app, pilot)
+        await settle(app, pilot)
+        assert len(builds) == 1
+        assert app._content_index.complete and not app._content_live

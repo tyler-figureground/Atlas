@@ -224,6 +224,12 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
         """The Content Index's one honest line: stamp, building, absent or
         failed - never a silent nothing (ADR 0004). Fitted to the dialog."""
         if self._content_error is not None:
+            if self._content_index is not None:
+                # A failed top-up: the partial index still answers (#56).
+                return _fit_line([
+                    f"content index failed: {self._content_error} - partial results",
+                    f"content index failed: {self._content_error}",
+                ], cells)
             return _fit_line([
                 f"content index failed: {self._content_error} - name matches only",
                 f"content index failed: {self._content_error}",

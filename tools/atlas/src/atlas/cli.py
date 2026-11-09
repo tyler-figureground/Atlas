@@ -1912,6 +1912,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             # is the pending work - never a silently empty result list.
             payload["content"] = None if content_result is None else {
                 "indexed_at": content_index.indexed_at,
+                "complete": content_index.complete,
                 "total": content_result.total,
                 "shown": len(content_result.hits),
                 "cap": RESULT_CAP,
@@ -1942,6 +1943,8 @@ def cmd_search(args: argparse.Namespace) -> int:
                       "to search file contents; the matches above are names only")
             else:
                 stamp = content_index.indexed_at
+                if not content_index.complete:
+                    stamp += "; partial - `atlas index build` reads the rest"
                 print(f"content matches (indexed at {stamp}):")
                 for hit in content_hits:
                     snippet = f'  "{hit.snippet}"' if hit.snippet else ""

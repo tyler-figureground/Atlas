@@ -1111,6 +1111,11 @@ class AtlasApp(App):
         # revalidation plus `atlas index build`, not a download at `r`.
         self._content_index: ContentIndex | None = None
         self._content_building = False
+        # Roots with a build thread still alive. A thread worker is never
+        # stopped by cancel or a drive switch, so "building" (what the overlay
+        # shows) and "a thread is running" are tracked apart: a top-up must
+        # never start beside a live build of the same root (#56 review).
+        self._content_live: set[Path] = set()
         self._content_progress: tuple[int, int] | None = None
         self._content_error: str | None = None
         # A Search Overlay reveal waiting on the Workspace to populate: the
@@ -1602,28 +1607,29 @@ class AtlasApp(App):
         # when there is nothing - the overlay reports either state honestly.
         root = self._inventory.root
         stored = load_index(root)
+        live = root in self._content_live
         if stored is not None:
             self._content_index = stored
             self._content_error = None
             if isinstance(self.screen, SearchOverlay):
                 self.screen.set_content_index(stored)
             if stored.complete:
+                # A live build still lands later; until then this is whole.
                 self._content_building = False
                 return
-            # A partial index: an interrupted build, or the periodic save of
-            # one still running. Search what it holds and read the rest - the
-            # build is incremental, so only the remainder (#56). A build
-            # already running keeps going; none starts twice.
-            if self._content_building:
-                if isinstance(self.screen, SearchOverlay):
-                    self.screen.set_content_building(self._content_progress)
-                return
-        elif self._content_building:
-            return
+        # Partial (an interrupted build, or the periodic save of one still
+        # running) or absent. Search what there is and read the rest - the
+        # build is incremental, so only the remainder (#56). A live build of
+        # this root keeps going; none starts beside it.
         self._content_building = True
+        if live:
+            if isinstance(self.screen, SearchOverlay):
+                self.screen.set_content_building(self._content_progress)
+            return
         self._content_progress = None
         if isinstance(self.screen, SearchOverlay):
             self.screen.set_content_building()
+        self._content_live.add(root)
         self._content_build_worker(root)
 
     @work(thread=True, exclusive=True, group="content-index", exit_on_error=False)
@@ -1654,6 +1660,7 @@ class AtlasApp(App):
             self.screen.set_content_building((done, total))
 
     def _content_ready(self, root: Path, index: ContentIndex) -> None:
+        self._content_live.discard(root)
         # Keyed to the drive the build read, not the scan generation: a rescan
         # mid-build does not make the index stale, and dropping it left
         # _content_building stuck True with nothing building (#55).
@@ -1669,14 +1676,19 @@ class AtlasApp(App):
         # scan or repair message that is none of this worker's business.
 
     def _content_failed(self, root: Path, error: Exception) -> None:
+        self._content_live.discard(root)
         if root != self._drive_root:
             return
         self._content_building = False
+        if self._content_index is not None and self._content_index.complete:
+            # A whole index (a CLI build landed meanwhile) still serves.
+            return
         self._content_error = str(error)
         if isinstance(self.screen, SearchOverlay):
             self.screen.set_content_error(str(error))
         self._set_operation(
-            f"Content search is unavailable: {error}. `atlas index build` retries.",
+            f"Content search is {'unavailable' if self._content_index is None else 'incomplete'}: "
+            f"{error}. Press r or run `atlas index build` to retry.",
             "warning")
 
     def _index_failed(self, generation: int, error: Exception) -> None:
