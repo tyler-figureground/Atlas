@@ -1669,6 +1669,7 @@ class AtlasApp(App):
         self._content_index = index
         self._content_building = False
         self._content_progress = None
+        self._content_error = None  # a later build succeeded (#56 review)
         if isinstance(self.screen, SearchOverlay):
             self.screen.set_content_index(index)
         # No operation-line note: the build finishing is visible where it
