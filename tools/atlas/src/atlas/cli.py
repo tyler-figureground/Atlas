@@ -1176,7 +1176,11 @@ def cmd_clean(args: argparse.Namespace) -> int:
 
 
 def cmd_runs(args: argparse.Namespace) -> int:
-    """List agent runs and zip the closed ones (ADR 0011). Dry run by default."""
+    """List agent runs and zip the closed ones (ADR 0011). Dry run by default.
+
+    Exit 0 when nothing is left to do, 1 when closed runs await --apply or a
+    run was skipped (a person looks), 2 when archiving a run failed.
+    """
     root = _resolve_drive(args.drive)
     m = load_map(find_map(root))
     if args.all and args.project:
@@ -1231,7 +1235,12 @@ def cmd_runs(args: argparse.Namespace) -> int:
             print("no agent runs")
         elif pending:
             print(f"\n{pending} closed run(s) (dry run - pass --apply to zip them)")
-    return 1 if pending else 0
+    # A run that failed or was skipped is not "done": the launcher must not
+    # report success over it (#58).
+    statuses = {e.get("status") for item in report for e in item["runs"]}
+    if "failed" in statuses:
+        return 2
+    return 1 if pending or "skipped" in statuses else 0
 
 
 # ---------------------------------------------------------------- archive
