@@ -1634,7 +1634,9 @@ class AtlasApp(App):
         self.call_from_thread(self._content_ready, root, index)
 
     def _content_progressed(self, root: Path, done: int, total: int) -> None:
-        if root != self._drive_root:
+        # Not building: a rescan already loaded what the build saved so far;
+        # its ticks would flip the overlay back to "building" (#55 review).
+        if root != self._drive_root or not self._content_building:
             return
         self._content_progress = (done, total)
         if isinstance(self.screen, SearchOverlay):

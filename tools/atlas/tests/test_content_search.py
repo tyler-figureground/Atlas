@@ -525,7 +525,13 @@ async def test_a_rescan_mid_first_build_still_lands_the_index(fixture_drive, mon
             await asyncio.sleep(0.05)
         assert started.is_set() and app._content_building
         app.action_refresh()
-        await pilot.pause()
+        # Hold the build until the rescan's _index_ready has run against the
+        # still-empty cache - the order that left the flag stuck.
+        for _ in range(200):
+            if app._name_index is not None:
+                break
+            await asyncio.sleep(0.05)
+        assert app._name_index is not None and load_index(fixture_drive) is None
         release.set()
         await settle(app, pilot)
         await settle(app, pilot)
