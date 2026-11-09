@@ -1231,7 +1231,12 @@ def cmd_runs(args: argparse.Namespace) -> int:
             print("no agent runs")
         elif pending:
             print(f"\n{pending} closed run(s) (dry run - pass --apply to zip them)")
-    return 1 if pending else 0
+    # A run that failed or was skipped is not "done": the launcher must not
+    # report success over it (#58).
+    statuses = {e.get("status") for item in report for e in item["runs"]}
+    if "failed" in statuses:
+        return 2
+    return 1 if pending or "skipped" in statuses else 0
 
 
 # ---------------------------------------------------------------- archive

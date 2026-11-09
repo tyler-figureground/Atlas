@@ -135,8 +135,15 @@ def archive_run(drive_root: Path, project: Path, m: DriveMap, run: Run) -> RunRe
         return RunResult(run.name, "skipped", "part of the run could not be read")
     archive_root.mkdir(parents=True, exist_ok=True)
     partial = archive.with_suffix(".zip.partial")
+    # The partial is only ever Atlas's own temp - one a crash left behind is
+    # overwritten ("w"), never a reason to refuse every later run (#58). The
+    # real zip above is still never overwritten.
+    done = False
     try:
-        with zipfile.ZipFile(long_path(partial), "x", compression=zipfile.ZIP_DEFLATED) as zf:
+        # strict_timestamps=False: a file dated before 1980 (an unzipped or
+        # tool-written one) is stored with the 1980 floor instead of raising.
+        with zipfile.ZipFile(long_path(partial), "w", compression=zipfile.ZIP_DEFLATED,
+                             strict_timestamps=False) as zf:
             for rel, _size, _mtime in files:
                 zf.write(long_path(source / rel), arcname=f"{run.name}/{rel}")
         with zipfile.ZipFile(long_path(partial)) as zf:
@@ -147,12 +154,17 @@ def archive_run(drive_root: Path, project: Path, m: DriveMap, run: Run) -> RunRe
         if sizes != expected:
             raise OpsError("zip does not hold every file of the run")
         os.replace(long_path(partial), long_path(archive))
-    except (OSError, OpsError, zipfile.BadZipFile) as error:
-        try:
-            os.remove(long_path(partial))
-        except OSError:
-            pass
+        done = True
+    except (OSError, OpsError, zipfile.BadZipFile, ValueError) as error:
         return RunResult(run.name, "failed", str(error))
+    finally:
+        # Every way out but success - Ctrl+C included - takes the partial
+        # with it, so the next run starts clean.
+        if not done:
+            try:
+                os.remove(long_path(partial))
+            except OSError:
+                pass
     # Everything is in the verified zip; only now does the folder go.
     try:
         shutil.rmtree(long_path(source))

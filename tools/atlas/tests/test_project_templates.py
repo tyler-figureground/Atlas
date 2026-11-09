@@ -352,6 +352,61 @@ def test_runs_cli_previews_then_applies(run_project, capsys):
     assert main(["runs", "--drive", str(drive), "--project", project.name]) == 0
 
 
+
+def _old_audit(project, m):
+    return next(r for r in list_runs(project, m) if r.name == "260901-old-audit")
+
+
+def test_a_file_dated_before_1980_still_archives(run_project):
+    """#58: zipfile refuses pre-1980 timestamps by default; the run crashed
+    and left a .zip.partial behind."""
+    drive, m, project = run_project
+    os.utime(project / ".agent/runs/260901-old-audit/a.py", (0, 0))
+    result = archive_run(drive, project, m, _old_audit(project, m))
+    assert result.status == "archived", result.note
+    assert not list((project / ".agent/archive").glob("*.partial"))
+    with zipfile.ZipFile(project / ".agent/archive/260901-old-audit.zip") as zf:
+        assert zf.read("260901-old-audit/a.py") == b"print(1)"
+
+
+def test_a_stale_partial_from_a_crashed_run_does_not_block_the_next(run_project):
+    drive, m, project = run_project
+    archive = project / ".agent/archive"
+    archive.mkdir(parents=True, exist_ok=True)
+    (archive / "260901-old-audit.zip.partial").write_bytes(b"half a zip")
+    result = archive_run(drive, project, m, _old_audit(project, m))
+    assert result.status == "archived", result.note
+    assert not (archive / "260901-old-audit.zip.partial").exists()
+    assert not (project / ".agent/runs/260901-old-audit").exists()
+
+
+def test_an_interrupt_mid_zip_removes_the_partial_and_keeps_the_run(run_project, monkeypatch):
+    drive, m, project = run_project
+
+    def interrupted(self, *args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(zipfile.ZipFile, "write", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        archive_run(drive, project, m, _old_audit(project, m))
+    assert not list((project / ".agent/archive").glob("*"))
+    assert (project / ".agent/runs/260901-old-audit/a.py").is_file()
+
+
+def test_runs_apply_exits_2_on_a_failed_run_and_1_on_a_skipped_one(run_project, capsys, monkeypatch):
+    """#58: --apply returned 0 whatever archive_run reported."""
+    import atlas.cli as cli
+    from atlas.core.runs import RunResult
+
+    drive, _m, project = run_project
+    monkeypatch.setattr(cli, "archive_run",
+                        lambda *a, **k: RunResult("260901-old-audit", "failed", "disk full"))
+    assert main(["runs", "--drive", str(drive), "--project", project.name, "--apply"]) == 2
+    assert "failed: disk full" in capsys.readouterr().out
+    monkeypatch.setattr(cli, "archive_run",
+                        lambda *a, **k: RunResult("260901-old-audit", "skipped", "zip exists"))
+    assert main(["runs", "--drive", str(drive), "--project", project.name, "--apply"]) == 1
+
 def test_runs_cli_needs_a_target(run_project, capsys):
     drive, _m, _project = run_project
     assert main(["runs", "--drive", str(drive)]) == 2
