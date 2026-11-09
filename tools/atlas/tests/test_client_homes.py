@@ -185,6 +185,20 @@ def test_conform_writes_and_refreshes_the_card_keeping_notes_outside_it(drive):
     assert text.count(CARD_BEGIN) == 1
 
 
+
+def test_a_card_refresh_keeps_unicode_line_separators_in_the_notes(drive):
+    """#61: the card rewrite turned U+2028 and form feed into line breaks."""
+    m = _load(drive)
+    note = "Our note\u2028stays one line\x0cand this too."
+    project = make_project(drive, "250101_Seps House", sections=["06 Research"], files={
+        "06 Research/README.md": f"# Research\n\n{note}\n",
+    })
+    apply_plan(drive, project, m, build_plan(_report(project, m), m, project))
+    text = (project / "06 Research/README.md").read_text(encoding="utf-8")
+    assert CARD_BEGIN in text and note in text
+    assert "06 Research/README.md" not in _report(project, m).missing_control_plane
+
+
 def test_broken_card_markers_are_a_conflict_not_a_rewrite(drive):
     m = _load(drive)
     broken = f"# Research\n{CARD_BEGIN}\nhalf a card\n"

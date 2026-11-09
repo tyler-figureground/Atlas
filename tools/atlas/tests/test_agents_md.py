@@ -9,6 +9,7 @@ from atlas.core.ops import new_project
 from atlas.core.projectmd import (
     AGENTS_BEGIN,
     AGENTS_END,
+    agents_block_current,
     agents_block_lines,
     agents_md_lines,
     carried_by,
@@ -226,3 +227,29 @@ def test_carried_by_wants_every_line_in_order():
     assert carried_by("a\nb", "a\nx\nb")
     assert not carried_by("a\nb", "b\na")
     assert not carried_by("a\nc", "a\nb")
+
+
+def test_a_refresh_keeps_unicode_line_separators_in_the_notes(fixture_drive):
+    """#61: str.splitlines() broke on U+2028, form feed, U+0085 and 0x1C-0x1E,
+    and the CRLF rewrite made them real line breaks in the person's notes."""
+    notes = "Note: line one\u2028still the same line\x0cpage\x85next\x1dgroup"
+    stale = ("# workspace\n\n" + AGENTS_BEGIN + "\nrules from last year\n" + AGENTS_END
+             + "\n\n## Project notes\n\n" + notes + "\n")
+    make_project(fixture_drive, "260313_Seps", sections=["01 Model"],
+                 files={"AGENTS.md": stale, "CLAUDE.md": POINTER + "\n"})
+    _result, inv, _m = conform(fixture_drive, "260313_Seps")
+    agents = text_of(inv.path / "AGENTS.md")
+    assert "rules from last year" not in agents
+    assert notes in agents, "every separator inside the line survives"
+
+
+def test_a_current_block_with_separators_in_the_notes_is_current(fixture_drive):
+    """The doctor's check splits the way the writer does, so a refreshed file
+    never reads as stale (and is never rewritten again)."""
+    make_project(fixture_drive, "260314_Settle", sections=["01 Model"],
+                 files={"AGENTS.md": "# workspace\n\nkeep\u2028this\n",
+                        "CLAUDE.md": POINTER + "\n"})
+    conform(fixture_drive, "260314_Settle")
+    _m = drive_map(fixture_drive)
+    text = text_of(fixture_drive / "260314_Settle" / "AGENTS.md")
+    assert agents_block_current(text, _m)

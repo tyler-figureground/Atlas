@@ -13,6 +13,7 @@ Staff-facing copy: plain words, no em dashes.
 from __future__ import annotations
 
 from .mapfile import DriveMap, Section
+from .projectmd import dossier_lines
 
 CARD_BEGIN = "<!-- atlas:card-begin -->"
 CARD_END = "<!-- atlas:card-end -->"
@@ -71,7 +72,8 @@ def _span(lines: list[str]) -> tuple[int, int] | None:
 
 
 def card_current(text: str, section: Section) -> bool:
-    lines = text.splitlines()
+    # Split as the writer splits (#61): U+2028 and friends are text, not breaks.
+    lines = dossier_lines(text)
     try:
         span = _span(lines)
     except CardBlockError:
