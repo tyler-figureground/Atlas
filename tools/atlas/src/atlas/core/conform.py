@@ -1065,7 +1065,7 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
     if _same_folder(src, dst) and action.src != action.dst:
         # Case-only rename on a case-insensitive mount: two-step via temp.
         tmp = src.with_name(src.name + ".atlas-tmp")
-        os.rename(long_path(src), long_path(tmp))
+        os.rename(long_path(src), _dest(tmp))  # never a prefixed write past the limit
         try:
             os.rename(long_path(tmp), _dest(dst))
         except OSError as error:
