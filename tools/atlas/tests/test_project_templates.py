@@ -370,14 +370,51 @@ def test_a_file_dated_before_1980_still_archives(run_project):
 
 
 def test_a_stale_partial_from_a_crashed_run_does_not_block_the_next(run_project):
+    """#58: mode "x" on one fixed partial name refused every run after a
+    crash. Each attempt now writes its own; a day-old leftover is swept, a
+    fresh one (maybe another process's) is left alone."""
     drive, m, project = run_project
     archive = project / ".agent/archive"
     archive.mkdir(parents=True, exist_ok=True)
-    (archive / "260901-old-audit.zip.partial").write_bytes(b"half a zip")
+    stale = archive / "260901-old-audit.zip.partial"
+    stale.write_bytes(b"half a zip")
+    two_days_ago = time.time() - 2 * 86400
+    os.utime(stale, (two_days_ago, two_days_ago))
+    fresh = archive / "260901-old-audit.zip.999-abcdef12.partial"
+    fresh.write_bytes(b"in flight elsewhere")
+
     result = archive_run(drive, project, m, _old_audit(project, m))
     assert result.status == "archived", result.note
-    assert not (archive / "260901-old-audit.zip.partial").exists()
+    assert not stale.exists()
+    assert fresh.read_bytes() == b"in flight elsewhere"
     assert not (project / ".agent/runs/260901-old-audit").exists()
+    assert sorted(p.name for p in archive.iterdir()) == [
+        "260901-old-audit.zip", "260901-old-audit.zip.999-abcdef12.partial"]
+
+
+def test_a_zip_that_appears_while_zipping_is_never_overwritten(run_project, monkeypatch):
+    """#58 review: another process publishing first must win untouched, and
+    this run's folder must stay."""
+    import atlas.core.runs as runs
+
+    drive, m, project = run_project
+    target = project / ".agent/archive/260901-old-audit.zip"
+    real = runs._walk_files
+
+    def walk_then_race(source):
+        found = real(source)
+        if source.name == "260901-old-audit":
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"the other machine's zip")
+        return found
+
+    run = _old_audit(project, m)
+    monkeypatch.setattr(runs, "_walk_files", walk_then_race)
+    result = archive_run(drive, project, m, run)
+    assert result.status == "skipped" and "appeared" in result.note
+    assert target.read_bytes() == b"the other machine's zip"
+    assert (project / ".agent/runs/260901-old-audit/a.py").is_file()
+    assert not list(target.parent.glob("*.partial"))
 
 
 def test_an_interrupt_mid_zip_removes_the_partial_and_keeps_the_run(run_project, monkeypatch):

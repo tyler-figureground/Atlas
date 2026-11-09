@@ -1176,7 +1176,11 @@ def cmd_clean(args: argparse.Namespace) -> int:
 
 
 def cmd_runs(args: argparse.Namespace) -> int:
-    """List agent runs and zip the closed ones (ADR 0011). Dry run by default."""
+    """List agent runs and zip the closed ones (ADR 0011). Dry run by default.
+
+    Exit 0 when nothing is left to do, 1 when closed runs await --apply or a
+    run was skipped (a person looks), 2 when archiving a run failed.
+    """
     root = _resolve_drive(args.drive)
     m = load_map(find_map(root))
     if args.all and args.project:

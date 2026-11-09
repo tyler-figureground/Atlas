@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import shutil
 import time
+import uuid
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,9 @@ from .ops import OpsError, append_log
 from .scan import long_path
 
 DAY = 86400
+# A partial older than this is a crash's leftover (no process zips one run
+# for a day); younger ones may belong to a run in flight and are left alone.
+STALE_PARTIAL_SECONDS = DAY
 
 
 @dataclass(frozen=True)
@@ -121,8 +125,30 @@ def list_runs(project: Path, m: DriveMap, now: float | None = None) -> list[Run]
     return runs
 
 
+def _publish(partial: Path, archive: Path) -> None:
+    """Move the verified partial to its final name, never over an existing
+    file: FileExistsError if one appeared. os.replace would overwrite."""
+    if os.name == "nt":
+        os.rename(long_path(partial), long_path(archive))  # refuses an existing target
+        return
+    os.link(partial, archive)  # refuses an existing target
+    os.remove(partial)
+
+
+def _sweep_stale_partials(archive_root: Path, run_name: str) -> None:
+    now = time.time()
+    for leftover in archive_root.glob(f"{run_name}.zip*.partial"):
+        try:
+            if now - leftover.stat().st_mtime > STALE_PARTIAL_SECONDS:
+                os.remove(long_path(leftover))
+        except OSError:
+            pass    # gone already, or held open: the next sweep retries
+
+
 def archive_run(drive_root: Path, project: Path, m: DriveMap, run: Run) -> RunResult:
-    """Zip one run, verify the zip, then remove the folder. Never overwrites."""
+    """Zip one run, verify the zip, then remove the folder. Never overwrites:
+    each attempt writes its own partial, and publishing it refuses a zip that
+    appeared meanwhile (another process or machine got there first)."""
     if not m.archive_dir:
         raise OpsError("the drive map names no archiveDir; nowhere to put closed runs")
     source = project / m.runs_dir / run.name
@@ -134,15 +160,15 @@ def archive_run(drive_root: Path, project: Path, m: DriveMap, run: Run) -> RunRe
     if unreadable:
         return RunResult(run.name, "skipped", "part of the run could not be read")
     archive_root.mkdir(parents=True, exist_ok=True)
-    partial = archive.with_suffix(".zip.partial")
-    # The partial is only ever Atlas's own temp - one a crash left behind is
-    # overwritten ("w"), never a reason to refuse every later run (#58). The
-    # real zip above is still never overwritten.
+    _sweep_stale_partials(archive_root, run.name)
+    # One partial per attempt: a crash's leftover never blocks a later run,
+    # and two processes never write one file (#58).
+    partial = archive_root / f"{run.name}.zip.{os.getpid()}-{uuid.uuid4().hex[:8]}.partial"
     done = False
     try:
         # strict_timestamps=False: a file dated before 1980 (an unzipped or
         # tool-written one) is stored with the 1980 floor instead of raising.
-        with zipfile.ZipFile(long_path(partial), "w", compression=zipfile.ZIP_DEFLATED,
+        with zipfile.ZipFile(long_path(partial), "x", compression=zipfile.ZIP_DEFLATED,
                              strict_timestamps=False) as zf:
             for rel, _size, _mtime in files:
                 zf.write(long_path(source / rel), arcname=f"{run.name}/{rel}")
@@ -153,8 +179,10 @@ def archive_run(drive_root: Path, project: Path, m: DriveMap, run: Run) -> RunRe
         expected = {f"{run.name}/{rel}": size for rel, size, _mtime in files}
         if sizes != expected:
             raise OpsError("zip does not hold every file of the run")
-        os.replace(long_path(partial), long_path(archive))
+        _publish(partial, archive)
         done = True
+    except FileExistsError:
+        return RunResult(run.name, "skipped", f"{archive.name} appeared while zipping; left both alone")
     except (OSError, OpsError, zipfile.BadZipFile, ValueError) as error:
         return RunResult(run.name, "failed", str(error))
     finally:
