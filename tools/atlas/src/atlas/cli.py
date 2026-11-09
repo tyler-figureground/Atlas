@@ -1318,7 +1318,7 @@ def cmd_unarchive(args: argparse.Namespace) -> int:
 def _archive_revert(args: argparse.Namespace, root: Path, m) -> int:
     manifest = Path(args.revert)
     try:
-        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload = json.loads(manifest.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as error:
         print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
         return 2
@@ -1386,7 +1386,7 @@ def _reference_root(args: argparse.Namespace) -> Path:
         return Path(os.path.abspath(args.root))
     if os.environ.get(REFERENCE_SETS_ENV):
         return Path(os.environ[REFERENCE_SETS_ENV])
-    raw = json.loads(find_map(_resolve_drive(args.drive)).read_text(encoding="utf-8"))
+    raw = json.loads(find_map(_resolve_drive(args.drive)).read_text(encoding="utf-8-sig"))
     value = raw.get("referenceSets", "") if isinstance(raw, dict) else ""
     if not isinstance(value, str) or not value:
         raise UsageError("no reference sets folder: pass --root, set "
@@ -2129,7 +2129,7 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
     """
     manifest = Path(args.revert)
     try:
-        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload = json.loads(manifest.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as error:
         print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
         return 2

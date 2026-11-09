@@ -298,7 +298,7 @@ def find_map(drive_root: Path) -> Path | None:
 
 def load_map(path: Path) -> DriveMap:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))  # a BOM is not a broken map (#64)
     except OSError as e:
         raise MapError(f"cannot read map: {path}: {e}") from e
     except json.JSONDecodeError as e:
