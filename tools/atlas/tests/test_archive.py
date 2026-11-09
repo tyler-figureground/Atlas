@@ -454,6 +454,34 @@ def test_undo_restores_the_folder_and_the_row_verbatim(fixture_drive):
     assert not (fixture_drive / "_Archived Projects").exists()
 
 
+def test_undo_of_a_failed_stamp_leaves_the_row_alone(fixture_drive, monkeypatch):
+    """#60: the stamp failed, so the row still said 'On hold'; undo then
+    stamped 'Active', a status the row never had."""
+    import atlas.core.archive as archive_module
+
+    _project(fixture_drive)
+    prior = _index_row(fixture_drive, "260101_103 Mosco", status="On hold")
+    m = _map(fixture_drive)
+    real_stamp = archive_module.stamp_project_index_status
+
+    def boom(*args, **kwargs):
+        raise ProjectIndexError("index is being updated")
+
+    monkeypatch.setattr(archive_module, "stamp_project_index_status", boom)
+    applied = apply_archive_plan(fixture_drive, m,
+                                 build_archive_plan(fixture_drive, m, "260101_103 Mosco"))
+    assert applied.actions[0].status == FAILED
+    monkeypatch.setattr(archive_module, "stamp_project_index_status", real_stamp)
+
+    undone = apply_archive_plan(fixture_drive, m, invert_archive_plan(applied))
+
+    assert undone.actions[0].status == DONE, undone.actions[0].note
+    assert (fixture_drive / "260101_103 Mosco").is_dir()
+    index = (fixture_drive / "_Project Index.md").read_text(encoding="utf-8")
+    assert prior in index.splitlines(), "still 'On hold', never stamped Active"
+    assert not (fixture_drive / "_Archived Projects").exists(), "the created root is pruned"
+
+
 def test_rearchive_after_undo_is_redo(fixture_drive):
     _project(fixture_drive)
     _index_row(fixture_drive, "260101_103 Mosco")
@@ -674,6 +702,32 @@ def test_unarchive_revert_restores_the_row_verbatim(fixture_drive, capsys, tmp_p
     index = (fixture_drive / "_Project Index.md").read_text(encoding="utf-8")
     assert prior in index.splitlines()
 
+
+
+def test_unarchive_revert_brings_back_a_failed_stamp_archive(
+        fixture_drive, capsys, tmp_path, monkeypatch):
+    """#60 review: the folder moved, the stamp failed, the manifest records
+    the move - and --revert refused it as 'a preview', stranding the folder."""
+    import atlas.core.archive as archive_module
+
+    _project(fixture_drive)
+    prior = _index_row(fixture_drive, "260101_103 Mosco", status="On hold")
+    real_stamp = archive_module.stamp_project_index_status
+
+    def boom(*args, **kwargs):
+        raise ProjectIndexError("index is being updated")
+
+    monkeypatch.setattr(archive_module, "stamp_project_index_status", boom)
+    assert _archive_cli(fixture_drive, "--apply", "--json") == 2
+    manifest = tmp_path / "failed-stamp.json"
+    manifest.write_text(capsys.readouterr().out, encoding="utf-8")
+    monkeypatch.setattr(archive_module, "stamp_project_index_status", real_stamp)
+
+    assert main(["unarchive", "--drive", str(fixture_drive), "--revert",
+                 str(manifest), "--apply"]) == 0
+    assert (fixture_drive / "260101_103 Mosco").is_dir()
+    index = (fixture_drive / "_Project Index.md").read_text(encoding="utf-8")
+    assert prior in index.splitlines()
 
 def test_unarchive_revert_refuses_another_drives_manifest(fixture_drive, capsys, tmp_path):
     _project(fixture_drive)

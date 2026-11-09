@@ -1333,8 +1333,11 @@ def _archive_revert(args: argparse.Namespace, root: Path, m) -> int:
         except OpsError as error:
             print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
             return 2
-        # A preview's manifest reverses nothing - only an applied one can.
-        if any(a.status != DONE for a in plan.actions):
+        # A preview's manifest reverses nothing - only an applied one can. A
+        # FAILED action that recorded its move (the folder moved, the index
+        # stamp failed) is applied too: its folder must be able to come back (#60).
+        if any(a.status != DONE and not (a.status == FAILED and a.moved)
+               for a in plan.actions):
             print(f"error: {manifest} records a preview, not an applied archive; "
                   f"nothing to revert", file=sys.stderr)
             return 2
