@@ -496,3 +496,38 @@ async def test_content_rows_hold_at_30_and_24_rows(fixture_drive):
             # and timestamp no longer fit).
             assert index.indexed_at.partition("T")[0] in _content_line(overlay)
             assert any(row.startswith("markdown") for row in _rows(overlay))
+
+
+async def test_a_rescan_mid_first_build_still_lands_the_index(fixture_drive, monkeypatch):
+    """#55: a rescan during the first build bumped the generation, the build's
+    result was dropped, and _content_building stayed True forever."""
+    import asyncio
+    import threading
+
+    import atlas.tui.app as app_module
+
+    _drive(fixture_drive)
+    started, release = threading.Event(), threading.Event()
+    real = app_module.build_index
+
+    def gated(root, **kwargs):
+        started.set()
+        release.wait(10)
+        return real(root, **kwargs)
+
+    monkeypatch.setattr(app_module, "build_index", gated)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+
+    async with app.run_test(size=(120, 51)) as pilot:
+        for _ in range(100):
+            if started.is_set():
+                break
+            await asyncio.sleep(0.05)
+        assert started.is_set() and app._content_building
+        app.action_refresh()
+        await pilot.pause()
+        release.set()
+        await settle(app, pilot)
+        await settle(app, pilot)
+        assert not app._content_building
+        assert app._content_index is not None

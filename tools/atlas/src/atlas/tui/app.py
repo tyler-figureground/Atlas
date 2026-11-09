@@ -1613,10 +1613,10 @@ class AtlasApp(App):
             self._content_progress = None
             if isinstance(self.screen, SearchOverlay):
                 self.screen.set_content_building()
-            self._content_build_worker(root, generation)
+            self._content_build_worker(root)
 
     @work(thread=True, exclusive=True, group="content-index", exit_on_error=False)
-    def _content_build_worker(self, root: Path, generation: int) -> None:
+    def _content_build_worker(self, root: Path) -> None:
         """The first content build, off the UI thread (ADR 0020 #5).
 
         Writes only to the local cache, never to the drive. Progress is
@@ -1625,23 +1625,26 @@ class AtlasApp(App):
         """
         def progress(done: int, total: int) -> None:
             if done == total or done % 25 == 0:
-                self.call_from_thread(self._content_progressed, generation, done, total)
+                self.call_from_thread(self._content_progressed, root, done, total)
         try:
             index = build_index(root, progress=progress, save_every=50)
         except Exception as error:  # a vanishing mount mid-build, not a query failure
-            self.call_from_thread(self._content_failed, generation, error)
+            self.call_from_thread(self._content_failed, root, error)
             return
-        self.call_from_thread(self._content_ready, generation, index)
+        self.call_from_thread(self._content_ready, root, index)
 
-    def _content_progressed(self, generation: int, done: int, total: int) -> None:
-        if generation != self._scan_generation:
+    def _content_progressed(self, root: Path, done: int, total: int) -> None:
+        if root != self._drive_root:
             return
         self._content_progress = (done, total)
         if isinstance(self.screen, SearchOverlay):
             self.screen.set_content_building((done, total))
 
-    def _content_ready(self, generation: int, index: ContentIndex) -> None:
-        if generation != self._scan_generation:
+    def _content_ready(self, root: Path, index: ContentIndex) -> None:
+        # Keyed to the drive the build read, not the scan generation: a rescan
+        # mid-build does not make the index stale, and dropping it left
+        # _content_building stuck True with nothing building (#55).
+        if root != self._drive_root:
             return
         self._content_index = index
         self._content_building = False
@@ -1652,8 +1655,8 @@ class AtlasApp(App):
         # matters (the overlay's stamp line), and the line may be carrying a
         # scan or repair message that is none of this worker's business.
 
-    def _content_failed(self, generation: int, error: Exception) -> None:
-        if generation != self._scan_generation:
+    def _content_failed(self, root: Path, error: Exception) -> None:
+        if root != self._drive_root:
             return
         self._content_building = False
         self._content_error = str(error)
