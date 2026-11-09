@@ -368,8 +368,12 @@ def invert_archive_plan(plan: ArchivePlan) -> ArchivePlan:
             kind=UNARCHIVE if action.kind == ARCHIVE else ARCHIVE,
             src=mv.dst,
             dst=mv.src,
-            note="restore the project index row" if action.index_row else "",
+            note=("restore the project index row" if action.index_row
+                  else "leave the project index as it is"),
             index_row=action.index_row,
+            # No recorded row means the original changed none: a failed stamp
+            # or no row to stamp. Undoing it touches the index no more (#60).
+            keep_index=not action.index_row,
             prune=prune,
         ))
     return ArchivePlan(project=plan.project, archive_root=plan.archive_root,
@@ -424,6 +428,11 @@ def _apply_one(drive_root: Path, m: DriveMap, plan: ArchivePlan,
     created = tuple(rel for rel in absent if (drive_root / rel).exists())
     moved = (Move(src=action.src, dst=action.dst, is_dir=True),)
 
+    if action.keep_index:
+        result = replace(action, status=DONE, moved=moved, created=created)
+        if result.prune:
+            _prune_empty(drive_root, result.prune)
+        return result
     try:
         if action.index_row:
             # An inverse restores the recorded row verbatim; only a fresh plan

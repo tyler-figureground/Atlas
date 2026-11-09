@@ -124,6 +124,10 @@ class Action:
     # before this action's stamp, recorded at apply time so the inverse restores
     # the register verbatim. Empty on every other kind.
     index_row: str = ""
+    # On an inverse ARCHIVE/UNARCHIVE only: the action being undone changed no
+    # index row (its stamp failed, or the project had none), so the undo must
+    # not stamp one either (#60).
+    keep_index: bool = False
 
     @property
     def path_warning(self) -> bool:
