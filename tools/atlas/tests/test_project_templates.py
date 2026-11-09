@@ -444,6 +444,43 @@ def test_runs_apply_exits_2_on_a_failed_run_and_1_on_a_skipped_one(run_project, 
                         lambda *a, **k: RunResult("260901-old-audit", "skipped", "zip exists"))
     assert main(["runs", "--drive", str(drive), "--project", project.name, "--apply"]) == 1
 
+
+def test_posix_publish_falls_back_where_hard_links_are_refused(tmp_path, monkeypatch):
+    """#58 review: Drive on a Mac, SMB and exFAT refuse os.link; the run
+    must still archive, and still never over an existing zip."""
+    import errno
+
+    import atlas.core.runs as runs
+
+    def no_links(src, dst):
+        raise OSError(errno.ENOTSUP, "Operation not supported")
+
+    monkeypatch.setattr(runs.os, "link", no_links)
+    partial, archive = tmp_path / "r.zip.1-a.partial", tmp_path / "r.zip"
+    partial.write_bytes(b"zip")
+    runs._publish_posix(partial, archive)
+    assert archive.read_bytes() == b"zip" and not partial.exists()
+
+    partial.write_bytes(b"second")
+    with pytest.raises(FileExistsError):
+        runs._publish_posix(partial, archive)
+    assert archive.read_bytes() == b"zip"
+
+
+def test_a_run_name_with_glob_characters_sweeps_only_its_own(run_project):
+    from atlas.core.runs import _sweep_stale_partials
+
+    _drive, _m, project = run_project
+    archive = project / ".agent/archive"
+    archive.mkdir(parents=True, exist_ok=True)
+    mine = archive / "260901-[draft].zip.partial"
+    other = archive / "260901-d.zip.partial"
+    for leftover in (mine, other):
+        leftover.write_bytes(b"x")
+        os.utime(leftover, (0, 0))
+    _sweep_stale_partials(archive, "260901-[draft]")
+    assert not mine.exists() and other.exists()
+
 def test_runs_cli_needs_a_target(run_project, capsys):
     drive, _m, _project = run_project
     assert main(["runs", "--drive", str(drive)]) == 2

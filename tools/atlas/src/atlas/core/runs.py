@@ -13,6 +13,8 @@ where it came from restores the run.
 
 from __future__ import annotations
 
+import errno
+import glob
 import os
 import shutil
 import time
@@ -131,13 +133,36 @@ def _publish(partial: Path, archive: Path) -> None:
     if os.name == "nt":
         os.rename(long_path(partial), long_path(archive))  # refuses an existing target
         return
-    os.link(partial, archive)  # refuses an existing target
-    os.remove(partial)
+    _publish_posix(partial, archive)
+
+
+# Filesystems that refuse hard links: Drive File Provider on a Mac, some SMB
+# and FUSE mounts, FAT/exFAT.
+_NO_LINK = {errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.ENOSYS, errno.EMLINK,
+            errno.EXDEV}
+
+
+def _publish_posix(partial: Path, archive: Path) -> None:
+    try:
+        os.link(partial, archive)  # refuses an existing target
+    except OSError as error:
+        if isinstance(error, FileExistsError) or error.errno not in _NO_LINK:
+            raise
+        # No hard links here: claim the name exclusively, then replace only
+        # that empty claim. A crash in between leaves an empty zip, which
+        # later runs skip (a person looks) - the run folder stays.
+        os.close(os.open(archive, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        os.replace(partial, archive)
+        return
+    try:
+        os.remove(partial)
+    except OSError:
+        pass    # published already; the stale-partial sweep collects it
 
 
 def _sweep_stale_partials(archive_root: Path, run_name: str) -> None:
     now = time.time()
-    for leftover in archive_root.glob(f"{run_name}.zip*.partial"):
+    for leftover in archive_root.glob(f"{glob.escape(run_name)}.zip*.partial"):
         try:
             if now - leftover.stat().st_mtime > STALE_PARTIAL_SECONDS:
                 os.remove(long_path(leftover))
