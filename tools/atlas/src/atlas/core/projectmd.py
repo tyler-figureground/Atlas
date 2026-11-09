@@ -552,7 +552,8 @@ def _agents_block_span(lines: list[str]) -> tuple[int, int] | None:
 
 
 def agents_block_current(text: str, m: DriveMap) -> bool:
-    lines = text.splitlines()
+    # Split as the writer splits (#61): U+2028 and friends are text, not breaks.
+    lines = dossier_lines(text)
     try:
         span = _agents_block_span(lines)
     except AgentsBlockError:

@@ -34,6 +34,7 @@ from .templates import TemplateError, render_template, template_values
 from .mcpjson import machine_mcp_server, write_mcp_json
 from .ops import OpsError, append_log, mkdir_below
 from .projectmd import (
+    dossier_lines,
     FRONT_MATTER_HEAD,
     AgentsBlockError,
     agents_md_lines,
@@ -833,10 +834,10 @@ def _backfill_card(project: Path, section: Section, action: Action) -> Action:
         return replace(action, status=CONFLICT, note="not UTF-8; left unchanged")
     raw, text = read
     try:
-        lines = with_card_block(text.splitlines(), section)
+        lines = with_card_block(dossier_lines(text), section)
     except CardBlockError as error:
         return replace(action, status=CONFLICT, note=str(error))
-    if lines == text.splitlines():
+    if lines == dossier_lines(text):
         return replace(action, status=SKIPPED, note="filing card already current")
     if path.read_bytes() != raw:
         return replace(action, status=SKIPPED, note="changed during apply; rerun")
@@ -903,7 +904,7 @@ def _backfill_agents(project: Path, m: DriveMap, action: Action) -> Action:
             # A person's CLAUDE.md becomes AGENTS.md with its words intact; the
             # CLAUDE.md backfill points at it once it can see them here.
             try:
-                lines = with_agents_block(text.splitlines(), m)
+                lines = with_agents_block(dossier_lines(text), m)
             except AgentsBlockError:
                 return replace(action, status=CONFLICT,
                                note=f"Atlas markers in {m.claude_file} are broken; fix them by hand")
@@ -919,10 +920,10 @@ def _backfill_agents(project: Path, m: DriveMap, action: Action) -> Action:
         return replace(action, status=CONFLICT, note=_notes(renamed, "not UTF-8; left unchanged"))
     raw, text = read
     try:
-        lines = with_agents_block(text.splitlines(), m)
+        lines = with_agents_block(dossier_lines(text), m)
     except AgentsBlockError as error:
         return replace(action, status=CONFLICT, note=_notes(renamed, str(error)))
-    if lines == text.splitlines():
+    if lines == dossier_lines(text):
         return replace(action, status=DONE if renamed else SKIPPED,
                        note=renamed or "Atlas block already current")
     if path.read_bytes() != raw:
