@@ -243,3 +243,36 @@ def test_queue_item_belongs_to_one_section_and_overdue_everywhere(fixture_drive)
     assert queue.due.total == 0  # due items already claimed by Send now / Decide
     assert all(e.overdue for e in queue.send_now.entries if e.item.id == "Y-020")
     assert queue.decide.entries[0].overdue and queue.decide.entries[0].blocks == 1
+
+
+def test_an_unreadable_list_is_never_reported_missing(fixture_drive, capsys):
+    """#57 (ADR 0004): a TASKS.md saved as cp1252 read as "missing" and its
+    DECISION blockers dropped out of the counts without a word."""
+    project = _project(fixture_drive, "261004_3 Elm St-Notepad", tyler=TYLER_MD, tasks=None)
+    (project / "00 Tasks" / "TASKS.md").write_bytes(
+        TASKS_MD.encode("utf-8") + "\n- [ ] \x93smart quotes\x94 DECISION\n".encode("latin-1"))
+
+    digest = collect(scan_drive(fixture_drive))
+    (only,) = digest.projects
+    assert not only.tasks_missing
+    assert only.tasks_unreadable and "UnicodeDecodeError" in only.tasks_unreadable
+    assert not only.tyler_unreadable
+
+    text = render(digest)
+    assert "TASKS.md missing" not in text
+    assert "TASKS.md cannot be read" in text
+    assert "counts are incomplete" in text
+
+    assert main(["tyler", "--drive", str(fixture_drive), "--json"]) == 0
+    row = json.loads(capsys.readouterr().out)["projects"][0]
+    assert row["tasks_missing"] is False
+    assert "UnicodeDecodeError" in row["tasks_unreadable"]
+    assert row["tyler_unreadable"] is None
+
+
+def test_an_unreadable_tyler_list_says_so(fixture_drive):
+    project = _project(fixture_drive, "261005_4 Ash St-Locked", tyler=None, tasks=TASKS_MD)
+    (project / "00 Tasks" / "TYLER.md").write_bytes(b"- [ ] \xff\xfe broken\n")
+    text = render(collect(scan_drive(fixture_drive)))
+    assert "TYLER.md missing" not in text
+    assert "TYLER.md cannot be read" in text

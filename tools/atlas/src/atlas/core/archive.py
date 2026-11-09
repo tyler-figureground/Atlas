@@ -47,7 +47,7 @@ from .project_index import (
 )
 from .scan import Listing, list_entries, tally_files, walk
 from .scan import is_project_dir
-from .tyler import TASKS_PATH, TYLER_PATH, open_items
+from .tyler import TASKS_PATH, TYLER_PATH, open_items, read_task_list
 
 ARCHIVE = "archive"
 UNARCHIVE = "unarchive"
@@ -130,22 +130,25 @@ def _project_facts(project: Path) -> tuple[int, int, tuple[str, ...]]:
     return total, models, unreadable
 
 
-def _open_task_items(project: Path) -> tuple[str, ...]:
-    """Open checkbox items in the project's two task lists, one line each.
+def _open_task_items(project: Path):
+    """Open checkbox items in the project's two task lists, one line each, and
+    a warning per list that exists but cannot be read.
 
     Counted and listed in the preview, never a refusal: a dormant project with
-    stale open items is the common case (ticket 30).
+    stale open items is the common case (ticket 30). An unreadable list is
+    unknown work, never none (ADR 0004, #57).
     """
     items: list[str] = []
+    cannot: list[str] = []
     for rel in (TASKS_PATH, TYLER_PATH):
-        path = project / rel
-        try:
-            text = path.read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError):
-            continue    # absent or unreadable: the digest reports that; archive does not
+        text, error = read_task_list(project / rel)
+        if error:
+            cannot.append(f"cannot read {rel} ({error}) - its open items are unknown")
+        if text is None:
+            continue
         for item in open_items(text):
             items.append(f"{rel}: {item.text}")
-    return tuple(items)
+    return tuple(items), tuple(cannot)
 
 
 def _archive_warnings(project: Path, model_count: int,
@@ -159,7 +162,8 @@ def _archive_warnings(project: Path, model_count: int,
         )
     for rel in unreadable:
         warnings.append(f"cannot read {rel} - the move will refuse it")
-    open_lines = _open_task_items(project)
+    open_lines, cannot = _open_task_items(project)
+    warnings.extend(cannot)
     if open_lines:
         warnings.append(f"{len(open_lines)} open task item(s) stay open:")
     return tuple(warnings), open_lines
@@ -242,7 +246,8 @@ def build_unarchive_plan(drive_root: Path, m: DriveMap, name: str,
 
     file_count, _models, unreadable = _project_facts(project)
     warnings = tuple(f"cannot read {rel} - the move will refuse it" for rel in unreadable)
-    open_lines = _open_task_items(project)
+    open_lines, cannot = _open_task_items(project)
+    warnings += cannot
     if open_lines:
         warnings += (f"{len(open_lines)} open task item(s) come back with it:", *open_lines)
     action = Action(

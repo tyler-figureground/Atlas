@@ -204,6 +204,20 @@ def test_archive_plan_counts_and_lists_open_task_items(fixture_drive):
     assert not any("closed" in w for w in plan.warnings)
 
 
+
+def test_archive_plan_warns_when_a_task_list_cannot_be_read(fixture_drive):
+    """#57 review (ADR 0004): a cp1252 TASKS.md read as no open items, so a
+    project with live blockers archived without a word."""
+    project = _project(fixture_drive, files={
+        "00 Tasks/TYLER.md": "# Tyler\n\n- [ ] Y-001 call the expediter\n",
+    })
+    (project / "00 Tasks" / "TASKS.md").write_bytes(b"- [ ] \x93open\x94 DECISION\n")
+
+    plan = build_archive_plan(fixture_drive, _map(fixture_drive), "260101_103 Mosco")
+
+    assert any("cannot read 00 Tasks/TASKS.md" in w and "unknown" in w for w in plan.warnings)
+    assert any("Y-001 call the expediter" in w for w in plan.warnings)
+
 def test_archive_refuses_a_missing_project(fixture_drive):
     with pytest.raises(OpsError, match="no project folder"):
         build_archive_plan(fixture_drive, _map(fixture_drive), "260101_Ghost")
