@@ -33,6 +33,7 @@ from .mapfile import DriveMap, Section, TemplateFile, find_map, load_map
 from .templates import TemplateError, render_template, template_values
 from .mcpjson import machine_mcp_server, write_mcp_json
 from .ops import OpsError, append_log, mkdir_below
+from .project_data import _rename_with_retry
 from .projectmd import (
     dossier_lines,
     FRONT_MATTER_HEAD,
@@ -876,8 +877,16 @@ def _canonical_spelling(project: Path, name: str) -> tuple[bool, str]:
     if found == name:
         return True, ""
     tmp = project / f"{found}.atlas-tmp"
-    (project / found).rename(tmp)
-    tmp.rename(project / name)
+    # Drive's transient locks (WinError 5/32) are retried, as project_data
+    # does. A second step that still fails puts the file back under its own
+    # name: stranded as .atlas-tmp, the next conform would find no AGENTS.md
+    # and write a stock one beside the person's words (#63).
+    _rename_with_retry(project / found, tmp)
+    try:
+        _rename_with_retry(tmp, project / name)
+    except OSError:
+        _rename_with_retry(tmp, project / found)
+        raise
     return True, f"renamed {found} -> {name}"
 
 
