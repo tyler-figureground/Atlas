@@ -80,3 +80,15 @@ def test_a_map_saved_with_a_bom_loads(fixture_drive):
     path = find_map(fixture_drive)
     path.write_bytes(codecs.BOM_UTF8 + path.read_bytes())
     assert load_map(path).drive == "TESTDRIVE"
+
+
+def test_a_map_saved_as_utf16_loads_and_garbage_is_a_map_error(fixture_drive):
+    """#64 review: Notepad "Unicode" writes UTF-16; cp1252 bytes must be a
+    MapError the CLI and console already handle, never a traceback."""
+    path = find_map(fixture_drive)
+    text = path.read_text(encoding="utf-8")
+    path.write_bytes(codecs.BOM_UTF16_LE + text.encode("utf-16-le"))
+    assert load_map(path).drive == "TESTDRIVE"
+    path.write_bytes(text.replace('"TESTDRIVE"', '"TÉST"').encode("cp1252"))
+    with pytest.raises(MapError, match="not UTF-8"):
+        load_map(path)
