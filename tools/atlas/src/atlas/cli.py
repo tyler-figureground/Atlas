@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+from dataclasses import replace
 from datetime import date, datetime
 from pathlib import Path
 
@@ -2242,7 +2243,13 @@ def cmd_conform(args: argparse.Namespace) -> int:
             results.append(plan)
             continue
         if args.apply:
-            results.append(apply_plan(root, inv.path, m, plan, only=only))
+            try:
+                results.append(apply_plan(root, inv.path, m, plan, only=only))
+            except OpsError as error:
+                # The project vanished between scan and apply. Record it and
+                # keep going: earlier projects' manifests must still print (#54).
+                results.append(replace(plan, actions=tuple(
+                    replace(a, status=FAILED, note=str(error)) for a in plan.actions)))
         else:
             results.append(plan)
             pending = True

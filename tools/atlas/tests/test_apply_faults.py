@@ -171,3 +171,92 @@ async def test_a_map_caught_mid_save_does_not_crash_the_console(fixture_drive):
         assert app.is_running
         assert "Nothing moved" in _operation(app) or "stopped" in _operation(app)
         assert (fixture_drive / "260703_Drift" / "Meetings").is_dir()
+
+
+def test_broken_claude_markers_are_a_conflict_not_a_crash(fixture_drive):
+    """#54: a hand-made CLAUDE.md with half an Atlas block and no AGENTS.md
+    raised AgentsBlockError out of apply_plan."""
+    from atlas.core.conform import CONFLICT
+    from atlas.core.projectmd import AGENTS_BEGIN
+
+    broken = "# House rules\n\n" + AGENTS_BEGIN + "\nhalf a block\n"
+    project = make_project(fixture_drive, "260704_Broken", sections=["01 Model"],
+                           files={"CLAUDE.md": broken})
+    plan, inv, m = _plan(fixture_drive, "260704_Broken")
+    result = apply_plan(fixture_drive, inv.path, m, plan)
+
+    action = next(a for a in result.actions if a.dst == "AGENTS.md")
+    assert action.status == CONFLICT
+    assert "CLAUDE.md" in action.note
+    assert not (project / "AGENTS.md").exists()
+    assert (project / "CLAUDE.md").read_text(encoding="utf-8") == broken
+
+
+def test_a_non_os_error_fails_that_action_and_the_rest_still_apply(fixture_drive, monkeypatch):
+    """#54: OpsError (a file where a seeded folder belongs) escaped apply_plan."""
+    import atlas.core.conform as conform
+    from atlas.core.ops import OpsError
+
+    project = make_project(fixture_drive, "260705_Ops", sections=["01 Model", "Meetings"],
+                           files={"Meetings/kickoff.md": "z"})
+    plan, inv, m = _plan(fixture_drive, "260705_Ops")
+    real = conform._apply_backfill
+
+    def backfill(project_path, m_, action):
+        if action.dst == m_.decisions_dir:
+            raise OpsError("cannot create folder; a file exists at decisions")
+        return real(project_path, m_, action)
+
+    monkeypatch.setattr(conform, "_apply_backfill", backfill)
+    result = apply_plan(fixture_drive, inv.path, m, plan)
+
+    failed = [a for a in result.actions if a.status == FAILED]
+    assert [a.dst for a in failed] == [m.decisions_dir]
+    assert "a file exists" in failed[0].note
+    assert (project / "11 Meetings" / "kickoff.md").is_file()
+
+
+def test_cli_all_keeps_the_manifest_when_a_later_project_conflicts(fixture_drive, capsys):
+    """#54: project A moved, project B crashed the loop, A's manifest was lost."""
+    from atlas.core.projectmd import AGENTS_BEGIN
+
+    make_project(fixture_drive, "260706_A", sections=["01 Model", "Meetings"],
+                 files={"Meetings/kickoff.md": "z"})
+    make_project(fixture_drive, "260707_B", sections=["01 Model"],
+                 files={"CLAUDE.md": "# Rules\n\n" + AGENTS_BEGIN + "\nhalf\n"})
+
+    status = main(["conform", "--drive", str(fixture_drive), "--all", "--apply", "--json"])
+
+    payload = {p["project"]: p for p in json.loads(capsys.readouterr().out)}
+    moved = [mv for a in payload["260706_A"]["actions"] for mv in a.get("moved", [])]
+    assert any(mv["src"].startswith("Meetings") for mv in moved)
+    b = next(a for a in payload["260707_B"]["actions"] if a["dst"] == "AGENTS.md")
+    assert b["status"] == "conflict"
+    assert status == 1
+
+
+def test_cli_all_records_a_vanished_project_and_keeps_going(fixture_drive, capsys, monkeypatch):
+    """#54: apply_plan's 'project folder is no longer available' OpsError
+    stopped the --all loop."""
+    import atlas.cli as cli
+    from atlas.core.ops import OpsError
+
+    make_project(fixture_drive, "260708_A", sections=["01 Model", "Meetings"],
+                 files={"Meetings/kickoff.md": "z"})
+    make_project(fixture_drive, "260709_Gone", sections=["01 Model", "Meetings"],
+                 files={"Meetings/kickoff.md": "z"})
+    real = cli.apply_plan
+
+    def apply(root, project, m, plan, only=None):
+        if project.name == "260709_Gone":
+            raise OpsError(f"project folder is no longer available: {project}")
+        return real(root, project, m, plan, only=only)
+
+    monkeypatch.setattr(cli, "apply_plan", apply)
+    status = main(["conform", "--drive", str(fixture_drive), "--all", "--apply", "--json"])
+
+    payload = {p["project"]: p for p in json.loads(capsys.readouterr().out)}
+    assert any(a["status"] == "done" for a in payload["260708_A"]["actions"])
+    gone = payload["260709_Gone"]["actions"]
+    assert gone and all(a["status"] == "failed" for a in gone)
+    assert status == 2

@@ -606,6 +606,11 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
             except OSError as error:
                 applied.append(replace(action, status=FAILED, note=_os_note(error)))
                 continue
+            except (OpsError, ValueError) as error:
+                # A file where a seeded folder belongs, or markers a person
+                # broke: still one action, never the whole run (#54).
+                applied.append(replace(action, status=FAILED, note=str(error)))
+                continue
             created = tuple(rel for rel in absent if (project / rel).exists())
             if created:
                 result = replace(result, created=created)
@@ -890,7 +895,12 @@ def _backfill_agents(project: Path, m: DriveMap, action: Action) -> Action:
         if meaningful_lines(text) and not is_claude_pointer(text, m) and not is_legacy_claude(text, m):
             # A person's CLAUDE.md becomes AGENTS.md with its words intact; the
             # CLAUDE.md backfill points at it once it can see them here.
-            lines, note = with_agents_block(text.splitlines(), m), f"created from {m.claude_file}"
+            try:
+                lines = with_agents_block(text.splitlines(), m)
+            except AgentsBlockError:
+                return replace(action, status=CONFLICT,
+                               note=f"Atlas markers in {m.claude_file} are broken; fix them by hand")
+            note = f"created from {m.claude_file}"
         else:
             lines, note = agents_md_lines(m), ""
         if not create_crlf_no_bom(path, lines):
