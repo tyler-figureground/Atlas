@@ -162,3 +162,17 @@ def test_a_revert_that_leaves_work_undone_exits_1(fixture_drive, capsys, tmp_pat
     (project / "Meetings" / "kickoff.md").write_text("someone else's", encoding="utf-8")
 
     assert _revert(fixture_drive, manifest, "--apply") == 1
+
+
+def test_revert_reads_a_manifest_powershell_51_redirected(fixture_drive, capsys, tmp_path):
+    """#64 review: `atlas conform --apply --json > m.json` in PowerShell 5.1
+    writes UTF-16 with a BOM; the revert crashed with a traceback."""
+    project, manifest = _applied_manifest(fixture_drive, capsys, tmp_path)
+    text = manifest.read_text(encoding="utf-8")
+    manifest.write_bytes(text.encode("utf-16"))  # BOM + UTF-16LE on Windows
+    assert _revert(fixture_drive, manifest, "--apply") == 0
+    assert (project / "Meetings" / "kickoff.md").is_file()
+
+    manifest.write_bytes(b"\xff\x00garbage")
+    assert _revert(fixture_drive, manifest, "--apply") == 2
+    assert "cannot read" in capsys.readouterr().err

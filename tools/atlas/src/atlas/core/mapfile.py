@@ -6,6 +6,7 @@ schema table (atlas-tui-spec.md section 8) for the contract this module reads.
 
 from __future__ import annotations
 
+import codecs
 import json
 import re
 from dataclasses import dataclass, field
@@ -296,11 +297,24 @@ def find_map(drive_root: Path) -> Path | None:
     return candidates[0] if candidates else None
 
 
+def read_json_text(path: Path) -> str:
+    """A JSON file's text however Windows saved it: UTF-8 with or without a
+    BOM (PowerShell 5.1 Set-Content -Encoding UTF8, Notepad), or UTF-16 with
+    its BOM (PowerShell 5.1 ``>`` redirection, Notepad "Unicode"). Anything
+    else raises UnicodeDecodeError (#64)."""
+    raw = path.read_bytes()
+    if raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return raw.decode("utf-16")
+    return raw.decode("utf-8-sig")
+
+
 def load_map(path: Path) -> DriveMap:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = json.loads(read_json_text(path))
     except OSError as e:
         raise MapError(f"cannot read map: {path}: {e}") from e
+    except UnicodeDecodeError as e:
+        raise MapError(f"map is not UTF-8 or UTF-16 text: {path}: {e}") from e
     except json.JSONDecodeError as e:
         raise MapError(f"map is not valid JSON: {path}: {e}") from e
 

@@ -61,7 +61,7 @@ from .core.intake import (
     USE_CASES,
 )
 from .core.lintmap import lint_map
-from .core.mapfile import MapError, find_map, load_map
+from .core.mapfile import MapError, find_map, load_map, read_json_text
 from .core.meetings import meeting_dict, scan_dict, scan_meetings
 from .core.permits import describe, scan_permits
 from .core.taskqueue import PARKED, TASKS_PATH, next_task, task_dict
@@ -1318,8 +1318,8 @@ def cmd_unarchive(args: argparse.Namespace) -> int:
 def _archive_revert(args: argparse.Namespace, root: Path, m) -> int:
     manifest = Path(args.revert)
     try:
-        payload = json.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        payload = json.loads(read_json_text(manifest))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
         return 2
     plans = payload if isinstance(payload, list) else [payload]
@@ -1386,7 +1386,7 @@ def _reference_root(args: argparse.Namespace) -> Path:
         return Path(os.path.abspath(args.root))
     if os.environ.get(REFERENCE_SETS_ENV):
         return Path(os.environ[REFERENCE_SETS_ENV])
-    raw = json.loads(find_map(_resolve_drive(args.drive)).read_text(encoding="utf-8"))
+    raw = json.loads(read_json_text(find_map(_resolve_drive(args.drive))))
     value = raw.get("referenceSets", "") if isinstance(raw, dict) else ""
     if not isinstance(value, str) or not value:
         raise UsageError("no reference sets folder: pass --root, set "
@@ -2129,8 +2129,8 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
     """
     manifest = Path(args.revert)
     try:
-        payload = json.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
+        payload = json.loads(read_json_text(manifest))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         print(f"error: cannot read {manifest}: {error}", file=sys.stderr)
         return 2
 

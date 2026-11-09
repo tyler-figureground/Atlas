@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import codecs
+
 import pytest
 
 from atlas.core.mapfile import MapError, find_map, load_map
@@ -70,3 +72,23 @@ def test_tolerated_must_be_a_list(tmp_path):
     write_map(drive, FIXTURE_MAP | {"tolerated": ".pi"})
     with pytest.raises(MapError):
         load_map(find_map(drive))
+
+
+def test_a_map_saved_with_a_bom_loads(fixture_drive):
+    """#64: PowerShell 5.1 Set-Content -Encoding UTF8 and Notepad write a BOM;
+    a strict utf-8 read made every Atlas command fail on that drive."""
+    path = find_map(fixture_drive)
+    path.write_bytes(codecs.BOM_UTF8 + path.read_bytes())
+    assert load_map(path).drive == "TESTDRIVE"
+
+
+def test_a_map_saved_as_utf16_loads_and_garbage_is_a_map_error(fixture_drive):
+    """#64 review: Notepad "Unicode" writes UTF-16; cp1252 bytes must be a
+    MapError the CLI and console already handle, never a traceback."""
+    path = find_map(fixture_drive)
+    text = path.read_text(encoding="utf-8")
+    path.write_bytes(codecs.BOM_UTF16_LE + text.encode("utf-16-le"))
+    assert load_map(path).drive == "TESTDRIVE"
+    path.write_bytes(text.replace('"TESTDRIVE"', '"TÉST"').encode("cp1252"))
+    with pytest.raises(MapError, match="not UTF-8"):
+        load_map(path)
