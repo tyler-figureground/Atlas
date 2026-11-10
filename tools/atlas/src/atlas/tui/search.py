@@ -113,6 +113,13 @@ def content_result_text(hit: ContentHit, cells: int) -> Text:
     return row
 
 
+# Content hits the overlay verifies per keystroke (#68): each is a stat, a
+# Drive round trip on the UI thread. Fifty fills the visible list several
+# times over; the rest are counted as unchecked, and `atlas search
+# --content` still checks every match.
+CONTENT_CHECKS = 50
+
+
 def _stamp_short(stamp: str, *, date_only: bool = False, tz: tzinfo | None = None) -> str:
     """The Indexed-At Stamp for a status line, in local time: '2026-10-09 07:31'.
 
@@ -285,8 +292,19 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
         if self._content_stale:
             found += f", {self._content_stale} stale"
         if self._content_unverified:
-            # Checked against the disk only as far as the list shows (#68).
+            # Checked against the disk only as far as the list shows (#68). A
+            # short query is exactly when this runs long, so shorter forms
+            # follow - never clipped mid-word at 46 columns.
             found += f", {self._content_unverified} unchecked"
+            stale = f", {self._content_stale} stale" if self._content_stale else ""
+            return _fit_line([
+                f"{found} - indexed {stamp}",
+                f"{found} - {date}",
+                found,
+                f"{self._content_total} content{stale}, {self._content_unverified} unchecked",
+                f"{self._content_total} content, {self._content_unverified} unchecked",
+                f"{self._content_unverified} unchecked",
+            ], cells)
         return _fit_line([
             f"{found} - indexed {stamp}",
             f"{found} - {date}",
@@ -315,7 +333,8 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
         result = search_names(self._index, query, cap=self._cap)
         content_result = None
         if self._content_index is not None:
-            content_result = query_index(self._content_index, query, cap=self._cap,
+            content_result = query_index(self._content_index, query,
+                                         cap=min(self._cap, CONTENT_CHECKS),
                                          verify_all=False)
             self._content_total = content_result.total
             self._content_stale = content_result.stale
@@ -332,7 +351,12 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
         ]
         self._hits = tuple(hit for hit, _render in rows)
         if not self._hits:
-            status.update(f"No matches for '{query}'.")
+            if self._content_unverified:
+                # Every match checked was stale and the budget ran out: the
+                # rest may hold real matches, so never "No matches" (#68).
+                status.update("Only stale matches - reindex")  # fits 34 cells
+            else:
+                status.update(f"No matches for '{query}'.")
             content_line.update(self._content_line(cells))
             return
         options.add_options(Option(render(hit, cells)) for hit, render in rows)
