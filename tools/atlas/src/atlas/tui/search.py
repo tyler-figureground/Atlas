@@ -28,6 +28,8 @@ widget applies them.
 
 from __future__ import annotations
 
+from datetime import datetime, tzinfo
+
 from rich.text import Text
 from textual import events
 from textual.app import ComposeResult
@@ -111,8 +113,20 @@ def content_result_text(hit: ContentHit, cells: int) -> Text:
     return row
 
 
-def _stamp_short(stamp: str, *, date_only: bool = False) -> str:
-    """The Indexed-At Stamp for a status line: '2026-10-09 07:31'."""
+def _stamp_short(stamp: str, *, date_only: bool = False, tz: tzinfo | None = None) -> str:
+    """The Indexed-At Stamp for a status line, in local time: '2026-10-09 07:31'.
+
+    The stamp is stored in UTC; shown raw, a 12:12 build in California read
+    '20:12', and after about 4 pm the next day's date (#66). ``tz`` is for
+    tests; None means this machine's zone.
+    """
+    try:
+        moment = datetime.fromisoformat(stamp)
+    except ValueError:
+        moment = None
+    if moment is not None and moment.tzinfo is not None:
+        local = moment.astimezone(tz)
+        return local.strftime("%Y-%m-%d" if date_only else "%Y-%m-%d %H:%M")
     date, _, time = stamp.partition("T")
     if date_only or not time:
         return date

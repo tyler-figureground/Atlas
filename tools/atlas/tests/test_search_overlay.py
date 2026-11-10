@@ -420,3 +420,17 @@ async def test_the_overlay_holds_at_30_and_24_rows(fixture_drive):
             # The row is fitted to the dialog, so its distinguishing tail survives.
             assert "notes.md" in "\n".join(_drawn_results(overlay))
             assert "1 match" in _status(overlay)
+
+
+def test_the_indexed_stamp_is_shown_in_local_time():
+    """#66: stored UTC, shown raw - a 12:12 Pacific build read 20:12, and
+    late afternoon showed tomorrow's date."""
+    from datetime import timedelta, timezone
+
+    from atlas.tui.search import _stamp_short
+
+    pacific = timezone(timedelta(hours=-8))
+    stamp = "2026-11-09T20:12:57+00:00"
+    assert _stamp_short(stamp, tz=pacific) == "2026-11-09 12:12"
+    assert _stamp_short("2026-11-10T01:30:00+00:00", tz=pacific, date_only=True) == "2026-11-09"
+    assert _stamp_short("2026-10-09T07:31", tz=pacific) == "2026-10-09 07:31"  # naive: as stored

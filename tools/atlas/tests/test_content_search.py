@@ -25,7 +25,7 @@ from atlas.core.contentindex import build_index, load_index, query_index
 from atlas.core.search import build_name_index
 from atlas.tui.app import AtlasApp
 from atlas.tui.layout import search_overlay_cells
-from atlas.tui.search import SearchOverlay
+from atlas.tui.search import SearchOverlay, _stamp_short
 from atlas.tui.treeview import ProjectTreeView
 
 from conftest import make_pdf, make_project
@@ -272,7 +272,7 @@ async def test_content_matches_join_below_name_matches(fixture_drive):
         assert "zoning notes.md" in content_rows[0]
         assert "zoning variance approved" in content_rows[0]
         assert "1 content match" in _content_line(overlay)
-        assert index.indexed_at.partition("T")[0] in _content_line(overlay)
+        assert _stamp_short(index.indexed_at, date_only=True) in _content_line(overlay)
 
 
 async def test_the_stamp_is_visible_before_any_query(fixture_drive):
@@ -288,7 +288,7 @@ async def test_the_stamp_is_visible_before_any_query(fixture_drive):
         overlay = _overlay(app)
         line = _content_line(overlay)
         assert "content: indexed" in line
-        assert index.indexed_at.partition("T")[0] in line
+        assert _stamp_short(index.indexed_at, date_only=True) in line
 
 
 async def test_a_content_only_match_is_not_no_matches(fixture_drive):
@@ -494,7 +494,7 @@ async def test_content_rows_hold_at_30_and_24_rows(fixture_drive):
             assert dialog.size.height <= rows, (width, rows)
             # The stamp survives at every width (the date, when the full word
             # and timestamp no longer fit).
-            assert index.indexed_at.partition("T")[0] in _content_line(overlay)
+            assert _stamp_short(index.indexed_at, date_only=True) in _content_line(overlay)
             assert any(row.startswith("markdown") for row in _rows(overlay))
 
 
