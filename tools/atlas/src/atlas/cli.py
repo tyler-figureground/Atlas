@@ -1386,7 +1386,15 @@ def _reference_root(args: argparse.Namespace) -> Path:
         return Path(os.path.abspath(args.root))
     if os.environ.get(REFERENCE_SETS_ENV):
         return Path(os.environ[REFERENCE_SETS_ENV])
-    raw = json.loads(read_json_text(find_map(_resolve_drive(args.drive))))
+    drive = _resolve_drive(args.drive)
+    map_path = find_map(drive)
+    if map_path is None:
+        raise MapError(f"no _tools/*-map.json under {drive}")
+    # A malformed map is a MapError like everywhere else, never a traceback (#67).
+    try:
+        raw = json.loads(read_json_text(map_path))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise MapError(f"map is not valid JSON: {map_path}: {error}") from error
     value = raw.get("referenceSets", "") if isinstance(raw, dict) else ""
     if not isinstance(value, str) or not value:
         raise UsageError("no reference sets folder: pass --root, set "
@@ -2728,11 +2736,13 @@ def main(argv: list[str] | None = None) -> int:
                                         help="limit apply to an action class (repeatable)")
 
     args = parser.parse_args(argv)
-    if args.command is None:
-        from .tui.app import run_tui  # lazy: textual import only when needed
-        drive = _resolve_drive(args.console_drive) if args.console_drive else None
-        return run_tui(drive)
     try:
+        if args.command is None:
+            # A typo in `Atlas.bat --drive G:\typo` is a usage error, exit 2 -
+            # never a traceback and exit 1, which means findings (#67).
+            drive = _resolve_drive(args.console_drive) if args.console_drive else None
+            from .tui.app import run_tui  # lazy: textual import only when needed
+            return run_tui(drive)
         return args.fn(args)
     except (ContactError, IntakeError, OpsError, ProjectDataError, MapError,
             TemplateError, UsageError, RefSetError, PdfError, OSError) as error:

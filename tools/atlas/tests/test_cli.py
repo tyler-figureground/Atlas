@@ -1217,3 +1217,19 @@ def test_other_without_custom_label_returns_2(fixture_drive, capsys):
     assert status == 2
     assert "custom Project Use Case" in captured.err
     assert captured.out == ""
+
+
+def test_a_bad_console_drive_is_a_usage_error_not_a_traceback(tmp_path, capsys):
+    """#67: `Atlas.bat --drive G:/typo` raised UsageError outside main's try:
+    a raw traceback and exit 1, which the CLI reserves for findings."""
+    assert main(["--drive", str(tmp_path / "typo")]) == 2
+    assert "no _tools/*-map.json" in capsys.readouterr().err
+
+
+def test_refs_with_a_malformed_map_is_an_error_not_a_traceback(fixture_drive, capsys, monkeypatch):
+    from atlas.cli import REFERENCE_SETS_ENV
+
+    monkeypatch.delenv(REFERENCE_SETS_ENV, raising=False)
+    (fixture_drive / "_tools" / "testdrive-map.json").write_text("{half", encoding="utf-8")
+    assert main(["refs", "--drive", str(fixture_drive)]) == 2
+    assert "not valid JSON" in capsys.readouterr().err
