@@ -640,3 +640,59 @@ def test_search_content_marks_a_partial_index(fixture_drive, cache_dir, monkeypa
     assert json.loads(capsys.readouterr().out)["content"]["complete"] is False
     main(["search", "--drive", str(fixture_drive), "--content", "a"])
     assert "partial" in capsys.readouterr().out
+
+
+
+def _broad_drive(drive, n=40):
+    files = {f"06 Research/note-{i:02}.md": f"note {i} about the building" for i in range(n)}
+    make_project(drive, "260813_Broad", sections=["06 Research"], files=files)
+
+
+def _count_stats(monkeypatch):
+    calls = []
+    real = os.stat
+
+    def counting(path, *args, **kwargs):
+        if "260813_Broad" in os.fspath(path):
+            calls.append(path)
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(contentindex.os, "stat", counting)
+    return calls
+
+
+def test_a_keystroke_query_stats_only_what_it_shows(fixture_drive, cache_dir, monkeypatch):
+    """#68: a one-letter query matched every file and stat-ed each one on the
+    UI thread - thousands of Drive round trips per keystroke."""
+    _broad_drive(fixture_drive)
+    index = build_index(fixture_drive, cache_dir=cache_dir)
+    calls = _count_stats(monkeypatch)
+
+    result = query_index(index, "building", cap=5, verify_all=False)
+
+    assert len(calls) <= 5 * 4
+    assert len(result.hits) == 5
+    assert result.total == 40 and result.unverified == 40 - len(calls)
+    assert result.stale == 0
+
+
+def test_the_budget_stops_a_mostly_stale_index(fixture_drive, cache_dir, monkeypatch):
+    _broad_drive(fixture_drive)
+    index = build_index(fixture_drive, cache_dir=cache_dir)
+    for i in range(40):
+        path = fixture_drive / "260813_Broad" / "06 Research" / f"note-{i:02}.md"
+        path.write_text(f"note {i} about the building, revised", encoding="utf-8")
+    calls = _count_stats(monkeypatch)
+
+    result = query_index(index, "building", cap=5, verify_all=False)
+
+    assert len(calls) == 20, "4 x cap, then stop"
+    assert result.hits == () and result.stale == 20 and result.unverified == 20
+
+
+def test_the_cli_path_still_verifies_every_match(fixture_drive, cache_dir, monkeypatch):
+    _broad_drive(fixture_drive)
+    index = build_index(fixture_drive, cache_dir=cache_dir)
+    calls = _count_stats(monkeypatch)
+    result = query_index(index, "building", cap=5)
+    assert len(calls) == 40 and result.unverified == 0 and result.total == 40

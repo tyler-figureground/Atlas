@@ -25,7 +25,7 @@ from atlas.core.contentindex import build_index, load_index, query_index
 from atlas.core.search import build_name_index
 from atlas.tui.app import AtlasApp
 from atlas.tui.layout import search_overlay_cells
-from atlas.tui.search import SearchOverlay, _stamp_short
+from atlas.tui.search import CONTENT_CHECKS, SearchOverlay, _stamp_short
 from atlas.tui.treeview import ProjectTreeView
 
 from conftest import make_pdf, make_project
@@ -657,3 +657,36 @@ async def test_no_second_build_starts_beside_a_live_one(fixture_drive, monkeypat
         await settle(app, pilot)
         assert len(builds) == 1
         assert app._content_index.complete and not app._content_live
+
+
+async def test_the_overlay_bounds_its_stats_and_fits_the_unchecked_count(fixture_drive, monkeypatch):
+    """#68 review: the overlay must use the bounded query (a regression there
+    would bring back a stat per match per keystroke), and the unchecked count
+    must fit 46 columns whole."""
+    import os
+
+    from atlas.core import contentindex
+
+    files = {f"06 Research/note-{i:03}.md": f"note {i} about the building" for i in range(300)}
+    make_project(fixture_drive, "260813_Broad", sections=["06 Research"], files=files)
+    build_index(fixture_drive)
+    app = AtlasApp(fixture_drive, follow_debounce=0)
+    async with app.run_test(size=(46, 51)) as pilot:
+        await settle(app, pilot)
+        await pilot.press("g")
+        await settle(app, pilot)
+        calls = []
+        real = os.stat
+
+        def counting(path, *args, **kwargs):
+            if "260813_Broad" in os.fspath(path):
+                calls.append(path)
+            return real(path, *args, **kwargs)
+
+        monkeypatch.setattr(contentindex.os, "stat", counting)
+        await pilot.press(*"building")
+        await settle(app, pilot)
+        overlay = _overlay(app)
+        assert len(calls) <= 8 * CONTENT_CHECKS, "bounded per keystroke (nothing stale)"
+        line = _content_line(overlay)
+        assert "unchecked" in line and "…" not in line
