@@ -354,7 +354,7 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
             if self._content_unverified:
                 # Every match checked was stale and the budget ran out: the
                 # rest may hold real matches, so never "No matches" (#68).
-                status.update("Only stale matches - reindex")  # fits 34 cells
+                status.update("Stale - run `atlas index build`")  # fits 34 cells
             else:
                 status.update(f"No matches for '{query}'.")
             content_line.update(self._content_line(cells))

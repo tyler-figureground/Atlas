@@ -687,6 +687,6 @@ async def test_the_overlay_bounds_its_stats_and_fits_the_unchecked_count(fixture
         await pilot.press(*"building")
         await settle(app, pilot)
         overlay = _overlay(app)
-        assert len(calls) <= 8 * 4 * CONTENT_CHECKS, "bounded per keystroke"
+        assert len(calls) <= 8 * CONTENT_CHECKS, "bounded per keystroke (nothing stale)"
         line = _content_line(overlay)
         assert "unchecked" in line and "…" not in line
