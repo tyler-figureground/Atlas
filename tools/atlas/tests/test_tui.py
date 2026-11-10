@@ -127,7 +127,7 @@ async def test_follow_timer_firing_during_teardown_is_a_no_op(fixture_drive):
         await settle(app, pilot)
         assert app.query_one("#projects").row_count == 2
         await pilot.press("down")      # unread project: the update arms a timer
-        await pilot.pause()
+        await wait_for(app, pilot, lambda: app._follow_timer is not None)
         assert app._follow_timer is not None
         follow = fired[-1]
     follow()  # the pending timer, firing against a torn-down app: must bail
