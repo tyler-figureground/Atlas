@@ -2736,13 +2736,18 @@ def main(argv: list[str] | None = None) -> int:
                                         help="limit apply to an action class (repeatable)")
 
     args = parser.parse_args(argv)
-    try:
-        if args.command is None:
-            # A typo in `Atlas.bat --drive G:\typo` is a usage error, exit 2 -
-            # never a traceback and exit 1, which means findings (#67).
+    if args.command is None:
+        # A typo in `Atlas.bat --drive G:\typo` is a usage error, exit 2 -
+        # never a traceback and exit 1, which means findings (#67). Only the
+        # resolve is guarded: a console crash keeps its traceback.
+        try:
             drive = _resolve_drive(args.console_drive) if args.console_drive else None
-            from .tui.app import run_tui  # lazy: textual import only when needed
-            return run_tui(drive)
+        except (MapError, UsageError, OSError) as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        from .tui.app import run_tui  # lazy: textual import only when needed
+        return run_tui(drive)
+    try:
         return args.fn(args)
     except (ContactError, IntakeError, OpsError, ProjectDataError, MapError,
             TemplateError, UsageError, RefSetError, PdfError, OSError) as error:
