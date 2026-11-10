@@ -114,6 +114,46 @@ def test_stamp_sets_only_the_status_cell_and_returns_the_prior_row(fixture_drive
     assert stamped.split("|")[1:-2] == prior.split("|")[1:-2]
 
 
+def test_a_stamp_keeps_unicode_line_separators_in_hand_written_text(fixture_drive):
+    """#78: the index rewrite split on str.splitlines(), so a U+2028 or form
+    feed in a note under the table became a real line break on every stamp."""
+    _project(fixture_drive)
+    _index_row(fixture_drive, "260101_103 Mosco")
+    index_path = fixture_drive / "_Project Index.md"
+    note = "Note: Mosco is on\u2028hold until\x0cspring."
+    index_path.write_bytes(index_path.read_bytes() + f"\r\n{note}\r\n".encode("utf-8"))
+
+    stamp_project_index_status(fixture_drive, _map(fixture_drive),
+                               "260101_103 Mosco", "archived 2026-11-09")
+
+    text = index_path.read_bytes().decode("utf-8")
+    assert note in text, "the separators stay inside the line"
+    assert "archived 2026-11-09" in text
+
+
+def test_a_separator_in_an_earlier_row_does_not_hide_the_stamped_row(fixture_drive):
+    """#78 review: a U+2028 in a hand-edited cell split that row, the table
+    seemed to end there, and the stamp of every later row silently missed."""
+    _index_row(fixture_drive, "260101_100 Alpha")
+    _project(fixture_drive)
+    _index_row(fixture_drive, "260101_103 Mosco")
+    index_path = fixture_drive / "_Project Index.md"
+    text = index_path.read_bytes().decode("utf-8")
+    alpha = next(line for line in text.split("\r\n") if "260101_100 Alpha" in line)
+    edited = alpha.replace("260101_100 Alpha", "260101_100 Al\u2028pha", 1)
+    assert edited != alpha
+    index_path.write_bytes(text.replace(alpha, edited).encode("utf-8"))
+
+    returned = stamp_project_index_status(fixture_drive, _map(fixture_drive),
+                                          "260101_103 Mosco", "archived 2026-11-09")
+
+    assert returned is not None, "the later row is still found"
+    after = index_path.read_bytes().decode("utf-8")
+    assert edited in after.split("\r\n"), "the edited row is untouched"
+    mosco = next(line for line in after.split("\r\n") if "260101_103 Mosco" in line)
+    assert _status_cell(mosco) == "archived 2026-11-09"
+
+
 def test_stamp_without_a_matching_row_changes_nothing(fixture_drive):
     _project(fixture_drive)
     m = _map(fixture_drive)

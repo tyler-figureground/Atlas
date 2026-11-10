@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from .intake import ProjectIntake
 from .mapfile import DriveMap
+from .projectmd import dossier_lines  # CR/LF only: U+2028 and friends are text (#78)
 
 
 __all__ = [
@@ -197,7 +198,7 @@ def _migrate_legacy(
     backup = _move_legacy_to_backup(path)
     try:
         moved_contents = backup.read_bytes()
-        moved_lines = moved_contents.decode("utf-8").splitlines()
+        moved_lines = dossier_lines(moved_contents.decode("utf-8"))
         moved_header = next(
             index for index, line in enumerate(moved_lines) if line.strip() == LEGACY_HEADER
         )
@@ -252,7 +253,7 @@ def _prepare_locked(path: Path, drive_map: DriveMap) -> Path:
         return path
     try:
         contents = path.read_bytes()
-        lines = contents.decode("utf-8").splitlines()
+        lines = dossier_lines(contents.decode("utf-8"))
     except (OSError, UnicodeDecodeError) as error:
         raise ProjectIndexError(
             f"cannot read UTF-8 project index {path}: {error}; index unchanged"
@@ -340,7 +341,7 @@ def append_project_index_row(
         row = _project_row(folder_name, intake)
         try:
             existing_contents = path.read_bytes()
-            lines = existing_contents.decode("utf-8").splitlines()
+            lines = dossier_lines(existing_contents.decode("utf-8"))
         except (OSError, UnicodeDecodeError) as error:
             raise ProjectIndexError(
                 f"cannot read UTF-8 project index {path}: {error}; index unchanged"
@@ -387,7 +388,7 @@ def stamp_project_index_status(
     with _index_lock(path):
         try:
             contents = path.read_bytes()
-            lines = contents.decode("utf-8").splitlines()
+            lines = dossier_lines(contents.decode("utf-8"))
         except (OSError, UnicodeDecodeError) as error:
             raise ProjectIndexError(
                 f"cannot read UTF-8 project index {path}: {error}; index unchanged"
@@ -425,7 +426,7 @@ def restore_project_index_row(
     with _index_lock(path):
         try:
             contents = path.read_bytes()
-            lines = contents.decode("utf-8").splitlines()
+            lines = dossier_lines(contents.decode("utf-8"))
         except (OSError, UnicodeDecodeError) as error:
             raise ProjectIndexError(
                 f"cannot read UTF-8 project index {path}: {error}; index unchanged"
@@ -455,7 +456,7 @@ def update_project_index_row(
     with _index_lock(path):
         try:
             contents = path.read_bytes()
-            lines = contents.decode("utf-8").splitlines()
+            lines = dossier_lines(contents.decode("utf-8"))
         except (OSError, UnicodeDecodeError) as error:
             raise ProjectIndexError(
                 f"cannot read UTF-8 project index {path}: {error}; index unchanged"
