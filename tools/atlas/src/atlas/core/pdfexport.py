@@ -71,13 +71,17 @@ def strip_front_matter(text: str) -> tuple[str, dict[str, str]]:
     return text[match.end():], fields
 
 
-def render_html(markdown: str, fallback_title: str) -> str:
+def render_html(markdown: str, fallback_title: str, base_dir: Path | None = None) -> str:
     body, fields = strip_front_matter(markdown)
     heading = re.search(r"^#\s+(.+)$", body, re.M)
     title = fields.get("title") or (heading.group(1).strip() if heading else fallback_title)
     md = MarkdownIt("commonmark", {"html": True, "linkify": False}).enable("table")
+    # The page is printed from a temp dir; without a base, ![plan](img/p.png)
+    # resolves there and prints as a broken-image icon (#65).
+    base = (f'<base href="{html.escape(Path(base_dir).resolve().as_uri() + "/")}">'
+            if base_dir is not None else "")
     return ("<!doctype html><html><head><meta charset='utf-8'>"
-            f"<title>{html.escape(title)}</title><style>{CSS}</style></head>"
+            f"{base}<title>{html.escape(title)}</title><style>{CSS}</style></head>"
             f"<body>{md.render(body)}</body></html>")
 
 
@@ -113,7 +117,8 @@ def export_pdf(source: Path, out: Path | None = None, *, force: bool = False,
     if replaced and not force and pdf.stat().st_mtime >= source.stat().st_mtime:
         raise PdfError(f"{pdf.name} is newer than {source.name} and may hold later edits; "
                        "pass --force to replace it")
-    page = render_html(source.read_text(encoding="utf-8", errors="replace"), source.stem)
+    page = render_html(source.read_text(encoding="utf-8", errors="replace"), source.stem,
+                       base_dir=source.parent)
     browser = browser or find_browser()
     with tempfile.TemporaryDirectory(prefix="atlas-pdf-") as tmp:
         html_path = Path(tmp) / "page.html"
