@@ -400,6 +400,9 @@ class ContentResult:
     stale: int
     index: ContentIndex
     archived: int = 0   # matches in archived projects, shown or not
+    # Matches never stat-checked (``verify_all=False``): in ``total``, not in
+    # ``hits`` or ``stale`` - counted, never dropped (#68).
+    unverified: int = 0
 
     @property
     def overflow(self) -> int:
@@ -407,26 +410,43 @@ class ContentResult:
 
 
 def query_index(index: ContentIndex, query: str, *,
-                cap: int = RESULT_CAP, archived: bool = True) -> ContentResult:
+                cap: int = RESULT_CAP, archived: bool = True,
+                verify_all: bool = True) -> ContentResult:
     """Case-folded substring over the indexed text, revalidated against disk.
 
     Never reads content: the revalidation is one stat per matching candidate,
     and a match whose key changed is stale - a top-up's job, not a query-time
     download (ticket 08). Live hits rank before archived ones;
     ``archived=False`` leaves the archive's out.
+
+    ``verify_all=False`` is the keystroke path (#68): a one-letter query
+    matches nearly every file, and a stat per match is a Drive round trip on
+    the UI thread. It stats in rank order only until ``cap`` hits hold, within
+    a budget of ``4 * cap`` stats; matches never checked are counted in
+    ``unverified`` (and in ``total``), never dropped or silently trusted.
     """
     needle = content.normalise(query)
     if not needle:
         return ContentResult(query=query, hits=(), total=0, stale=0, index=index)
-    hits: list[ContentHit] = []
-    stale = 0
+    live: list[tuple[IndexedFile, int]] = []
+    in_archive_list: list[tuple[IndexedFile, int]] = []
     for entry in index.files:
         in_archive = index.is_archived(entry.path)
         if in_archive and not archived:
             continue
         where = entry.text.find(needle)
-        if where < 0:
-            continue
+        if where >= 0:
+            (in_archive_list if in_archive else live).append((entry, where))
+    candidates = live + in_archive_list
+    budget = None if verify_all else 4 * cap
+    hits: list[ContentHit] = []
+    stale = 0
+    checked = 0
+    for entry, where in candidates:
+        if budget is not None and (len(hits) >= cap or checked >= budget):
+            break
+        checked += 1
+        in_archive = index.is_archived(entry.path)
         try:
             stat = os.stat(long_path(index.root / entry.path))
         except OSError:
@@ -444,9 +464,11 @@ def query_index(index: ContentIndex, query: str, *,
                                snippet=_snippet(entry.text, where, len(needle)),
                                archived=in_archive, root=root))
     ordered = live_first(hits)
-    return ContentResult(query=query, hits=ordered[:cap], total=len(ordered),
+    unverified = len(candidates) - checked
+    return ContentResult(query=query, hits=ordered[:cap], total=len(ordered) + unverified,
                          stale=stale, index=index,
-                         archived=sum(1 for h in ordered if h.archived))
+                         archived=sum(1 for h in ordered if h.archived),
+                         unverified=unverified)
 
 
 def _snippet(text: str, where: int, length: int) -> str:

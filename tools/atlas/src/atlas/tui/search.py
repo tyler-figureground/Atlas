@@ -174,6 +174,7 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
         # The last content query, so the stamp line can carry its counts.
         self._content_total = 0
         self._content_stale = 0
+        self._content_unverified = 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="search-dialog"):
@@ -283,6 +284,9 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
             "es" if self._content_total != 1 else "")
         if self._content_stale:
             found += f", {self._content_stale} stale"
+        if self._content_unverified:
+            # Checked against the disk only as far as the list shows (#68).
+            found += f", {self._content_unverified} unchecked"
         return _fit_line([
             f"{found} - indexed {stamp}",
             f"{found} - {date}",
@@ -298,6 +302,7 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
         self._hits = ()
         self._content_total = 0
         self._content_stale = 0
+        self._content_unverified = 0
         if self._index is None:
             status.update("Indexing drive names - one moment.")
             content_line.update(self._content_line(cells))
@@ -310,9 +315,11 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
         result = search_names(self._index, query, cap=self._cap)
         content_result = None
         if self._content_index is not None:
-            content_result = query_index(self._content_index, query, cap=self._cap)
+            content_result = query_index(self._content_index, query, cap=self._cap,
+                                         verify_all=False)
             self._content_total = content_result.total
             self._content_stale = content_result.stale
+            self._content_unverified = content_result.unverified
         content_hits = content_result.hits if content_result is not None else ()
         # Live work first, then the archive (plan Q3) - so an archived name
         # never pushes a live content match down. Within each, name matches

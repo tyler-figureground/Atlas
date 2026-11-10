@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Typing in content search no longer stalls on the shared drive (#68).** Every keystroke checked every matching file against the drive, and a one- or two-letter query matches nearly every file: thousands of Drive round trips on the console's own thread. The overlay now checks only as many matches as it shows (at most four times that if many are stale) and reports the rest as "unchecked". `atlas search --content` still checks every match.
 - **A mistyped `--drive` or a malformed map is a plain error, not a traceback (#67).** `Atlas.bat --drive` with a path that holds no drive map printed a Python traceback and exited 1, the code the CLI reserves for findings. `atlas refs` on a drive whose map is malformed did the same. Both now print one error line and exit 2.
 - **Content search shows when the index was built in local time (#66).** The stamp is stored in UTC and was shown as-is, so a 12:12 build in California read "20:12", and late in the afternoon it showed the next day's date. The console now converts it to the machine's time zone; the CLI (`atlas index status`, `index build`, `search --content`) still prints the full stamp with its `+00:00` offset.
 - **`atlas pdf` prints the images a Markdown file links to (#65).** A relative image path such as `img/p.png` resolved against the temporary folder the page was printed from, so the PDF showed a broken-image icon while the export reported success. Images now resolve against the Markdown file's own folder.
