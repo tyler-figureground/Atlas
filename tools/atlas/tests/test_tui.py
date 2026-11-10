@@ -111,14 +111,26 @@ async def test_follow_timer_firing_during_teardown_is_a_no_op(fixture_drive):
     new_project(fixture_drive, m, make_intake(fixture_drive, "Alpha", created=date(2026, 8, 13)))
     make_project(fixture_drive, "260813_Beta", sections=["01 Model"])
 
-    app = AtlasApp(fixture_drive)
+    # Deterministic (#74): a debounce no CI runner can outlast keeps the timer
+    # pending, and the recorded callback is then fired by hand after teardown,
+    # rather than hoping a real timer lands in the shutdown window.
+    app = AtlasApp(fixture_drive, follow_debounce=60)
+    fired = []
+    real_set_timer = app.set_timer
+
+    def recording(delay, callback, *args, **kwargs):
+        fired.append(callback)
+        return real_set_timer(delay, callback, *args, **kwargs)
+
+    app.set_timer = recording
     async with app.run_test() as pilot:
         await settle(app, pilot)
         assert app.query_one("#projects").row_count == 2
         await pilot.press("down")      # unread project: the update arms a timer
+        await wait_for(app, pilot, lambda: app._follow_timer is not None)
         assert app._follow_timer is not None
-        # Exit the context inside the debounce window: if the pending timer
-        # raises during teardown, run_test re-raises it here.
+        follow = fired[-1]
+    follow()  # the pending timer, firing against a torn-down app: must bail
 
 
 async def test_new_project_wizard_creates_complete_project(fixture_drive):
