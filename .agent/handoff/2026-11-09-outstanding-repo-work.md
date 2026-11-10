@@ -46,7 +46,7 @@ File one `ready-for-agent` issue for baseline 6.1 and 2-4 bundled issues for the
 - **Auto-merge is disabled** in this repo, and repo settings are off-limits. Wait for both checks (`Lint`, `Atlas`) on the **head SHA**: `gh run list --branch <b> --json headSha,status,conclusion`. `gh pr checks --watch` and grepping `gh pr checks` can match an earlier commit's runs. Then `gh pr merge <n> --merge`. Its "main already used by worktree" error is harmless.
 - **Removing a worktree** fails with "Permission denied" while the shell sits inside it or its `.venv` is busy (uv creates a `.venv` per worktree). Run `git worktree remove --force` from the repo root, then delete the empty folders left behind (check they contain no files or links first).
 - **Reviewer subagents deleted files from the scratchpad** once. Tell them to use their own subfolder and never touch the parent's files.
-- **The lint (`scripts/lint.sh`) checks link-shaped text even inside CHANGELOG code spans.** `![x](img/p.png)` failed it once.
+- **The lint (`scripts/lint.sh`) checks link-shaped text even inside CHANGELOG code spans.** A Markdown image example with a relative path failed it once; write the path alone (`img/p.png`). Locally the lint can pass where CI fails, so wait for CI.
 - **Tests that assert a raw UTC date fail on a Pacific machine after about 4 pm.** Use `tui.search._stamp_short`.
 - `tests/test_path_length.py` long-path and trailing-space tests are Windows-only. CI (ubuntu) doesn't run them, so run them locally.
 - Full suite: `cd tools/atlas && PYTHONUTF8=1 uv run pytest -q -p no:cacheprovider`. About 1,645 tests, about 5 minutes. Capture the output to a file and check the exit code; don't pipe.
