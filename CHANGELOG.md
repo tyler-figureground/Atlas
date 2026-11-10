@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [Atlas 0.32.0] - 2026-11-09
+
 ### Fixed
 
 - **Stamping `_Project Index.md` keeps hand-written text intact (#78).** Every archive, unarchive or status stamp rewrote the whole register, and a Unicode line separator or form feed in a hand-written note (common in text pasted from the web or Word) came back split into real line breaks. Only CR and LF are line breaks now, as for `AGENTS.md` (#61).
