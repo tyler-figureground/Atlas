@@ -99,3 +99,19 @@ def test_cli_json(tmp_path: Path, monkeypatch, capsys):
     src.write_text("# Memo\n", encoding="utf-8")
     assert main(["pdf", str(src), "--json"]) == 0
     assert '"replaced": false' in capsys.readouterr().out
+
+
+def test_relative_images_resolve_against_the_markdown_folder(tmp_path):
+    """#65: the page is printed from a temp dir, so ![plan](img/p.png) became
+    Edge's broken-image icon and the export still said it succeeded."""
+    folder = tmp_path / "08 OUT" / "Code memo"
+    folder.mkdir(parents=True)
+    page = render_html("# Memo\n\n![plan](img/p.png)\n", "x", base_dir=folder)
+    base = folder.resolve().as_uri() + "/"
+    assert f'<base href="{base}">' in page
+    assert page.index("<base ") < page.index("<body>")
+    assert "%20" in base, "spaces in studio paths are percent-encoded"
+
+
+def test_no_base_without_a_folder():
+    assert "<base " not in render_html("# Memo\n", "x")
