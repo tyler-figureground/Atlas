@@ -114,6 +114,23 @@ def test_stamp_sets_only_the_status_cell_and_returns_the_prior_row(fixture_drive
     assert stamped.split("|")[1:-2] == prior.split("|")[1:-2]
 
 
+
+def test_a_stamp_keeps_unicode_line_separators_in_hand_written_text(fixture_drive):
+    """#78: the index rewrite split on str.splitlines(), so a U+2028 or form
+    feed in a note under the table became a real line break on every stamp."""
+    _project(fixture_drive)
+    _index_row(fixture_drive, "260101_103 Mosco")
+    index_path = fixture_drive / "_Project Index.md"
+    note = "Note: Mosco is on\u2028hold until\x0cspring."
+    index_path.write_bytes(index_path.read_bytes() + f"\r\n{note}\r\n".encode("utf-8"))
+
+    stamp_project_index_status(fixture_drive, _map(fixture_drive),
+                               "260101_103 Mosco", "archived 2026-11-09")
+
+    text = index_path.read_bytes().decode("utf-8")
+    assert note in text, "the separators stay inside the line"
+    assert "archived 2026-11-09" in text
+
 def test_stamp_without_a_matching_row_changes_nothing(fixture_drive):
     _project(fixture_drive)
     m = _map(fixture_drive)
