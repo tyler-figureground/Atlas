@@ -581,12 +581,23 @@ def test_manifest_round_trips(fixture_drive):
     assert back.actions[0].kind == ARCHIVE
     assert back.actions[0].index_row == prior
     assert back.actions[0].moved == applied.actions[0].moved
+    assert back.actions[0].created_unknown == ()
+    del payload["actions"][0]["created_unknown"]
+    assert archive_plan_from_dict(payload).actions[0].created_unknown == ()
+    payload["actions"][0]["created_unknown"] = ["_Archived Projects"]
+    uncertain = archive_plan_from_dict(json.loads(json.dumps(payload)))
+    assert uncertain.actions[0].created_unknown == ("_Archived Projects",)
+    assert archive_plan_to_dict(uncertain, m.drive)["actions"][0]["created_unknown"] == [
+        "_Archived Projects"]
+    with pytest.raises(NotInvertible, match="unknown creation state"):
+        invert_archive_plan(uncertain)
 
 
 @pytest.mark.parametrize("field,value", [
     ("src", "../outside"),
     ("dst", "/absolute"),
     ("dst", "C:/elsewhere"),
+    ("created_unknown", ["../outside"]),
 ])
 def test_manifest_paths_cannot_leave_the_drive(fixture_drive, field, value):
     action = {"kind": "archive", "src": "260101_X", "dst": "_Archived Projects/260101_X",

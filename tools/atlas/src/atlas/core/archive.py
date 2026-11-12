@@ -342,6 +342,11 @@ def invert_archive_plan(plan: ArchivePlan) -> ArchivePlan:
     """
     actions: list[Action] = []
     for action in plan.actions:
+        if action.created_unknown:
+            raise NotInvertible(
+                f"{action.kind} {action.src} has unknown creation state; "
+                f"the plan cannot be reversed"
+            )
         if action.status == FAILED and not action.moved:
             raise NotInvertible(
                 f"{action.kind} {action.src} failed before anything moved; "
@@ -428,13 +433,10 @@ def _apply_one(drive_root: Path, m: DriveMap, plan: ArchivePlan,
     created = tuple(rel for rel in absent if (drive_root / rel).exists())
     moved = (Move(src=action.src, dst=action.dst, is_dir=True),)
 
-    if action.keep_index:
-        result = replace(action, status=DONE, moved=moved, created=created)
-        if result.prune:
-            _prune_empty(drive_root, result.prune)
-        return result
     try:
-        if action.index_row:
+        if action.keep_index:
+            prior = None
+        elif action.index_row:
             # An inverse restores the recorded row verbatim; only a fresh plan
             # stamps.
             prior = restore_project_index_row(drive_root, m, plan.project,
@@ -452,9 +454,10 @@ def _apply_one(drive_root: Path, m: DriveMap, plan: ArchivePlan,
         return replace(action, status=FAILED, moved=moved, created=created,
                        note=f"folder moved; the project index stamp failed: {error}")
 
-    note = action.note if prior is not None else f"{action.note}; no project-index row"
+    note = (action.note if action.keep_index or prior is not None
+            else f"{action.note}; no project-index row")
     result = replace(action, status=DONE, moved=moved, created=created,
-                     index_row=prior or "", note=note)
+                     index_row=action.index_row if action.keep_index else prior or "", note=note)
     if result.prune:
         _prune_empty(drive_root, result.prune)
     return result
@@ -527,6 +530,8 @@ def archive_plan_from_dict(payload: dict) -> ArchivePlan:
                 ),
                 path_length=a.get("path_length", 0),
                 created=tuple(_drive_relative(k, "created") for k in a.get("created", ())),
+                created_unknown=tuple(_drive_relative(k, "created_unknown")
+                                      for k in a.get("created_unknown", ())),
                 prune=tuple(_drive_relative(k, "prune") for k in a.get("prune", ())),
                 index_row=_row_text(a.get("index_row", "")),
             )

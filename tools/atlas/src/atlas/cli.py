@@ -28,6 +28,7 @@ from .core.archive import (
 from .core.conform import (
     DONE,
     FAILED,
+    SKIPPED,
     NotInvertible,
     Plan,
     action_to_dict,
@@ -2181,7 +2182,15 @@ def cmd_revert(args: argparse.Namespace, root: Path, m) -> int:
         _print_plans(inverses, args, m.drive, applied=False)
         return 1 if any(not p.empty for p in inverses) else 0
 
-    results = [apply_plan(root, root / inverse.project, m, inverse) for inverse in inverses]
+    results = []
+    for inverse in inverses:
+        try:
+            results.append(apply_plan(root, root / inverse.project, m, inverse))
+        except (OpsError, OSError) as error:
+            # Preflight cannot prevent a project disappearing during the batch.
+            # Keep earlier manifests and still attempt the remaining projects.
+            results.append(replace(inverse, actions=tuple(
+                replace(a, status=FAILED, note=str(error)) for a in inverse.actions)))
     _print_plans(results, args, m.drive, applied=True)
     if any(a.status == FAILED for p in results for a in p.actions):
         return 2
@@ -2297,6 +2306,8 @@ def cmd_conform(args: argparse.Namespace) -> int:
                 # The project vanished between scan and apply. Record it and
                 # keep going: earlier projects' manifests must still print (#54).
                 results.append(replace(plan, actions=tuple(
+                    replace(a, status=SKIPPED, note="filtered by --only")
+                    if only and a.kind not in only else
                     replace(a, status=FAILED, note=str(error)) for a in plan.actions)))
         else:
             results.append(plan)

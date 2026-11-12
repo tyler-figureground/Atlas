@@ -102,7 +102,7 @@ def test_plan_from_dict_refuses_an_escaping_path():
             "note": "", "moved": [], "path_length": 0}]})
 
 
-@pytest.mark.parametrize("field", ["created", "prune"])
+@pytest.mark.parametrize("field", ["created", "created_unknown", "prune"])
 @pytest.mark.parametrize("bad", ["../../outside", "C:/Windows", "/etc", ""])
 def test_plan_from_dict_refuses_an_escaping_created_or_prune(field, bad):
     """Both name folders an undo will rmdir; they obey the same path rule."""
@@ -110,6 +110,22 @@ def test_plan_from_dict_refuses_an_escaping_created_or_prune(field, bad):
         plan_from_dict({"project": "P", "actions": [{
             "kind": "rename", "src": "a", "dst": "b", "file_count": 0, "status": "done",
             "note": "", "moved": [], "path_length": 0, field: [bad]}]})
+
+
+@pytest.mark.parametrize("status", ["done", "failed", "conflict", "skipped"])
+def test_unknown_creation_refuses_inversion_even_with_moves(status):
+    from atlas.core.conform import Action, Move, NotInvertible, Plan, action_to_dict, invert_plan
+
+    action = Action("relocate", "Source", "Parent/Target", status=status,
+                    moved=(Move("Source", "Parent/Target", True),),
+                    created_unknown=("Parent",))
+    payload = {"project": "P", "actions": [action_to_dict(action)]}
+    with pytest.raises(NotInvertible, match="unknown creation state"):
+        invert_plan(plan_from_dict(json.loads(json.dumps(payload))))
+    # Older manifests did not carry this field. Do not infer it from prose.
+    del payload["actions"][0]["created_unknown"]
+    payload["actions"][0]["note"] = "created state unknown"
+    assert plan_from_dict(payload).actions[0].created_unknown == ()
 
 
 def test_node_key_normalises_and_joins_as_one_function():
@@ -162,6 +178,39 @@ def test_a_revert_that_leaves_work_undone_exits_1(fixture_drive, capsys, tmp_pat
     (project / "Meetings" / "kickoff.md").write_text("someone else's", encoding="utf-8")
 
     assert _revert(fixture_drive, manifest, "--apply") == 1
+
+
+@pytest.mark.parametrize("failure", [OpsError("project vanished"), PermissionError("mount unavailable")])
+def test_revert_preserves_results_and_continues_after_project_failure(
+        fixture_drive, capsys, tmp_path, monkeypatch, failure):
+    import atlas.cli as cli
+
+    payload = []
+    projects = []
+    for name in ("260810_A", "260811_B", "260812_C"):
+        project, manifest = _applied_manifest(fixture_drive, capsys, tmp_path / name, name)
+        projects.append(project)
+        payload.extend(json.loads(manifest.read_text(encoding="utf-8")))
+    manifest = tmp_path / "batch.json"
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    real = cli.apply_plan
+
+    def apply(root, project, m, plan, only=None):
+        if project == projects[1]:
+            raise failure
+        return real(root, project, m, plan, only=only)
+
+    monkeypatch.setattr(cli, "apply_plan", apply)
+    assert _revert(fixture_drive, manifest, "--apply", "--json") == 2
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    results = json.loads(captured.out)
+    assert [p["actions"][0]["status"] for p in results] == ["done", "failed", "done"]
+    assert results[0]["actions"][0]["moved"]
+    assert results[2]["actions"][0]["moved"]
+    assert (projects[0] / "Meetings/kickoff.md").read_text(encoding="utf-8") == "z"
+    assert (projects[1] / "11 Meetings/kickoff.md").is_file()
+    assert (projects[2] / "Meetings/kickoff.md").is_file()
 
 
 def test_revert_reads_a_manifest_powershell_51_redirected(fixture_drive, capsys, tmp_path):

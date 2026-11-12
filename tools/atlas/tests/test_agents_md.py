@@ -334,6 +334,11 @@ def test_a_rename_whose_rollback_also_fails_says_where_the_file_is(fixture_drive
     action = next(a for a in result.actions if a.dst == "AGENTS.md")
     assert action.status == CONFLICT
     assert "left as Agents.md.atlas-tmp" in action.note
+    assert [(mv.src, mv.dst) for mv in action.moved] == [
+        ("Agents.md", "Agents.md.atlas-tmp")]
+    log = "".join(p.read_text(encoding="utf-8")
+                  for p in (fixture_drive / "_tools/logs").glob("*.log"))
+    assert "CONFLICT" in log and "Agents.md -> Agents.md.atlas-tmp" in log
 
     monkeypatch.setattr(os, "rename", real_rename)
     again, _inv, _m = conform(fixture_drive, "260317_Held")
