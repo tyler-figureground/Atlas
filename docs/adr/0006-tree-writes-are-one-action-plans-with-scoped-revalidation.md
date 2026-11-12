@@ -150,6 +150,19 @@ one offers a Repair - `f` in the Companion arms it (#42). A missing section keep
 the add-folders path, `a`. The Decision section above, and the "empty mapped
 folder" example under it, should be read with that limit.
 
+**Issue #95 corrects the boundary and the exact-name exception.** MAX_PATH
+includes the terminating NUL: the general Path Length Warning fires at 260,
+not only above it. Ordinary destinations remain unprefixed and Windows decides
+whether they can be written. Naming a trailing space/dot exactly requires the
+extended namespace, so those destinations are explicitly refused at 260 for
+files and 248 for directories; already-prefixed inputs obey the same checks.
+The directory check conservatively preserves legacy creation headroom for
+moves as well. It is not the limit for enumerating an existing directory, and
+the general warning is not a promise that every shorter path is writable.
+UNC measurement excludes the six-character namespace expansion, not four, and
+never strips the actual trailing filename characters. Evidence and native
+boundary tests: [Windows path boundaries](../research/atlas-windows-path-boundaries.md).
+
 ## Amendments
 
 **Amendment (ticket 30, 2026-10-07): the action set gains ARCHIVE and

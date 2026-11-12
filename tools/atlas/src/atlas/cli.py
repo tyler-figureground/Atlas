@@ -2202,7 +2202,7 @@ def _action_line(a) -> str:
     note = f"  ({a.note})" if a.note else ""
     files = f" ({a.file_count} files)" if a.file_count else ""
     src = f"{a.src} -> " if a.src else ""
-    warning = f"  [path {a.path_length} > 260]" if a.path_warning else ""
+    warning = f"  [path {a.path_length} >= 260]" if a.path_warning else ""
     return f"    {a.kind:9} {src}{a.dst}{files}{status}{note}{warning}"
 
 

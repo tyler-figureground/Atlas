@@ -45,7 +45,7 @@ from .project_index import (
     restore_project_index_row,
     stamp_project_index_status,
 )
-from .scan import Listing, list_entries, tally_files, walk
+from .scan import Listing, list_entries, path_length, tally_files, walk
 from .scan import is_project_dir
 from .tyler import TASKS_PATH, TYLER_PATH, open_items, read_task_list
 
@@ -208,7 +208,7 @@ def build_archive_plan(drive_root: Path, m: DriveMap, name: str,
         dst=f"{archive_root}/{name}",
         file_count=file_count,
         note=f"stamp the project index row '{stamp}'",
-        path_length=len(str(drive_root / archive_root / name)) + deepest_tail(project),
+        path_length=path_length(drive_root / archive_root / name) + deepest_tail(project),
     )
     return ArchivePlan(
         project=name,
@@ -256,7 +256,7 @@ def build_unarchive_plan(drive_root: Path, m: DriveMap, name: str,
         dst=name,
         file_count=file_count,
         note="restore the project index row",
-        path_length=len(str(drive_root / name)) + deepest_tail(project),
+        path_length=path_length(drive_root / name) + deepest_tail(project),
         # Emptied by the move, the archive root goes with it (rmdir-only, so a
         # root still holding other projects stays).
         prune=(archive_root,),

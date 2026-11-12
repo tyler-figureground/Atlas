@@ -369,6 +369,61 @@ def test_a_file_dated_before_1980_still_archives(run_project):
         assert zf.read("260901-old-audit/a.py") == b"print(1)"
 
 
+@pytest.mark.skipif(os.name != "nt", reason="native Windows long paths")
+@pytest.mark.parametrize("long_root", [False, True])
+def test_archive_sweeps_long_stale_partials_on_legacy_windows(run_project, monkeypatch, long_root):
+    from dataclasses import replace
+    from pathlib import Path
+    from atlas.core.scan import long_path
+
+    drive, m, project = run_project
+    run = _old_audit(project, m)
+    if long_root:
+        m = replace(m, control_plane={**m.control_plane,
+                    "archiveDir": ".agent/archive/" + "a" * 80 + "/" + "b" * 80})
+    archive = project / m.archive_dir
+    os.makedirs(long_path(archive), exist_ok=True)
+    stale = archive / (run.name + ".zip." + "z" * 100 + ".partial")
+    fresh = archive / (run.name + ".zip.fresh.partial")
+    unrelated = archive / "other.zip.partial"
+    for path in (stale, fresh, unrelated):
+        Path(long_path(path)).write_bytes(b"keep unless stale and same run")
+    old = time.time() - 2 * 86400
+    os.utime(long_path(stale), (old, old))
+    os.utime(long_path(unrelated), (old, old))
+    assert len(str(stale)) >= 260
+    real_stat, real_scandir = os.stat, os.scandir
+
+    def legacy(call, path, *args, **kwargs):
+        raw = os.fspath(path)
+        if not raw.startswith("\\\\?\\") and len(raw) >= 260:
+            raise FileNotFoundError(3, "legacy MAX_PATH", raw)
+        return call(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "scandir", lambda path: legacy(real_scandir, path))
+    # Restrict the stat injection to cleanup candidates, not archive policy.
+    def stat(path, *args, **kwargs):
+        if os.fspath(path).endswith(".partial"):
+            return legacy(real_stat, path, *args, **kwargs)
+        return real_stat(path, *args, **kwargs)
+    monkeypatch.setattr(os, "stat", stat)
+
+    if long_root:
+        # Cleanup is also safe for an already-existing long archive root;
+        # this is not authority to create new archive directories past policy.
+        from atlas.core.runs import _sweep_stale_partials
+        _sweep_stale_partials(archive, run.name)
+    else:
+        result = archive_run(drive, project, m, run)
+        assert result.status == "archived", result.note
+    assert not os.path.exists(long_path(stale))
+    assert Path(long_path(fresh)).read_bytes() == b"keep unless stale and same run"
+    assert Path(long_path(unrelated)).read_bytes() == b"keep unless stale and same run"
+    if not long_root:
+        with zipfile.ZipFile(long_path(archive / (run.name + ".zip"))) as zf:
+            assert zf.read(run.name + "/a.py") == b"print(1)"
+
+
 def test_a_stale_partial_from_a_crashed_run_does_not_block_the_next(run_project):
     """#58: mode "x" on one fixed partial name refused every run after a
     crash. Each attempt now writes its own; a day-old leftover is swept, a

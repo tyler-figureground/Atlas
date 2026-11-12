@@ -11,8 +11,8 @@
 ## Plan and cursor
 
 1. #93 complete and merged: Tyler digest off-map folder counts and incomplete-scan warnings.
-2. #94 current: conform/undo recovery implementation in `agent-outstanding-recovery`. User approved public core/CLI test seams, temporary filesystems and injected failures. Commit only implementation plus this cursor; no push, PR or merge. Coordinator owns independent review and integration.
-3. #95 Windows path boundaries/stale archive cleanup, #96 content-search lifecycle/presentation, #97 text preservation/remaining guard regressions: pending. Do not start in this worktree.
+2. #94 complete: merged PR #99, SHA `3bc0944`. Full 1670, focused 143, lint and CI green. Two review rounds; final P2 fixed and coordinator-inspected.
+3. #95 current in `agent-outstanding-paths`: Windows path boundaries/stale archive cleanup. Fully sequential, red-first temporary-filesystem and injected-failure tests. Commit only; no push, PR or merge. #96 content-search lifecycle/presentation and #97 text preservation/remaining guard regressions remain pending.
 4. Leave parked tickets 27/28, quarterly walk, human site work, deployment and old branch alone.
 
 ## #94 implementation and evidence
@@ -49,4 +49,29 @@
 
 ## Next action
 
-Final P2 repair verified and committed with this cursor, without pushing. Coordinator owns final-change inspection and push/integration; no third review requested or PASS claimed. Both existing review reports preserved. No merge, deployment, primary-checkout or studio-drive writes.
+#94 integrated as recorded above. #95 implementation and independent review95 repairs are recorded below; this cursor accompanies the repair commit. Coordinator owns review/integration; no push, PR or merge from this session. #96-97 remain pending. No third review of #94; both existing review reports preserved. No deployment, primary-checkout or studio-drive writes.
+
+## #95 implementation and final evidence
+
+- Fetched base ahead 0 / behind 0; issue #95 and open PRs inspected. Existing issue lease names this worktree's task.
+- Seams: Plan measurement/application and warning output; path filesystem adapter (UNC lexical tests, no live share); archive_run and stale-partial cleanup. User authorized temporary filesystems and OS-failure injections.
+- Native CreateDirectoryA proves 247 accepted, 248/259 refused with error 206 even under a long-path-aware Python. Exact trailing-space/dot directory moves reproduced silent prefix routing at 248 and 259 (four red tests); directory-aware destination checks now prevent it.
+- File preview at 260 reproduced missing warning; extended UNC previews reproduced marker overcount. Shared display-path measurement retains trailing spaces/dots and excludes the UNC marker correctly. Already-prefixed project roots additionally reproduced six bypasses; exact destination checks now cover those too.
+- Stale-partial tests initially needed fixture corrections (Path import, map control_plane), then both failed on retained stale files. Enumeration root and candidate stat now use long_path; fresh and unrelated partials survive. Archive creation policy unchanged.
+- UNC removal control: restoring subtraction of only four prefix characters caused four adapter cases to fail (file 258/259 and directory 246/247); restoring display-path measurement passed all six cases.
+- Final exact-name inspection found Windows abspath also trimmed an odd project root before measurement. Two new native red tests measured 259 instead of 260; measurement now keeps the project name intact and resolves the full destination through the shared helper.
+- First full run: 1706 passed, one failure in an existing CLI assertion expecting the old `> 260` label. Updated it to `>= 260`; no product fallback or test weakened. That run preceded the two additional exact-root tests.
+- Focused final run: `cd tools/atlas && uv run pytest tests/test_windows_path_policy.py tests/test_path_length.py tests/test_project_templates.py tests/test_apply_faults.py tests/test_revert_safety.py tests/test_tree_writes.py -q`: 186 passed in 14.75s on the final focused rerun, no skips. Native Windows cases executed; UNC tests use lexical/injected semantics, not a live share.
+- Source evidence recorded in `docs/research/atlas-windows-path-boundaries.md`, linked from ADR 0006 and AGENTS; glossary and changelog corrected. General 260 warning is not a guarantee that a shorter directory creation will succeed. Ordinary destinations stay unprefixed; exact-name directory checks conservatively use the creation boundary.
+- Final full suite: `cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120`: 1709 passed in 324.11s, exit 0, no skips. Windows / Python 3.13.15; native directory/file, exact-name and cleanup tests executed. Same test command as CI; no new CI run claimed.
+- Final repo lint passed, including 264 Markdown files and both hook suites. Optional shellcheck unavailable locally, explicitly skipped by the script. Staged diff check passed. All owned background test processes exited.
+- Commit only, including implementation, tests, changelog, source evidence and this cursor. No push/PR/merge, no independent #95 review claim, no primary-checkout or studio-drive edits.
+
+## Independent review95 P2 repairs
+
+- User approved full existing seams without further questions; coordinator's finding summary supplied review context. Fetched origin: branch ahead 1 / behind 0 relative to origin/main, clean before edits. Commit only, no push.
+- Existing-parent regression: four native Windows red cases through apply_plan/invert_plan proved a 248-character exact parent blocked a valid 254-character file move, either inward or on undo after moving outward. Both trailing-space and trailing-dot names now round-trip with original bytes and exact parent spelling. _apply_sweep and _apply_move only run parent creation checks when the exact parent is not already a directory. Actual directory destinations and file destination checks remain unchanged.
+- UTF-16 regression: native emoji directory/file destinations at 248/260 units incorrectly applied (two red cases); destination and subtree preview cases reported 259 instead of 260 (two red cases). Shared path_units uses Windows UTF-16 code units with surrogatepass, character counts elsewhere. Absolute measurement, subtree roots/leaves and read-prefix selection use it consistently. UNC adapter coverage now includes emoji at both refusal boundaries and below them; portable character semantics have explicit coverage.
+- Consumer sweep: conform Plans, inverse measurement, archive/unarchive previews, deep scan, long_path and _dest inspected. Archive/unarchive destination and deep-scan raw len calls reproduced three further native failures and now use path_length. Warning thresholds, directory rename policy, archive writes, UI/JSON field shape and deep-scan crossing policy are unchanged. The separate intake naming budgets (200-component/240-project characters) are not legacy-boundary consumers and were left out of this repair; display widths and key slicing likewise remain character-based.
+- Focused final: uv run pytest tests/test_windows_path_policy.py tests/test_path_length.py tests/test_archive.py tests/test_deep_pass.py tests/test_apply_faults.py tests/test_revert_safety.py tests/test_tree_writes.py -q: 240 passed in 5.97s, no skips. An earlier invocation named nonexistent test_deep.py and ran no tests; corrected to test_deep_pass.py.
+- Full native Windows suite: cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120: 1728 passed in 316.44s, exit 0, no skips. Owned background process exited. Repo lint passed after changelog/cursor edits (264 Markdown files, both hook suites; optional shellcheck unavailable/skipped locally); staged diff check passed. No primary-checkout or studio-drive edits, deployment, push or merge. Coordinator owns integration and review disposition.

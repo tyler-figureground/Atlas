@@ -39,17 +39,40 @@ PARTIAL = "partial"
 # disables all path normalisation, so it is not safe to apply blindly.
 _MAX_PATH = 240
 
-# Windows refuses a path longer than this without the extended-length prefix,
-# and so do Explorer, Revit, and the studio's PowerShell tools. Atlas warns when
-# a move would create one (conform's Path Length Warning), flags ones already
-# on disk (the deep pass, plan 1.4), and never applies long_path() on the
-# write side: routing around the limit would make the warning dishonest.
-# See ADR 0006 and ticket 19.
+# Legacy MAX_PATH includes the terminating NUL: file paths at this length
+# need the extended namespace. Conform warns at this boundary; its exact-name
+# write adapter additionally preserves directory-creation headroom (12 chars).
+# Prefixes name trailing spaces/dots exactly, never bypass destination policy.
+# See ADR 0006, ticket 19 and docs/research/atlas-windows-path-boundaries.md.
 WINDOWS_MAX_PATH = 260
 _LONG_PREFIX = "\\\\?\\"
 # Already-extended or device paths, in either slash form. Prefixing one again
 # would turn it into a bogus UNC path.
 _DEVICE_PREFIXES = (_LONG_PREFIX, "\\\\.\\", "//?/", "//./")
+
+
+def path_units(raw: str):
+    """Native path units: UTF-16 code units on Windows, characters elsewhere."""
+    if sys.platform == "win32":
+        return len(raw.encode("utf-16-le", errors="surrogatepass")) // 2
+    return len(raw)
+
+
+def path_length(path: Path | str):
+    """Absolute display-path length, excluding only the Windows device marker.
+
+    Extended UNC replaces two leading slashes with eight characters, not four.
+    Do not strip spaces or dots: they are part of the actual filename.
+    """
+    raw = long_path(path)
+    if not os.path.isabs(raw):
+        raw = os.path.abspath(raw)
+    raw = raw.replace("/", "\\")
+    if raw[:8].casefold() == "\\\\?\\unc\\":
+        raw = "\\\\" + raw[8:]
+    elif raw.startswith(("\\\\?\\", "\\\\.\\")):
+        raw = raw[4:]
+    return path_units(raw)
 
 
 def ends_in_space_or_dot(raw: str) -> bool:
@@ -80,7 +103,7 @@ def long_path(path: Path | str) -> str:
         # Measure what Windows will see, not the string given: a 41-character
         # relative path can be 308 once the working directory is in front of it.
         absolute = os.path.abspath(raw)
-        if len(absolute) < _MAX_PATH:
+        if path_units(absolute) < _MAX_PATH:
             return raw
     if absolute.startswith("\\\\"):  # UNC
         return _LONG_PREFIX + "UNC" + absolute[1:]
