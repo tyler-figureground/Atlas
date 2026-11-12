@@ -12,8 +12,9 @@
 
 1. #93 complete and merged: Tyler digest off-map folder counts and incomplete-scan warnings.
 2. #94 complete: merged PR #99, SHA `3bc0944`. Full 1670, focused 143, lint and CI green. Two review rounds; final P2 fixed and coordinator-inspected.
-3. #95 current in `agent-outstanding-paths`: Windows path boundaries/stale archive cleanup. Fully sequential, red-first temporary-filesystem and injected-failure tests. Commit only; no push, PR or merge. #96 content-search lifecycle/presentation and #97 text preservation/remaining guard regressions remain pending.
-4. Leave parked tickets 27/28, quarterly walk, human site work, deployment and old branch alone.
+3. #95 complete: merged PR #100, SHA `00e297b`. Full suite 1728, independent verification 279, lint and CI green, review PASS (coordinator evidence).
+4. #96 current in `agent-outstanding-search`: content-search lifecycle, cache persistence and compact status. Approved public API/CLI, temporary-filesystem, executor/thread and timer seams; sequential red-first fixes. Commit only; no push, PR or merge. #97 text preservation/remaining guard regressions remains pending.
+5. Leave parked tickets 27/28, quarterly walk, human site work, deployment and old branch alone.
 
 ## #94 implementation and evidence
 
@@ -47,9 +48,25 @@
 - Consumer inspection: CLI conform/archive JSON use the shared serializer; both loaders explicitly reconstruct Actions and now retain the field; CLI revert preflight and TUI UndoStack use the inversion functions and inherit refusal. Tree/render/guard consumers retain existing behavior; no new action kind or guessed cleanup. Existing index_row/keep_index serialization behavior is outside this repair and unchanged.
 - Full suite: `cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120`: 1670 passed in 316.95s, exit 0, no skips. Final focused rerun: `uv run pytest tests/test_apply_faults.py tests/test_agents_md.py tests/test_revert_safety.py tests/test_archive.py -q`: 143 passed in 5.93s, no skips. Repo lint and diff check passed; shellcheck unavailable locally (script skips).
 
+## #96 implementation and verification
+
+- Base fetched: ahead 0 / behind 0. Read live issue #96; no duplicate open PR. User approved public API/CLI, temporary filesystem, thread/executor and timer seams, with no further questions. No primary-checkout or studio-drive writes.
+- Queued cancellation reproduced red through a controlled executor Future, Textual worker cancellation, refresh and persisted/indexed output. Reservations now distinguish queued workers from actual running threads, with lock-protected acquisition/release. Cancellation never frees a running builder's reservation; the separate running-thread test blocks a real content read and proves refresh does not start a second builder. Completion releases on the UI thread; finally cleanup checks worker identity before touching a successor's reservation.
+- Periodic and interrupted saves reproduced downgrading a CLI-complete cache. Whole builds and resumable checkpoints now publish independently (at most two local snapshots per root), without a check-then-replace race or cross-process lock. Readers prefer a usable complete snapshot; build inputs combine both snapshots by path/size/mtime. Legacy partial caches remain readable. Concurrent whole builds retain last-publisher-wins behavior; completeness is not a freshness guarantee.
+- Interrupted top-up regression caught the first implementation re-reading an already-extracted changed file. Full-key lookup now reuses both old complete and newer checkpoint entries only when the current stat matches. No query-time content reads, watches or extra validation work.
+- Shared-temp removal control failed with FileNotFoundError under two barrier-controlled publishers after making the rename ordering deterministic. Restored unique temporary files; normal/error cleanup owns only that writer's file. Initial unconstrained Windows rename control passed, so it was not counted as reproduction evidence.
+- CLI consumer sweep found the new partial snapshot left `index status --json` naming a nonexistent whole-cache path. Added a red public CLI/filesystem test, retained the actual backing path on ContentIndex, and corrected status/build path output, including legacy single-file partials. Stopped the first full run deliberately for this repair; it is not a completed verification result.
+- The 46-column stale/unchecked test failed on `100 content, 100 unchecked`, dropping 200 stale matches. Compact fallback now keeps both counts; 46/77/120-column pilots assert readable, unclipped output and exactly the 200-stat stale budget for one keystroke. Existing non-stale validation budget tests remain.
+- Three injected local-clock cases failed for missing offsets; stamps now include numeric UTC offsets, covering UTC, negative offset/day rollover and a fractional-hour zone. Date-only narrow fallback and legacy naive stamps retain their existing semantics.
+- Screen-present/tree-gone teardown case drives a real cursor timer, removes the tree while keeping its screen, then invokes the recorded callback. Removing only the DOM guard produced NoMatches; restoring it passes. No manufactured product fix for this already-correct guard.
+- Focused search run: 92 passed in 109.52s (before the final CLI-path repair). Changed-seam/content-index run: 50 passed in 28.87s, no skips. First completed full exact-CI-command run: 1742 passed in 337.68s, before the following lifecycle repair.
+- Final concurrency review reproduced one more race: after the failure callback, but before its thread's finally block, refresh saw a phantom live builder and left the partial cache unfinished. A deterministic dispatch gate reproduced the failed retry; completion now releases both the root lease and pending worker before retry, with identity-checked final cleanup. Three lifecycle tests passed in 2.46s. Final full run, including this fifteenth regression: `cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120`: **1743 passed in 343.04s**, exit 0, no skips, Windows / Python 3.13.15. UI verification is headless Textual Pilot at supported widths, not a browser or live-drive run.
+- Final repo lint passed (264 Markdown files; both hook suites). Optional shellcheck unavailable, explicitly skipped by the script. Staged diff check passed. Fetch immediately before commit still ahead 0 / behind 0 against origin/main. All owned test processes exited or were explicitly stopped; no background work remains.
+- Changelog and queue cursor updated. #95 merged PR #100 / `00e297b`, full 1728, independent 279, lint/CI green, review PASS per coordinator. #96 current; #97 remaining. Commit only; no push/PR/merge or independent-review/CI claim for #96.
+
 ## Next action
 
-#94 integrated as recorded above. #95 implementation and independent review95 repairs are recorded below; this cursor accompanies the repair commit. Coordinator owns review/integration; no push, PR or merge from this session. #96-97 remain pending. No third review of #94; both existing review reports preserved. No deployment, primary-checkout or studio-drive writes.
+#95 integrated as PR #100 / `00e297b`, full 1728, independent 279, lint/CI green, review PASS. #96 is the current implementation; #97 remains next. Coordinator owns review/integration; no push, PR or merge from this session. No third review of #94; both existing review reports preserved. No deployment, primary-checkout or studio-drive writes.
 
 ## #95 implementation and final evidence
 

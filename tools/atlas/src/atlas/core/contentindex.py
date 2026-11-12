@@ -38,9 +38,15 @@ whose file changed or vanished is stale - excluded and counted, never silently
 served. The **Indexed-At Stamp** rides every save; consumers show it rather
 than implying freshness.
 
-A damaged index file rebuilds, never crashes: ``load_index`` returns None on
-any corruption, schema drift, or root mismatch, and the next build starts
-clean.
+Whole builds and resumable checkpoints publish to separate local files. A
+reader prefers the whole build; only when none is usable does it serve the
+checkpoint as partial. Builds reuse matching keys from both. Keeping at most
+one of each per root avoids cross-process locking and prevents a late periodic
+save from replacing a CLI-complete cache. Legacy single-file partial caches
+remain readable. Concurrent whole builds retain last-publisher-wins semantics.
+
+A damaged index file rebuilds, never crashes: ``load_index`` returns None when
+neither snapshot is usable (corruption, schema drift, or root mismatch).
 """
 
 from __future__ import annotations
@@ -49,6 +55,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -130,6 +137,9 @@ class ContentIndex:
     # are absent, not stale, so a consumer must top it up rather than trust
     # it (#56). Caches written before the flag were full builds.
     complete: bool = True
+    # Actual local snapshot backing this value; not persisted in its payload.
+    # None for caller-constructed indexes. Legacy partials retain their path.
+    cache_path: Path | None = None
 
     def is_archived(self, path: str) -> bool:
         return path.startswith(f"{self.archive_root}/")
@@ -150,8 +160,11 @@ def default_cache_dir() -> Path:
 
 
 def index_path(root: Path | str, cache_dir: Path | str | None = None) -> Path:
-    """The one cache file per drive root, named so a human can tell drives
-    apart and keyed so two roots never share a file."""
+    """The whole-cache destination per root; checkpoints are adjacent.
+
+    Named so a human can tell drives apart and keyed so roots never share a
+    file. A loaded index's ``cache_path`` names the actual snapshot served.
+    """
     base = os.path.abspath(os.fspath(root))
     digest = hashlib.sha1(base.casefold().encode("utf-8")).hexdigest()[:12]
     # The root's own name ("TESTDRIVE", "G") is the human label; the digest
@@ -170,7 +183,14 @@ def _stamp() -> str:
 
 
 def _save(path: Path, index: ContentIndex) -> None:
-    """Atomic: a reader never meets a half-written index."""
+    """Publish whole builds and resumable checkpoints independently.
+
+    A checkpoint can never replace a whole build from another process. Each
+    writer owns its temporary file, so concurrent CLI/TUI saves cannot rename
+    or overwrite each other's staging bytes. No check-then-replace race.
+    """
+    if not index.complete:
+        path = _checkpoint_path(path)
     payload = {
         "schema": SCHEMA,
         "drive": index.drive,
@@ -183,19 +203,38 @@ def _save(path: Path, index: ContentIndex) -> None:
         "complete": index.complete,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(payload), encoding="utf-8")
-    os.replace(tmp, path)
+    handle = tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                         dir=path.parent, prefix=path.name + ".",
+                                         suffix=".tmp", delete=False)
+    tmp = Path(handle.name)
+    try:
+        with handle:
+            handle.write(json.dumps(payload))
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def _checkpoint_path(path: Path):
+    return path.with_suffix(".partial.json")
 
 
 def load_index(root: Path | str, *,
                cache_dir: Path | str | None = None) -> ContentIndex | None:
     """The stored index for this drive root, or None.
 
-    None covers absent, unreadable, corrupt, wrong schema, and written for a
-    different root alike - a damaged index rebuilds, never crashes.
+    Prefer a whole build over a checkpoint, regardless of publication order.
+    None covers both snapshots absent, unreadable, corrupt, wrong schema, or
+    written for a different root - a damaged index rebuilds, never crashes.
     """
     path = index_path(root, cache_dir)
+    stored = _load(path, root)
+    if stored is not None and stored.complete:
+        return stored
+    return _load(_checkpoint_path(path), root) or stored
+
+
+def _load(path: Path, root: Path | str):
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if payload["schema"] != SCHEMA:
@@ -209,7 +248,8 @@ def load_index(root: Path | str, *,
                             indexed_at=payload["indexed_at"], files=files,
                             skipped=skipped, unreadable=unreadable,
                             archive_root=payload.get("archive_root", DEFAULT_ARCHIVE_ROOT),
-                            complete=bool(payload.get("complete", True)))
+                            complete=bool(payload.get("complete", True)),
+                            cache_path=path)
     except (OSError, ValueError, KeyError, TypeError):
         return None
 
@@ -264,8 +304,17 @@ def build_index(root: Path | str, *,
     """
     base = os.path.abspath(os.fspath(root))
     prior = load_index(base, cache_dir=cache_dir)
-    prior_files = {f.path: f for f in prior.files} if prior else {}
-    prior_skipped = {s.path: s for s in prior.skipped} if prior else {}
+    prior_files = {(f.path, f.size, f.mtime_ns): f for f in prior.files} if prior else {}
+    prior_skipped = {(s.path, s.size, s.mtime_ns): s for s in prior.skipped} if prior else {}
+    # Checkpoints are build inputs even when readers prefer the whole cache.
+    # Each entry still passes the ordinary size/mtime check below. Keep the
+    # whole build's entry first: a stale checkpoint must not force a re-read.
+    checkpoint = _load(_checkpoint_path(index_path(base, cache_dir)), base)
+    if checkpoint is not None:
+        for entry in checkpoint.files:
+            prior_files.setdefault((entry.path, entry.size, entry.mtime_ns), entry)
+        for entry in checkpoint.skipped:
+            prior_skipped.setdefault((entry.path, entry.size, entry.mtime_ns), entry)
 
     archive_root = resolve_archive_root(base)
     errors: list[tuple[str, str]] = []
@@ -299,13 +348,13 @@ def build_index(root: Path | str, *,
             # Vanished mid-walk or unreadable. Unkeyable, so not recorded:
             # the next build retries the stat, which costs nothing.
             continue
-        prev = prior_files.get(rel)
-        if prev and prev.size == stat.st_size and prev.mtime_ns == stat.st_mtime_ns:
+        key = (rel, stat.st_size, stat.st_mtime_ns)
+        prev = prior_files.get(key)
+        if prev is not None:
             kept.append(prev)
             continue
-        prev_skip = prior_skipped.get(rel)
-        if (prev_skip and prev_skip.size == stat.st_size
-                and prev_skip.mtime_ns == stat.st_mtime_ns):
+        prev_skip = prior_skipped.get(key)
+        if prev_skip is not None:
             skipped.append(prev_skip)
             continue
         if stat.st_size > READ_LIMIT:
@@ -323,7 +372,8 @@ def build_index(root: Path | str, *,
             root=Path(base), drive=_drive_label(base), indexed_at=_stamp(),
             files=tuple(sorted(kept, key=lambda f: f.path.casefold())),
             skipped=tuple(sorted(skipped, key=lambda s: s.path.casefold())),
-            unreadable=unreadable, archive_root=archive_root, complete=complete)
+            unreadable=unreadable, archive_root=archive_root, complete=complete,
+            cache_path=path if complete else _checkpoint_path(path))
 
     total = len(to_read)
     try:

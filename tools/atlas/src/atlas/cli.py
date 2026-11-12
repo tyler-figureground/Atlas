@@ -2033,7 +2033,7 @@ def cmd_index_build(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps({
             "drive": index.drive,
-            "path": str(index_path(root)),
+            "path": str(index.cache_path or index_path(root)),
             "indexed_at": index.indexed_at,
             "files": len(index.files),
             "archived": index.archived_files,
@@ -2062,9 +2062,10 @@ def cmd_index_status(args: argparse.Namespace) -> int:
     """
     root = _resolve_drive(args.drive)
     index = load_index(root)
+    path = (index.cache_path if index is not None else None) or index_path(root)
     if args.json:
         payload = {"exists": index is not None,
-                   "path": str(index_path(root))}
+                   "path": str(path)}
         if index is not None:
             payload.update({
                 "drive": index.drive,
@@ -2081,7 +2082,7 @@ def cmd_index_status(args: argparse.Namespace) -> int:
               "(per-machine; the first build reads every PDF and Markdown file)")
         return 1
     noun = "file" if len(index.files) == 1 else "files"
-    print(f"content index: {index_path(root)}")
+    print(f"content index: {path}")
     print(f"indexed at {index.indexed_at}; {len(index.files)} {noun}, "
           f"{len(index.skipped)} skipped, "
           f"{len(index.unreadable)} unreadable folder(s)")

@@ -431,6 +431,6 @@ def test_the_indexed_stamp_is_shown_in_local_time():
 
     pacific = timezone(timedelta(hours=-8))
     stamp = "2026-11-09T20:12:57+00:00"
-    assert _stamp_short(stamp, tz=pacific) == "2026-11-09 12:12"
+    assert _stamp_short(stamp, tz=pacific) == "2026-11-09 12:12 -0800"
     assert _stamp_short("2026-11-10T01:30:00+00:00", tz=pacific, date_only=True) == "2026-11-09"
     assert _stamp_short("2026-10-09T07:31", tz=pacific) == "2026-10-09 07:31"  # naive: as stored
