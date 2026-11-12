@@ -17,6 +17,7 @@ from atlas.cli import main
 from atlas.core.conform import (
     DONE,
     FAILED,
+    OpsError,
     apply_plan,
     build_plan,
     build_repair_plan,
@@ -239,7 +240,64 @@ def test_cli_all_keeps_the_manifest_when_a_later_project_conflicts(fixture_drive
     assert status == 1
 
 
-def test_cli_all_records_a_vanished_project_and_keeps_going(fixture_drive, capsys, monkeypatch):
+def test_unexpected_apply_error_propagates_and_logs_completed_actions(fixture_drive, monkeypatch):
+    from atlas.core.conform import Action, Plan
+
+    project = make_project(fixture_drive, "260713_Bug", sections=["Meetings"],
+                           files={"Meetings/a.md": "keep"})
+    m = scan_drive(fixture_drive).map
+    plan = Plan(project=project.name, actions=(
+        Action(kind="rename", src="Meetings", dst="11 Meetings"),
+        Action(kind="sweep", src="a.txt", dst="target"),
+    ))
+    import os
+
+    real = os.makedirs
+
+    def mkdir(path, *args, **kwargs):
+        if Path(path) == project / "target":
+            raise RuntimeError("programming defect")
+        return real(path, *args, **kwargs)
+
+    (project / "a.txt").write_text("source", encoding="utf-8")
+    monkeypatch.setattr(os, "makedirs", mkdir)
+    with pytest.raises(RuntimeError, match="programming defect"):
+        apply_plan(fixture_drive, project, m, plan)
+    assert (project / "11 Meetings/a.md").read_text(encoding="utf-8") == "keep"
+    assert "rename Meetings -> 11 Meetings" in _log_text(fixture_drive)
+
+
+@pytest.mark.parametrize("error_type", [PermissionError, OpsError])
+def test_failed_parent_creation_keeps_created_manifest(fixture_drive, monkeypatch, error_type):
+    from atlas.core.conform import Action, Plan, action_to_dict, plan_from_dict
+
+    project = make_project(fixture_drive, "260710_Parents")
+    m = scan_drive(fixture_drive).map
+    plan = Plan(project=project.name, actions=(
+        Action(kind="backfill", src="", dst=m.analysis_dir),
+        Action(kind="backfill", src="", dst=m.decisions_dir),
+    ))
+    real = Path.mkdir
+
+    def mkdir(path, *args, **kwargs):
+        if path == project / m.analysis_dir:
+            real(path.parent, parents=True, exist_ok=True)
+            raise error_type("injected child creation failure")
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", mkdir)
+    result = apply_plan(fixture_drive, project, m, plan)
+    assert result.actions[0].created == ("06 Research",)
+    assert result.actions[0].status == (FAILED if error_type is PermissionError else "conflict")
+    assert result.actions[1].status == DONE
+    restored = plan_from_dict({"project": project.name,
+                               "actions": [action_to_dict(a) for a in result.actions]})
+    assert restored.actions[0].created == ("06 Research",)
+    assert (project / "06 Research").is_dir()
+
+
+@pytest.mark.parametrize("only", [None, "rename"])
+def test_cli_all_records_a_vanished_project_and_keeps_going(fixture_drive, capsys, monkeypatch, only):
     """#54: apply_plan's 'project folder is no longer available' OpsError
     stopped the --all loop."""
     import atlas.cli as cli
@@ -257,10 +315,16 @@ def test_cli_all_records_a_vanished_project_and_keeps_going(fixture_drive, capsy
         return real(root, project, m, plan, only=only)
 
     monkeypatch.setattr(cli, "apply_plan", apply)
-    status = main(["conform", "--drive", str(fixture_drive), "--all", "--apply", "--json"])
+    status = main(["conform", "--drive", str(fixture_drive), "--all", "--apply", "--json"]
+                  + (["--only", only] if only else []))
 
     payload = {p["project"]: p for p in json.loads(capsys.readouterr().out)}
     assert any(a["status"] == "done" for a in payload["260708_A"]["actions"])
     gone = payload["260709_Gone"]["actions"]
-    assert gone and all(a["status"] == "failed" for a in gone)
+    assert gone
+    for action in gone:
+        filtered = only and action["kind"] != only
+        assert action["status"] == ("skipped" if filtered else "failed")
+        if filtered:
+            assert action["note"] == "filtered by --only"
     assert status == 2

@@ -608,18 +608,19 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
             # One failed action fails that action, not the process: a file held
             # open in Revit or Excel refuses the rename, and everything that
             # already moved must still be recorded, logged and undoable.
+            absent = ()
             try:
                 absent = _absent_chain(project, _created_root(action))
                 result = _apply_one(project, m, action, inverse=plan.inverse)
             except OSError as error:
-                applied.append(replace(action, status=FAILED, note=_os_note(error)))
-                continue
+                result = replace(action, status=FAILED, note=_os_note(error))
+            except _StrandedRename as error:
+                result = replace(action, status=CONFLICT, note=str(error), moved=(error.move,))
             except (OpsError, AgentsBlockError, CardBlockError) as error:
                 # A file where a seeded folder belongs, or markers a person
                 # broke: a person resolves it, and it is one action, never the
                 # whole run (#54).
-                applied.append(replace(action, status=CONFLICT, note=str(error)))
-                continue
+                result = replace(action, status=CONFLICT, note=str(error))
             created = tuple(rel for rel in absent if (project / rel).exists())
             if created:
                 result = replace(result, created=created)
@@ -659,9 +660,9 @@ def _log_applied(drive_root: Path, project: Path, applied: list[Action]) -> None
     for a in applied:
         if a.status == DONE:
             parts.append(f"{a.kind} {a.src or a.dst} -> {a.dst}")
-        elif a.status == FAILED and a.moved:
+        elif a.status in (FAILED, CONFLICT) and a.moved:
             moved = ", ".join(f"{mv.src} -> {mv.dst}" for mv in a.moved)
-            parts.append(f"{a.kind} {a.src} -> {a.dst} FAILED ({a.note}) after moving {moved}")
+            parts.append(f"{a.kind} {a.src} -> {a.dst} {a.status.upper()} ({a.note}) after moving {moved}")
     if parts:
         try:
             append_log(drive_root, f"[{project.name}] conform: " + "; ".join(parts))
@@ -864,6 +865,14 @@ def _root_spelling(project: Path, name: str) -> str | None:
     return variant
 
 
+class _StrandedRename(OpsError):
+    """An expected rename failure whose rollback left a recorded move."""
+
+    def __init__(self, note: str, move: Move):
+        super().__init__(note)
+        self.move = move
+
+
 def _canonical_spelling(project: Path, name: str) -> tuple[bool, str]:
     """Give the root file ``name`` exactly that spelling.
 
@@ -894,8 +903,11 @@ def _canonical_spelling(project: Path, name: str) -> tuple[bool, str]:
         try:
             _rename_with_retry(tmp, project / found)
         except OSError:
-            raise OpsError(f"could not rename {found} -> {name} ({reason}); "
-                           f"left as {tmp.name} - rename it back by hand") from None
+            raise _StrandedRename(
+                f"could not rename {found} -> {name} ({reason}); "
+                f"left as {tmp.name} - rename it back by hand",
+                Move(src=found, dst=tmp.name, is_dir=False),
+            ) from None
         raise OSError(error.errno, f"could not rename {found} -> {name} ({reason}); "
                                    f"left as {found}") from None
     return True, f"renamed {found} -> {name}"

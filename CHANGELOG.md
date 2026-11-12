@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Tyler digest reports off-map folders per project (#93).** Nonzero counts use the same enumeration-only deep scan and exclusions as doctor. Unreadable and depth-capped paths stay visible even when no drift was found; partial counts say "at least". `atlas tyler --json` includes each project's `off_map` count and scan warnings. No project files are changed.
 
+### Fixed
+
+- **Conform keeps recovery evidence after partial failures (#94).** Multi-project `--revert` records expected project failures without losing earlier manifests or abandoning later projects. Failed or conflicted actions retain folders created before the failure; stranded agent-file case renames retain their Move Manifest, and conflicted moves reach the drive log. A vanished project's `--only` exclusions remain skipped. Archive undo now shares one completion path while preserving its index, manifest and empty-folder pruning behavior.
+
 ## [Atlas 0.32.0] - 2026-11-09
 
 ### Fixed

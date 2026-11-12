@@ -164,6 +164,39 @@ def test_a_revert_that_leaves_work_undone_exits_1(fixture_drive, capsys, tmp_pat
     assert _revert(fixture_drive, manifest, "--apply") == 1
 
 
+@pytest.mark.parametrize("failure", [OpsError("project vanished"), PermissionError("mount unavailable")])
+def test_revert_preserves_results_and_continues_after_project_failure(
+        fixture_drive, capsys, tmp_path, monkeypatch, failure):
+    import atlas.cli as cli
+
+    payload = []
+    projects = []
+    for name in ("260810_A", "260811_B", "260812_C"):
+        project, manifest = _applied_manifest(fixture_drive, capsys, tmp_path / name, name)
+        projects.append(project)
+        payload.extend(json.loads(manifest.read_text(encoding="utf-8")))
+    manifest = tmp_path / "batch.json"
+    manifest.write_text(json.dumps(payload), encoding="utf-8")
+    real = cli.apply_plan
+
+    def apply(root, project, m, plan, only=None):
+        if project == projects[1]:
+            raise failure
+        return real(root, project, m, plan, only=only)
+
+    monkeypatch.setattr(cli, "apply_plan", apply)
+    assert _revert(fixture_drive, manifest, "--apply", "--json") == 2
+    captured = capsys.readouterr()
+    assert "Traceback" not in captured.err
+    results = json.loads(captured.out)
+    assert [p["actions"][0]["status"] for p in results] == ["done", "failed", "done"]
+    assert results[0]["actions"][0]["moved"]
+    assert results[2]["actions"][0]["moved"]
+    assert (projects[0] / "Meetings/kickoff.md").read_text(encoding="utf-8") == "z"
+    assert (projects[1] / "11 Meetings/kickoff.md").is_file()
+    assert (projects[2] / "Meetings/kickoff.md").is_file()
+
+
 def test_revert_reads_a_manifest_powershell_51_redirected(fixture_drive, capsys, tmp_path):
     """#64 review: `atlas conform --apply --json > m.json` in PowerShell 5.1
     writes UTF-16 with a BOM; the revert crashed with a traceback."""
