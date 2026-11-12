@@ -30,6 +30,14 @@
 - Repo lint passed after changelog/cursor updates; optional shellcheck unavailable locally, skipped by script.
 - `git diff --check` passed. Implementation and cursor ready for commit; no push, PR, merge, deployment or independent-review claim.
 
+## PR #99 independent-review repairs
+
+- Review FAIL P1 reproduced red at public `apply_plan`: a successful earlier rename followed by a successful sweep and denied post-write `Path.exists` raised PermissionError, losing the returned Plan. Probe errors now catch only OSError per path, retain prior/current Move Manifests and confirmed `created` entries, append an explicit unknown-state note, and mark the affected action failed. Other Action metadata and notes survive; JSON round-trip and drive log are asserted.
+- CLI regression additionally verifies exit 2 with both manifests and the earlier DONE status intact. Removing the probe fix made this test fail with missing JSON; restoring it passes. Initial CLI test used an invalid comma-separated `--only`; corrected to repeated flags before the removal control.
+- Review FAIL P2 reproduced red using a real parent mkdir followed by an injected denied rename. `invert_plan` now rejects creation-only effects with NotInvertible before building any inverse, including FAILED actions. No new undo action type or deletion behavior.
+- Focused final run: `cd tools/atlas && uv run pytest tests/test_apply_faults.py tests/test_agents_md.py tests/test_revert_safety.py tests/test_archive.py -q`: 133 passed in 8.77s, no skips.
+- Full suite: `cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120`: 1660 passed in 384.60s, exit 0, no skips; Windows / Python 3.13.15. Repo lint passed (optional shellcheck unavailable locally); `git diff --check` passed. No primary-checkout or studio-drive writes; local branch started ahead 0 / behind 0 after fetch.
+
 ## Next action
 
-Implementation complete with full pytest and lint green. Coordinator takes the implementation/cursor commit, runs independent review, opens PR and integrates only after CI is green. Auto-merge disabled; no integration delegated to this implementation session.
+Review repairs verified and ready in this commit, without pushing. Coordinator owns independent re-review of PR #99 and any push/integration; no review PASS claimed here.

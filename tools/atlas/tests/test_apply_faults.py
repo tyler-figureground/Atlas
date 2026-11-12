@@ -296,6 +296,97 @@ def test_failed_parent_creation_keeps_created_manifest(fixture_drive, monkeypatc
     assert (project / "06 Research").is_dir()
 
 
+def test_denied_created_probe_preserves_prior_and_current_effects(fixture_drive, monkeypatch):
+    from atlas.core.conform import Action, Move, Plan, action_to_dict, plan_from_dict
+
+    project = make_project(fixture_drive, "260714_Probe", sections=["Meetings"],
+                           files={"Meetings/a.md": "keep", "a.txt": "move"})
+    m = scan_drive(fixture_drive).map
+    plan = Plan(project=project.name, actions=(
+        Action(kind="rename", src="Meetings", dst="11 Meetings"),
+        Action(kind="sweep", src="a.txt", dst="NewParent/Child", file_count=1,
+               path_length=123, note="original note"),
+    ))
+    real = Path.exists
+
+    def exists(path):
+        if path == project / "NewParent/Child" and (project / "NewParent/Child/a.txt").is_file():
+            raise PermissionError("metadata denied")
+        return real(path)
+
+    monkeypatch.setattr(Path, "exists", exists)
+    result = apply_plan(fixture_drive, project, m, plan)
+    earlier, current = result.actions
+    assert earlier.status == DONE
+    assert earlier.moved == (Move("Meetings", "11 Meetings", True),)
+    assert current.status == FAILED
+    assert current.moved == (Move("a.txt", "NewParent/Child/a.txt", False),)
+    assert current.created == ("NewParent",)
+    assert current.file_count == 1 and current.path_length == 123
+    assert "original note" in current.note
+    assert "NewParent/Child" in current.note and "unknown" in current.note
+    assert "metadata denied" in current.note
+    restored = plan_from_dict({"project": project.name,
+                               "actions": [action_to_dict(a) for a in result.actions]})
+    assert restored == result
+    assert "a.txt -> NewParent/Child/a.txt" in _log_text(fixture_drive)
+    assert "rename Meetings -> 11 Meetings" in _log_text(fixture_drive)
+
+
+def test_cli_denied_created_probe_keeps_successful_move_manifests(fixture_drive, monkeypatch, capsys):
+    project = make_project(
+        fixture_drive, "260716_ProbeCLI", sections=["Meetings", "08 OUT/Invoices"],
+        files={"Meetings/a.md": "keep", "08 OUT/Invoices/a.pdf": "move"},
+    )
+    real = Path.exists
+
+    def exists(path):
+        if path == project / "10 Legal" and (project / "10 Legal/Invoices/a.pdf").is_file():
+            raise PermissionError("metadata denied")
+        return real(path)
+
+    monkeypatch.setattr(Path, "exists", exists)
+    status = main(["conform", "--drive", str(fixture_drive), "--project", project.name,
+                   "--only", "rename", "--only", "relocate", "--apply", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    actions = payload[0]["actions"]
+    earlier = next(a for a in actions if a["src"] == "Meetings")
+    current = next(a for a in actions if a["src"] == "08 OUT/Invoices")
+    assert status == 2
+    assert earlier["status"] == DONE
+    assert earlier["moved"] == [{"src": "Meetings", "dst": "11 Meetings", "is_dir": True}]
+    assert current["status"] == FAILED
+    assert current["moved"] == [{"src": "08 OUT/Invoices", "dst": "10 Legal/Invoices", "is_dir": True}]
+    assert "unknown" in current["note"] and "10 Legal" in current["note"]
+
+
+def test_creation_only_failure_cannot_report_a_successful_empty_undo(fixture_drive, monkeypatch):
+    import os
+    from atlas.core.conform import Action, NotInvertible, Plan
+
+    project = make_project(fixture_drive, "260715_Created", sections=["Source"],
+                           files={"Source/a.md": "keep"})
+    m = scan_drive(fixture_drive).map
+    real = os.rename
+
+    def rename(src, dst):
+        if Path(dst) == project / "NewParent/Target":
+            raise PermissionError("move denied after mkdir")
+        return real(src, dst)
+
+    monkeypatch.setattr(os, "rename", rename)
+    result = apply_plan(fixture_drive, project, m, Plan(project.name, (
+        Action(kind="relocate", src="Source", dst="NewParent/Target"),
+    )))
+    assert result.actions[0].status == FAILED
+    assert result.actions[0].created == ("NewParent",)
+    assert result.actions[0].moved == ()
+    with pytest.raises(NotInvertible, match="created.*cannot be reversed"):
+        invert_plan(result)
+    assert (project / "NewParent").is_dir()
+    assert (project / "Source/a.md").read_text(encoding="utf-8") == "keep"
+
+
 @pytest.mark.parametrize("only", [None, "rename"])
 def test_cli_all_records_a_vanished_project_and_keeps_going(fixture_drive, capsys, monkeypatch, only):
     """#54: apply_plan's 'project folder is no longer available' OpsError

@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
-- **Conform keeps recovery evidence after partial failures (#94).** Multi-project `--revert` records expected project failures without losing earlier manifests or abandoning later projects. Failed or conflicted actions retain folders created before the failure; stranded agent-file case renames retain their Move Manifest, and conflicted moves reach the drive log. A vanished project's `--only` exclusions remain skipped. Archive undo now shares one completion path while preserving its index, manifest and empty-folder pruning behavior.
+- **Conform keeps recovery evidence after partial failures (#94).** Multi-project `--revert` records expected project failures without losing earlier manifests or abandoning later projects. Failed or conflicted actions retain folders created before the failure; stranded agent-file case renames retain their Move Manifest, and conflicted moves reach the drive log. Post-write metadata probe failures preserve earlier and current Move Manifests, retain confirmed creations, and report unreadable creation state as unknown. Creation-only actions explicitly refuse undo instead of reporting an empty success. A vanished project's `--only` exclusions remain skipped. Archive undo now shares one completion path while preserving its index, manifest and empty-folder pruning behavior.
 
 ## [Atlas 0.32.0] - 2026-11-09
 

@@ -398,6 +398,11 @@ def invert_plan(plan: Plan) -> Plan:
     still refused: its manifest never describes what it changed.
     """
     for action in plan.actions:
+        if action.created and not action.moved:
+            raise NotInvertible(
+                f"{action.kind} {action.src or action.dst} created paths without "
+                f"a move to undo; the plan cannot be reversed"
+            )
         if action.status == SKIPPED or (action.status == FAILED and not action.moved):
             continue    # nothing happened, so there is nothing to reverse
         if action.status == FAILED:
@@ -621,9 +626,19 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
                 # broke: a person resolves it, and it is one action, never the
                 # whole run (#54).
                 result = replace(action, status=CONFLICT, note=str(error))
-            created = tuple(rel for rel in absent if (project / rel).exists())
-            if created:
-                result = replace(result, created=created)
+            created = list(result.created)
+            for rel in absent:
+                try:
+                    exists = (project / rel).exists()
+                except OSError as error:
+                    # The write already returned its effects. A metadata read
+                    # must not discard them or describe an unreadable path as absent.
+                    result = replace(result, status=FAILED, note=_notes(
+                        result.note, f"created state unknown for {rel}: {_os_note(error)}"))
+                    continue
+                if exists and rel not in created:
+                    created.append(rel)
+            result = replace(result, created=tuple(created))
             if result.status == DONE and action.prune:
                 _prune_empty(project, action.prune)
             applied.append(result)
