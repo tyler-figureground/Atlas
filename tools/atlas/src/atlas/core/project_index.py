@@ -134,7 +134,7 @@ def _atomic_write(path: Path, contents: bytes, expected: bytes | None) -> None:
                 pass
 
 
-def _split_table_row(line: str) -> list[str] | None:
+def _split_table_row(line: str, *, raw: bool = False) -> list[str] | None:
     stripped = line.strip()
     if not stripped.startswith("|") or not stripped.endswith("|"):
         return None
@@ -143,7 +143,8 @@ def _split_table_row(line: str) -> list[str] | None:
     escaped = False
     for character in stripped[1:-1]:
         if character == "|" and not escaped:
-            cells.append("".join(current).strip())
+            cell = "".join(current)
+            cells.append(cell if raw else cell.strip())
             current = []
         else:
             current.append(character)
@@ -151,7 +152,8 @@ def _split_table_row(line: str) -> list[str] | None:
             escaped = not escaped
         else:
             escaped = False
-    cells.append("".join(current).strip())
+    cell = "".join(current)
+    cells.append(cell if raw else cell.strip())
     return cells
 
 
@@ -470,9 +472,10 @@ def update_project_index_row(
         if match is None:
             lines.insert(row_end, _project_row(new_folder_name, intake))
         else:
-            existing_cells = _split_table_row(lines[match])
-            assert existing_cells is not None
-            lines[match] = _project_row(
-                new_folder_name, intake, _untable(existing_cells[6])
-            )
+            existing_cells = _split_table_row(lines[match], raw=True)
+            revised_cells = _split_table_row(_project_row(new_folder_name, intake), raw=True)
+            assert existing_cells is not None and revised_cells is not None
+            # Status is hand-written, not intake: keep its separators, escapes
+            # and padding verbatim rather than decoding and rendering it again.
+            lines[match] = "|" + "|".join([*revised_cells[:6], existing_cells[6]]) + "|"
         _atomic_write(path, _crlf_bytes(lines), contents)

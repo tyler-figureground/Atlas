@@ -13,8 +13,9 @@
 1. #93 complete and merged: Tyler digest off-map folder counts and incomplete-scan warnings.
 2. #94 complete: merged PR #99, SHA `3bc0944`. Full 1670, focused 143, lint and CI green. Two review rounds; final P2 fixed and coordinator-inspected.
 3. #95 complete: merged PR #100, SHA `00e297b`. Full suite 1728, independent verification 279, lint and CI green, review PASS (coordinator evidence).
-4. #96 current in `agent-outstanding-search`: content-search lifecycle, cache persistence and compact status. Approved public API/CLI, temporary-filesystem, executor/thread and timer seams; sequential red-first fixes. Commit only; no push, PR or merge. #97 text preservation/remaining guard regressions remains pending.
-5. Leave parked tickets 27/28, quarterly walk, human site work, deployment and old branch alone.
+4. #96 complete: merged PR #101, SHA `11dd258`. Full suite 1743, independent verification 94, lint/CI PASS (coordinator evidence).
+5. #97 current and last in `agent-outstanding-text`: text preservation and remaining CLI/doctor regressions. Approved existing API/CLI seams with temporary fixtures; sequential red-first fixes. Commit only; no push, PR or merge. After coordinator integration, the outstanding implementation queue is empty.
+6. Leave parked tickets 27/28, quarterly walk, human site work, release/deployment and old branch alone.
 
 ## #94 implementation and evidence
 
@@ -64,9 +65,21 @@
 - Final repo lint passed (264 Markdown files; both hook suites). Optional shellcheck unavailable, explicitly skipped by the script. Staged diff check passed. Fetch immediately before commit still ahead 0 / behind 0 against origin/main. All owned test processes exited or were explicitly stopped; no background work remains.
 - Changelog and queue cursor updated. #95 merged PR #100 / `00e297b`, full 1728, independent 279, lint/CI green, review PASS per coordinator. #96 current; #97 remaining. Commit only; no push/PR/merge or independent-review/CI claim for #96.
 
+## #97 implementation and verification
+
+- Fetched base `11dd258`: ahead 0 / behind 0. Read issue #97, original PR #77/#88/#85 review comments, global/repo rules, TDD skill and references, glossary and ADR 0010. User approved existing public API/CLI seams with temporary fixtures; no new seam or drive access needed.
+- Marker red-green: 32 cases reproduced silent separator removal at marker edges or duplicate-block insertion when separator-adjacent text hid both markers. Marker lines now allow only ASCII horizontal padding; embedded marker occurrences refuse rather than guessing. Conflict tests assert original file bytes unchanged. Missing, reversed, duplicate and mixed valid/embedded markers remain refused by both reader and writer.
+- Leading separator red-green: 16 failures (block inserted after a later heading instead of before the leading separator, or deleted separator before headless prose); eight same-physical-line heading controls already passed. Separator characters are now substantive text for placement and blank-line trimming. All 24 cases preserve the original suffix and settle without another rewrite.
+- Status red-green: eight separator cases failed byte equality. Updating intake now renders only intake cells and carries the raw Status cell through unchanged, including unusual padding, Unicode separators, escaped pipes and noncanonical backslashes. Three updates prove idempotence; earlier row and trailing notes remain byte-identical in the CRLF fixture. Existing CR/LF serialization policy is unchanged.
+- Doctor test now places U+2028 inside map-derived block content, checks the public report, detects a real heading change and confirms conform repairs it. Removal control switching only the reader to `splitlines()` failed; restored physical-line reader passed. No manufactured production fix for this already-correct splitter.
+- Existing CLI initialization guards already passed. Strengthened both direct calls with explicit no-traceback/empty-stdout assertions; two real CLI subprocesses additionally require exit 2 and the expected diagnostic without a traceback. Environment points only to temporary fixtures; the reference-set override is cleared.
+- Consumer sweep found the same PR #77 logic in filing cards. Stopped the incomplete first full run before editing it (not verification evidence). Reproduced 32 marker failures and 16 leading-separator failures there, with eight already-passing controls. Applied the same bounded marker/placement policy; all 56 new filing-card cases pass. No shared-module extraction or unrelated marker-format changes.
+- Focused final: `cd tools/atlas && uv run pytest tests/test_agents_md.py tests/test_client_homes.py tests/test_project_index.py tests/test_cli.py tests/test_archive.py tests/test_project_data.py -q`: **326 passed in 10.39s**, no skips. Final full suite: `cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120`: **1873 passed in 335.91s**, exit 0, no skips, Windows / Python 3.13.15. Same command as CI; no new CI or independent-review result claimed. Repo lint passed (264 Markdown files, both hook suites; optional shellcheck unavailable and skipped locally). Diff check passed. All owned background test processes exited or were explicitly stopped.
+- Changelog and cursor updated: #96 merged PR #101 / `11dd258`, full 1743, independent 94, lint/CI PASS per coordinator. #97 current and last; after integration queue empty. Commit only; no push/PR/merge, primary-checkout or studio-drive writes. Release/deploy, old branch, parked tickets and human work untouched.
+
 ## Next action
 
-#95 integrated as PR #100 / `00e297b`, full 1728, independent 279, lint/CI green, review PASS. #96 is the current implementation; #97 remains next. Coordinator owns review/integration; no push, PR or merge from this session. No third review of #94; both existing review reports preserved. No deployment, primary-checkout or studio-drive writes.
+#96 integrated as PR #101 / `11dd258`, full 1743, independent 94, lint/CI PASS. #97 is current and last; after its integration the outstanding implementation queue is empty. Coordinator owns review/integration; no push, PR or merge from this session. No third review of #94; both existing review reports preserved. Leave release/deployment, old branch, parked tickets and human work alone. No primary-checkout or studio-drive writes.
 
 ## #95 implementation and final evidence
 
