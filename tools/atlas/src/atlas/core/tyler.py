@@ -23,6 +23,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date
 from pathlib import Path
 
+from .deep import DeepScan, scan_deep
 from .meetings import MeetingScan, scan_meetings
 from .permits import (
     AHJ,
@@ -75,6 +76,8 @@ class ProjectDigest:
     meetings: MeetingScan | None = None
     # The permit tracker (roadmap F3, ADR 0024): None when the map has no rule.
     permits: PermitScan | None = None
+    # Shared doctor walk: folder drift and scan completeness, without content reads.
+    deep: DeepScan | None = None
 
     def blocks(self, decision: TaskItem) -> int | None:
         if not decision.id:
@@ -185,6 +188,11 @@ def _project(name: str, tyler_text: str | None, tasks_text: str | None, *,
 
 
 def collect(inventory: DriveInventory) -> Digest:
+    """Read task lists and scan each project for folder drift.
+
+    The digest pays one shared deep pass per project; no separate traversal or
+    file-content reads are added for the off-map count.
+    """
     # Sorted by name: scan order is the filesystem's, which differs by OS.
     rule = inventory.map.meetings
     permit_rule = inventory.map.permits
@@ -198,6 +206,7 @@ def collect(inventory: DriveInventory) -> Digest:
             project = replace(project, meetings=scan_meetings(inv.path, rule))
         if permit_rule is not None:
             project = replace(project, permits=scan_permits(inv.path, permit_rule))
+        project = replace(project, deep=scan_deep(inv.path, inventory.map))
         projects.append(project)
     return Digest(drive=inventory.map.drive, projects=tuple(projects),
                   meetings_tracked=rule is not None,
@@ -431,6 +440,19 @@ def render(digest: Digest, *, generated: date | None = None) -> str:
     lines += _render_permits(digest, generated)
     for project in digest.projects:
         lines += ["", f"## {project.name}"]
+        if project.deep is not None:
+            scan = project.deep
+            incomplete = bool(scan.unreadable or scan.depth_capped)
+            if scan.off_map:
+                count = len(scan.off_map)
+                qualifier = "at least " if incomplete else ""
+                noun = "folder" if count == 1 else "folders"
+                lines.append(f"- {qualifier}{count} off-map {noun}")
+            if incomplete:
+                lines.append("- Off-map scan incomplete:")
+                lines += [f"  - unreadable: {reason}" for reason in scan.unreadable]
+                lines += [f"  - depth-capped: {path} (not scanned)"
+                          for path in scan.depth_capped]
         if project.tyler_unreadable:
             lines.append(f"- TYLER.md cannot be read ({project.tyler_unreadable}) - "
                          "its errands are not counted")

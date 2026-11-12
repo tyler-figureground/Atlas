@@ -1580,6 +1580,10 @@ def cmd_tyler(args: argparse.Namespace) -> int:
                  "tasks_missing": p.tasks_missing,
                  "tyler_unreadable": p.tyler_unreadable,
                  "tasks_unreadable": p.tasks_unreadable,
+                 "off_map": ({"count": len(p.deep.off_map),
+                              "unreadable": list(p.deep.unreadable),
+                              "depth_capped": list(p.deep.depth_capped)}
+                             if p.deep is not None else None),
                  "errands": [item_dict(i) for i in p.errands],
                  "decisions": [{**item_dict(i), "blocks": p.blocks(i)} for i in p.decisions],
                  "meetings": scan_dict(p.meetings) if p.meetings is not None else None,
