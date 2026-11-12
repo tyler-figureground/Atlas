@@ -636,8 +636,9 @@ async def test_no_second_build_starts_beside_a_live_one(fixture_drive, monkeypat
         assert started.is_set()
 
         # The running build's periodic save: a partial cache on disk.
-        contentindex._save(contentindex.index_path(fixture_drive),
-                           dc_replace(real(fixture_drive), complete=False))
+        partial = dc_replace(real(fixture_drive), complete=False)
+        contentindex.index_path(fixture_drive).unlink()
+        contentindex._save(contentindex.index_path(fixture_drive), partial)
         await rescan()
         assert app._content_building and len(builds) == 1
 
@@ -646,11 +647,11 @@ async def test_no_second_build_starts_beside_a_live_one(fixture_drive, monkeypat
         await rescan()
         assert not app._content_building and len(builds) == 1
 
-        # The live thread's next periodic save downgrades that cache.
-        contentindex._save(contentindex.index_path(fixture_drive),
-                           dc_replace(real(fixture_drive), complete=False))
+        # The live thread's checkpoint cannot downgrade that whole cache.
+        contentindex._save(contentindex.index_path(fixture_drive), partial)
         await rescan()
-        assert app._content_building and len(builds) == 1
+        assert not app._content_building and len(builds) == 1
+        assert load_index(fixture_drive).complete
 
         release.set()
         await settle(app, pilot)

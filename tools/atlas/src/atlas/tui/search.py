@@ -121,7 +121,7 @@ CONTENT_CHECKS = 50
 
 
 def _stamp_short(stamp: str, *, date_only: bool = False, tz: tzinfo | None = None) -> str:
-    """The Indexed-At Stamp for a status line, in local time: '2026-10-09 07:31'.
+    """The Indexed-At Stamp for a status line, in local time: '2026-10-09 07:31 -0700'.
 
     The stamp is stored in UTC; shown raw, a 12:12 build in California read
     '20:12', and after about 4 pm the next day's date (#66). ``tz`` is for
@@ -133,7 +133,7 @@ def _stamp_short(stamp: str, *, date_only: bool = False, tz: tzinfo | None = Non
         moment = None
     if moment is not None and moment.tzinfo is not None:
         local = moment.astimezone(tz)
-        return local.strftime("%Y-%m-%d" if date_only else "%Y-%m-%d %H:%M")
+        return local.strftime("%Y-%m-%d" if date_only else "%Y-%m-%d %H:%M %z")
     date, _, time = stamp.partition("T")
     if date_only or not time:
         return date
@@ -302,8 +302,8 @@ class SearchOverlay(ModalScreen[tuple[str, Hit] | None]):
                 f"{found} - {date}",
                 found,
                 f"{self._content_total} content{stale}, {self._content_unverified} unchecked",
-                f"{self._content_total} content, {self._content_unverified} unchecked",
-                f"{self._content_unverified} unchecked",
+                (f"{self._content_stale} stale, {self._content_unverified} unchecked"
+                 if self._content_stale else f"{self._content_unverified} unchecked"),
             ], cells)
         return _fit_line([
             f"{found} - indexed {stamp}",
