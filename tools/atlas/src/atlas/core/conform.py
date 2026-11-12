@@ -60,6 +60,7 @@ from .scan import (
     ends_in_space_or_dot,
     long_path,
     path_length,
+    path_units,
     scan_drive,
     tally_files,
     walk,
@@ -164,13 +165,13 @@ def deepest_tail(src: Path) -> int:
     # deep subtree is otherwise under-measured on a machine without
     # LongPathsEnabled, exactly where the warning matters.
     base = os.fspath(src)
-    root_len = len(base)
+    root_len = path_units(base)
     deepest = 0
     for root, _dirs, files, links in walk(base):
-        tail = len(root) - root_len
+        tail = path_units(root) - root_len
         deepest = max(deepest, tail)
         for name in (*files, *links):
-            deepest = max(deepest, tail + 1 + len(name))
+            deepest = max(deepest, tail + 1 + path_units(name))
     return deepest
 
 
@@ -1154,7 +1155,8 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
 
     if not _exists(dst):
-        os.makedirs(_dest(dst.parent, directory=True), exist_ok=True)
+        if not _isdir(dst.parent):
+            os.makedirs(_dest(dst.parent, directory=True), exist_ok=True)
         os.rename(long_path(src), _dest(dst, directory=True))
         return replace(action, status=DONE,
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
@@ -1205,7 +1207,8 @@ def _apply_sweep(project: Path, action: Action) -> Action:
         return replace(action, status=SKIPPED, note="source gone")
     dst_rel = action.dst.replace("\\", "/").rstrip("/")
     dst_dir = project / dst_rel
-    os.makedirs(_dest(dst_dir, directory=True), exist_ok=True)
+    if not _isdir(dst_dir):
+        os.makedirs(_dest(dst_dir, directory=True), exist_ok=True)
     target = dst_dir / src.name
     if _exists(target):
         return replace(action, status=CONFLICT, note="name exists at target")

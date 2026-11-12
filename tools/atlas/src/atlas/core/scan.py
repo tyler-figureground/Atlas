@@ -51,6 +51,13 @@ _LONG_PREFIX = "\\\\?\\"
 _DEVICE_PREFIXES = (_LONG_PREFIX, "\\\\.\\", "//?/", "//./")
 
 
+def path_units(raw: str):
+    """Native path units: UTF-16 code units on Windows, characters elsewhere."""
+    if sys.platform == "win32":
+        return len(raw.encode("utf-16-le", errors="surrogatepass")) // 2
+    return len(raw)
+
+
 def path_length(path: Path | str):
     """Absolute display-path length, excluding only the Windows device marker.
 
@@ -65,7 +72,7 @@ def path_length(path: Path | str):
         raw = "\\\\" + raw[8:]
     elif raw.startswith(("\\\\?\\", "\\\\.\\")):
         raw = raw[4:]
-    return len(raw)
+    return path_units(raw)
 
 
 def ends_in_space_or_dot(raw: str) -> bool:
@@ -96,7 +103,7 @@ def long_path(path: Path | str) -> str:
         # Measure what Windows will see, not the string given: a 41-character
         # relative path can be 308 once the working directory is in front of it.
         absolute = os.path.abspath(raw)
-        if len(absolute) < _MAX_PATH:
+        if path_units(absolute) < _MAX_PATH:
             return raw
     if absolute.startswith("\\\\"):  # UNC
         return _LONG_PREFIX + "UNC" + absolute[1:]

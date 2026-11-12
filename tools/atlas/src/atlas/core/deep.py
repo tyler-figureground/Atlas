@@ -51,7 +51,7 @@ from pathlib import Path
 
 from .filerules import names_match
 from .mapfile import DriveMap
-from .scan import WINDOWS_MAX_PATH, is_link, long_path
+from .scan import WINDOWS_MAX_PATH, is_link, long_path, path_length
 
 # Per-folder depth guard. Real project trees sit under a dozen levels; 64 is
 # far past anything legitimate (at 64 levels even short names blow past
@@ -186,7 +186,7 @@ def scan_deep(project: Path, m: DriveMap) -> DeepScan:
                 continue        # the entry itself failed; its folder was read
             # Measure what Windows will see, not the string given (long_path's
             # rule): a short relative path can be far longer absolute.
-            length = len(os.path.abspath(os.path.join(os.fspath(project), child)))
+            length = path_length(project / child)
             over = length + (2 if directory else 0) > WINDOWS_MAX_PATH
             if over and not under_overlong:
                 overlong.append(OverlongPath(path=child, length=length))

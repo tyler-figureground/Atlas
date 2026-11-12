@@ -49,7 +49,7 @@
 
 ## Next action
 
-#94 integrated as recorded above. #95 implemented and verified locally; this cursor accompanies its commit. Coordinator owns review/integration; no push, PR or merge from this session. #96-97 remain pending. No third review of #94; both existing review reports preserved. No deployment, primary-checkout or studio-drive writes.
+#94 integrated as recorded above. #95 implementation and independent review95 repairs are recorded below; this cursor accompanies the repair commit. Coordinator owns review/integration; no push, PR or merge from this session. #96-97 remain pending. No third review of #94; both existing review reports preserved. No deployment, primary-checkout or studio-drive writes.
 
 ## #95 implementation and final evidence
 
@@ -66,3 +66,12 @@
 - Final full suite: `cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120`: 1709 passed in 324.11s, exit 0, no skips. Windows / Python 3.13.15; native directory/file, exact-name and cleanup tests executed. Same test command as CI; no new CI run claimed.
 - Final repo lint passed, including 264 Markdown files and both hook suites. Optional shellcheck unavailable locally, explicitly skipped by the script. Staged diff check passed. All owned background test processes exited.
 - Commit only, including implementation, tests, changelog, source evidence and this cursor. No push/PR/merge, no independent #95 review claim, no primary-checkout or studio-drive edits.
+
+## Independent review95 P2 repairs
+
+- User approved full existing seams without further questions; coordinator's finding summary supplied review context. Fetched origin: branch ahead 1 / behind 0 relative to origin/main, clean before edits. Commit only, no push.
+- Existing-parent regression: four native Windows red cases through apply_plan/invert_plan proved a 248-character exact parent blocked a valid 254-character file move, either inward or on undo after moving outward. Both trailing-space and trailing-dot names now round-trip with original bytes and exact parent spelling. _apply_sweep and _apply_move only run parent creation checks when the exact parent is not already a directory. Actual directory destinations and file destination checks remain unchanged.
+- UTF-16 regression: native emoji directory/file destinations at 248/260 units incorrectly applied (two red cases); destination and subtree preview cases reported 259 instead of 260 (two red cases). Shared path_units uses Windows UTF-16 code units with surrogatepass, character counts elsewhere. Absolute measurement, subtree roots/leaves and read-prefix selection use it consistently. UNC adapter coverage now includes emoji at both refusal boundaries and below them; portable character semantics have explicit coverage.
+- Consumer sweep: conform Plans, inverse measurement, archive/unarchive previews, deep scan, long_path and _dest inspected. Archive/unarchive destination and deep-scan raw len calls reproduced three further native failures and now use path_length. Warning thresholds, directory rename policy, archive writes, UI/JSON field shape and deep-scan crossing policy are unchanged. The separate intake naming budgets (200-component/240-project characters) are not legacy-boundary consumers and were left out of this repair; display widths and key slicing likewise remain character-based.
+- Focused final: uv run pytest tests/test_windows_path_policy.py tests/test_path_length.py tests/test_archive.py tests/test_deep_pass.py tests/test_apply_faults.py tests/test_revert_safety.py tests/test_tree_writes.py -q: 240 passed in 5.97s, no skips. An earlier invocation named nonexistent test_deep.py and ran no tests; corrected to test_deep_pass.py.
+- Full native Windows suite: cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120: 1728 passed in 316.44s, exit 0, no skips. Owned background process exited. Repo lint passed after changelog/cursor edits (264 Markdown files, both hook suites; optional shellcheck unavailable/skipped locally); staged diff check passed. No primary-checkout or studio-drive edits, deployment, push or merge. Coordinator owns integration and review disposition.
