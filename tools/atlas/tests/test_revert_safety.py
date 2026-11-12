@@ -102,7 +102,7 @@ def test_plan_from_dict_refuses_an_escaping_path():
             "note": "", "moved": [], "path_length": 0}]})
 
 
-@pytest.mark.parametrize("field", ["created", "prune"])
+@pytest.mark.parametrize("field", ["created", "created_unknown", "prune"])
 @pytest.mark.parametrize("bad", ["../../outside", "C:/Windows", "/etc", ""])
 def test_plan_from_dict_refuses_an_escaping_created_or_prune(field, bad):
     """Both name folders an undo will rmdir; they obey the same path rule."""
@@ -110,6 +110,22 @@ def test_plan_from_dict_refuses_an_escaping_created_or_prune(field, bad):
         plan_from_dict({"project": "P", "actions": [{
             "kind": "rename", "src": "a", "dst": "b", "file_count": 0, "status": "done",
             "note": "", "moved": [], "path_length": 0, field: [bad]}]})
+
+
+@pytest.mark.parametrize("status", ["done", "failed", "conflict", "skipped"])
+def test_unknown_creation_refuses_inversion_even_with_moves(status):
+    from atlas.core.conform import Action, Move, NotInvertible, Plan, action_to_dict, invert_plan
+
+    action = Action("relocate", "Source", "Parent/Target", status=status,
+                    moved=(Move("Source", "Parent/Target", True),),
+                    created_unknown=("Parent",))
+    payload = {"project": "P", "actions": [action_to_dict(action)]}
+    with pytest.raises(NotInvertible, match="unknown creation state"):
+        invert_plan(plan_from_dict(json.loads(json.dumps(payload))))
+    # Older manifests did not carry this field. Do not infer it from prose.
+    del payload["actions"][0]["created_unknown"]
+    payload["actions"][0]["note"] = "created state unknown"
+    assert plan_from_dict(payload).actions[0].created_unknown == ()
 
 
 def test_node_key_normalises_and_joins_as_one_function():

@@ -38,6 +38,15 @@
 - Focused final run: `cd tools/atlas && uv run pytest tests/test_apply_faults.py tests/test_agents_md.py tests/test_revert_safety.py tests/test_archive.py -q`: 133 passed in 8.77s, no skips.
 - Full suite: `cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120`: 1660 passed in 384.60s, exit 0, no skips; Windows / Python 3.13.15. Repo lint passed (optional shellcheck unavailable locally); `git diff --check` passed. No primary-checkout or studio-drive writes; local branch started ahead 0 / behind 0 after fetch.
 
+## Final round-2 P2 repair (#94 / PR #99)
+
+- Base 660308a, fetched origin; ahead 0 / behind 0 at start. Round 2 has no P0/P1; review rounds capped at two. Both coordinator review reports remain untouched; no third review requested.
+- Red-first public apply/manifest/CLI regression: relocate creates NewParent, rename raises PermissionError, post-write existence probe raises PermissionError. Returned FAILED action has no confirmed creations or moves. Serialized manifest with its prose note cleared loaded successfully, and `conform --revert --apply --json` incorrectly exited 0 with an empty inverse and leftover NewParent. Observed failure: expected 2, got 0.
+- Added default-empty `Action.created_unknown` path tuple, appended after existing fields to preserve positional constructors. Apply retains uncertain creation paths alongside confirmed effects. Shared JSON serializer and both conform/archive loaders preserve it with their existing containment validation; legacy manifests missing the field still load with an empty tuple. Neither recovery path parses notes.
+- Both inversion functions refuse uncertain effects before status/move shortcuts. Coverage includes uncertain actions with moves and DONE/FAILED/CONFLICT/SKIPPED statuses, legacy defaults, archive round-trip/refusal, and escaping paths. CLI regression now exits 2 and leaves the source and uncertain parent untouched.
+- Consumer inspection: CLI conform/archive JSON use the shared serializer; both loaders explicitly reconstruct Actions and now retain the field; CLI revert preflight and TUI UndoStack use the inversion functions and inherit refusal. Tree/render/guard consumers retain existing behavior; no new action kind or guessed cleanup. Existing index_row/keep_index serialization behavior is outside this repair and unchanged.
+- Full suite: `cd tools/atlas && uv run --locked --with pytest-timeout pytest -q --timeout=120`: 1670 passed in 316.95s, exit 0, no skips. Final focused rerun: `uv run pytest tests/test_apply_faults.py tests/test_agents_md.py tests/test_revert_safety.py tests/test_archive.py -q`: 143 passed in 5.93s, no skips. Repo lint and diff check passed; shellcheck unavailable locally (script skips).
+
 ## Next action
 
-Review repairs verified and ready in this commit, without pushing. Coordinator owns independent re-review of PR #99 and any push/integration; no review PASS claimed here.
+Final P2 repair verified and committed with this cursor, without pushing. Coordinator owns final-change inspection and push/integration; no third review requested or PASS claimed. Both existing review reports preserved. No merge, deployment, primary-checkout or studio-drive writes.

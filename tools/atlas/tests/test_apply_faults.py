@@ -387,6 +387,49 @@ def test_creation_only_failure_cannot_report_a_successful_empty_undo(fixture_dri
     assert (project / "Source/a.md").read_text(encoding="utf-8") == "keep"
 
 
+def test_unknown_creation_manifest_refuses_cli_revert(fixture_drive, monkeypatch, tmp_path, capsys):
+    import os
+    from atlas.core.conform import Action, Plan, action_to_dict, plan_from_dict
+
+    project = make_project(fixture_drive, "260717_Unknown", sections=["Source"],
+                           files={"Source/a.md": "keep"})
+    m = scan_drive(fixture_drive).map
+    real_rename, real_exists = os.rename, Path.exists
+
+    def rename(src, dst):
+        if Path(dst) == project / "NewParent/Target":
+            raise PermissionError("move denied after mkdir")
+        return real_rename(src, dst)
+
+    def exists(path):
+        if path == project / "NewParent" and path.is_dir():
+            raise PermissionError("metadata denied")
+        return real_exists(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "rename", rename)
+        patch.setattr(Path, "exists", exists)
+        result = apply_plan(fixture_drive, project, m, Plan(project.name, (
+            Action(kind="relocate", src="Source", dst="NewParent/Target"),
+        )))
+    assert result.actions[0].status == FAILED
+    assert result.actions[0].created == result.actions[0].moved == ()
+    payload = {"drive": "TESTDRIVE", "project": project.name,
+               "actions": [action_to_dict(a) for a in result.actions]}
+    # Recovery must use structured evidence, not the human-readable note.
+    payload["actions"][0]["note"] = ""
+    manifest = tmp_path / "unknown.json"
+    manifest.write_text(json.dumps([payload]), encoding="utf-8")
+    loaded = plan_from_dict(json.loads(manifest.read_text(encoding="utf-8"))[0])
+    status = main(["conform", "--drive", str(fixture_drive), "--revert", str(manifest),
+                   "--apply", "--json"])
+    assert status == 2
+    assert "unknown" in capsys.readouterr().err
+    assert loaded.actions[0].created_unknown == ("NewParent",)
+    assert (project / "NewParent").is_dir()
+    assert (project / "Source/a.md").read_text(encoding="utf-8") == "keep"
+
+
 @pytest.mark.parametrize("only", [None, "rename"])
 def test_cli_all_records_a_vanished_project_and_keeps_going(fixture_drive, capsys, monkeypatch, only):
     """#54: apply_plan's 'project folder is no longer available' OpsError

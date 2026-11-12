@@ -342,6 +342,11 @@ def invert_archive_plan(plan: ArchivePlan) -> ArchivePlan:
     """
     actions: list[Action] = []
     for action in plan.actions:
+        if action.created_unknown:
+            raise NotInvertible(
+                f"{action.kind} {action.src} has unknown creation state; "
+                f"the plan cannot be reversed"
+            )
         if action.status == FAILED and not action.moved:
             raise NotInvertible(
                 f"{action.kind} {action.src} failed before anything moved; "
@@ -525,6 +530,8 @@ def archive_plan_from_dict(payload: dict) -> ArchivePlan:
                 ),
                 path_length=a.get("path_length", 0),
                 created=tuple(_drive_relative(k, "created") for k in a.get("created", ())),
+                created_unknown=tuple(_drive_relative(k, "created_unknown")
+                                      for k in a.get("created_unknown", ())),
                 prune=tuple(_drive_relative(k, "prune") for k in a.get("prune", ())),
                 index_row=_row_text(a.get("index_row", "")),
             )

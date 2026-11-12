@@ -130,6 +130,9 @@ class Action:
     # index row (its stamp failed, or the project had none), so the undo must
     # not stamp one either (#60).
     keep_index: bool = False
+    # Paths absent before applying whose post-write existence could not be read.
+    # Not confirmed creations, and never evidence that nothing happened.
+    created_unknown: tuple[str, ...] = ()
 
     @property
     def path_warning(self) -> bool:
@@ -284,6 +287,7 @@ def action_to_dict(action: Action) -> dict:
         "path_length": action.path_length,
         "path_warning": action.path_warning,
         "created": list(action.created),
+        "created_unknown": list(action.created_unknown),
         "prune": list(action.prune),
         "index_row": action.index_row,
     }
@@ -303,6 +307,8 @@ def plan_from_dict(payload: dict) -> Plan:
     way in - it is a property, and honouring a supplied one would let a manifest
     contradict its own ``path_length``. ``created`` and ``prune`` came later and
     default to empty, so a manifest an older Atlas printed still reads back.
+    ``created_unknown`` likewise defaults to empty for legacy manifests; new
+    manifests retain unreadable post-write creation paths separately.
     """
     try:
         actions = tuple(
@@ -320,9 +326,11 @@ def plan_from_dict(payload: dict) -> Plan:
                     for mv in a["moved"]
                 ),
                 path_length=a["path_length"],
-                # Both name folders Atlas will rmdir: the same path rule applies.
+                # Creation evidence and undo pruning use the same containment rule.
                 created=tuple(_inside(k, "created", required=True)
                               for k in a.get("created", ())),
+                created_unknown=tuple(_inside(k, "created_unknown", required=True)
+                                      for k in a.get("created_unknown", ())),
                 prune=tuple(_inside(k, "prune", required=True)
                             for k in a.get("prune", ())),
             )
@@ -398,6 +406,11 @@ def invert_plan(plan: Plan) -> Plan:
     still refused: its manifest never describes what it changed.
     """
     for action in plan.actions:
+        if action.created_unknown:
+            raise NotInvertible(
+                f"{action.kind} {action.src or action.dst} has unknown creation state "
+                f"for {', '.join(action.created_unknown)}; the plan cannot be reversed"
+            )
         if action.created and not action.moved:
             raise NotInvertible(
                 f"{action.kind} {action.src or action.dst} created paths without "
@@ -627,18 +640,22 @@ def apply_plan(drive_root: Path, project: Path, m: DriveMap, plan: Plan,
                 # whole run (#54).
                 result = replace(action, status=CONFLICT, note=str(error))
             created = list(result.created)
+            created_unknown = list(result.created_unknown)
             for rel in absent:
                 try:
                     exists = (project / rel).exists()
                 except OSError as error:
                     # The write already returned its effects. A metadata read
                     # must not discard them or describe an unreadable path as absent.
+                    if rel not in created_unknown:
+                        created_unknown.append(rel)
                     result = replace(result, status=FAILED, note=_notes(
                         result.note, f"created state unknown for {rel}: {_os_note(error)}"))
                     continue
                 if exists and rel not in created:
                     created.append(rel)
-            result = replace(result, created=tuple(created))
+            result = replace(result, created=tuple(created),
+                             created_unknown=tuple(created_unknown))
             if result.status == DONE and action.prune:
                 _prune_empty(project, action.prune)
             applied.append(result)
