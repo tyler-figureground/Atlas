@@ -403,6 +403,34 @@ def test_update_still_blocks_duplicate_matching_rows(fixture_drive):
     assert index.read_bytes() == duplicate
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"])
+def test_update_preserves_handwritten_status_and_unrelated_bytes(fixture_drive, separator):
+    drive_map = load_map(fixture_drive / "_tools" / "testdrive-map.json")
+    folder = "260813_100 Main-Old"
+    append_project_index_row(fixture_drive, drive_map, "260812_Other", _intake())
+    append_project_index_row(fixture_drive, drive_map, folder, _intake())
+    index = fixture_drive / "_Project Index.md"
+    status = ("\t " + separator + r"On hold\|" + separator
+              + r"review C:\notes" + separator + " \t").encode("utf-8")
+    original = index.read_bytes()
+    prefix, row = original.rsplit(("| " + folder).encode(), 1)
+    row = ("| " + folder).encode() + row.replace(b" Active ", status)
+    notes = ("\r\nNotes: keep" + separator + "this.\r\n").encode("utf-8")
+    original = prefix + row + notes
+    index.write_bytes(original)
+
+    for _ in range(3):
+        update_project_index_row(
+            fixture_drive, drive_map, folder, folder,
+            replace(_intake(), project_name="Revised"),
+            expected_digest=hashlib.sha256(index.read_bytes()).hexdigest(),
+        )
+
+    assert index.read_bytes() == prefix + row.replace(
+        "Café \\| Annex Study".encode("utf-8"), b"Revised"
+    ) + notes
+
+
 def test_update_leaves_untouched_status_cell_byte_identical(fixture_drive):
     # An edit that does not touch Status must not re-escape it: a pipe in the
     # cell used to double its backslashes on every edit.

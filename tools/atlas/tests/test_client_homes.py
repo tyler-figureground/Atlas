@@ -210,6 +210,46 @@ def test_broken_card_markers_are_a_conflict_not_a_rewrite(drive):
     assert (project / "06 Research/README.md").read_text(encoding="utf-8") == broken
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"])
+@pytest.mark.parametrize("placement", ["before", "after", "text-before", "text-after"])
+def test_separator_adjacent_card_markers_refuse_without_writing(drive, separator, placement):
+    m = _load(drive)
+    def adjacent(marker):
+        return {
+            "before": separator + marker,
+            "after": marker + separator,
+            "text-before": "keep" + separator + marker,
+            "text-after": marker + separator + "keep",
+        }[placement]
+
+    project = make_project(drive, "250101_Adjacent Card", sections=["06 Research"])
+    path = project / "06 Research/README.md"
+    original = ("# Research\r\n" + adjacent(CARD_BEGIN) + "\r\nold\r\n"
+                + adjacent(CARD_END) + "\r\nnotes\r\n").encode("utf-8")
+    path.write_bytes(original)
+    applied = apply_plan(drive, project, m, build_plan(_report(project, m), m, project))
+    card = next(a for a in applied.actions if a.dst == "06 Research/README.md")
+    assert card.status == "conflict" and "markers" in card.note
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"])
+@pytest.mark.parametrize("tail", ["\r\n# Research\r\n\r\nNotes.\r\n", "# Research\r\nNotes.\r\n", "\r\nNotes.\r\n"])
+def test_card_block_precedes_and_preserves_leading_separator(drive, separator, tail):
+    m = _load(drive)
+    project = make_project(drive, "250101_Leading Card", sections=["06 Research"])
+    path = project / "06 Research/README.md"
+    original = (separator + tail).encode("utf-8")
+    path.write_bytes(original)
+    apply_plan(drive, project, m, build_plan(_report(project, m), m, project))
+    updated = path.read_bytes()
+    assert updated.startswith(CARD_BEGIN.encode() + b"\r\n")
+    assert updated.endswith(b"\r\n\r\n" + original)
+    assert "06 Research/README.md" not in _report(project, m).missing_control_plane
+    apply_plan(drive, project, m, build_plan(_report(project, m), m, project))
+    assert path.read_bytes() == updated
+
+
 def test_no_card_for_an_absent_section_nothing_will_create(drive):
     data = copy.deepcopy(MAP)
     data["templates"] = []          # no backfill makes 06 Research here

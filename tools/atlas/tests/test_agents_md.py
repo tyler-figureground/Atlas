@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from atlas.core.conform import CONFLICT, apply_plan, build_plan, build_repair_plan
 from atlas.core.doctor import report_project
 from atlas.core.mapfile import find_map, load_map
@@ -9,6 +11,7 @@ from atlas.core.ops import new_project
 from atlas.core.projectmd import (
     AGENTS_BEGIN,
     AGENTS_END,
+    AgentsBlockError,
     agents_block_current,
     agents_block_lines,
     agents_md_lines,
@@ -184,6 +187,51 @@ def test_broken_markers_are_a_conflict(fixture_drive):
     assert text_of(inv.path / "AGENTS.md") == broken
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"])
+@pytest.mark.parametrize("placement", ["before", "after", "text-before", "text-after"])
+def test_separator_adjacent_markers_are_broken_and_leave_bytes_alone(
+    fixture_drive, separator, placement,
+):
+    def adjacent(marker):
+        return {
+            "before": separator + marker,
+            "after": marker + separator,
+            "text-before": "keep" + separator + marker,
+            "text-after": marker + separator + "keep",
+        }[placement]
+
+    broken = ("# workspace\r\n\r\n" + adjacent(AGENTS_BEGIN)
+              + "\r\nold rules\r\n" + adjacent(AGENTS_END) + "\r\nnotes\r\n")
+    project = make_project(fixture_drive, "260311_Adjacent", sections=["01 Model"],
+                           files={"CLAUDE.md": POINTER + "\n"})
+    path = project / "AGENTS.md"
+    original = broken.encode("utf-8")
+    path.write_bytes(original)
+
+    result, _inv, _m = conform(fixture_drive, project.name)
+
+    action = next(a for a in result.actions if a.dst == "AGENTS.md")
+    assert action.status == CONFLICT and "markers" in action.note
+    assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("markers", [
+    [AGENTS_BEGIN],
+    [AGENTS_END],
+    [AGENTS_END, AGENTS_BEGIN],
+    [AGENTS_BEGIN, AGENTS_BEGIN, AGENTS_END],
+    [AGENTS_BEGIN, AGENTS_END, AGENTS_END],
+    [AGENTS_BEGIN + "\u2028notes", AGENTS_END],
+    [AGENTS_BEGIN, "notes\u2028" + AGENTS_END],
+    [AGENTS_BEGIN, AGENTS_END, "notes\u2028" + AGENTS_BEGIN],
+])
+def test_malformed_marker_guards_agree_for_reader_and_writer(fixture_drive, markers):
+    m = drive_map(fixture_drive)
+    assert not agents_block_current("\n".join(markers), m)
+    with pytest.raises(AgentsBlockError, match="markers.*broken"):
+        with_agents_block(markers, m)
+
+
 def test_conform_settles(fixture_drive):
     make_project(fixture_drive, "260312_Twice", sections=["01 Model"],
                  files={"CLAUDE.md": "# workspace\n\nCustom.\n"})
@@ -223,6 +271,26 @@ def test_block_lands_after_a_heading_and_at_the_top_without_one(fixture_drive):
     assert with_agents_block(with_heading, m) == with_heading   # idempotent
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\x85", "\x0b", "\x0c", "\x1c", "\x1d", "\x1e"])
+@pytest.mark.parametrize("tail", ["\r\n# Title\r\n\r\nBody.\r\n", "# Title\r\nBody.\r\n", "\r\nBody.\r\n"])
+def test_leading_separator_is_text_and_block_precedes_it(fixture_drive, separator, tail):
+    project = make_project(fixture_drive, "260319_Leading", sections=["01 Model"],
+                           files={"CLAUDE.md": POINTER + "\n"})
+    path = project / "AGENTS.md"
+    original = (separator + tail).encode("utf-8")
+    path.write_bytes(original)
+
+    conform(fixture_drive, project.name)
+
+    updated = path.read_bytes()
+    assert updated.startswith(AGENTS_BEGIN.encode() + b"\r\n")
+    assert updated.endswith(b"\r\n\r\n" + original)
+    report, _inv, _m = project_report_for(fixture_drive, project.name)
+    assert "AGENTS.md" not in report.missing_control_plane
+    conform(fixture_drive, project.name)
+    assert path.read_bytes() == updated
+
+
 def test_carried_by_wants_every_line_in_order():
     assert carried_by("a\nb", "a\nx\nb")
     assert not carried_by("a\nb", "b\na")
@@ -243,16 +311,34 @@ def test_a_refresh_keeps_unicode_line_separators_in_the_notes(fixture_drive):
     assert notes in agents, "every separator inside the line survives"
 
 
-def test_a_current_block_with_separators_in_the_notes_is_current(fixture_drive):
-    """The doctor's check splits the way the writer does, so a refreshed file
-    never reads as stale (and is never rewritten again)."""
-    make_project(fixture_drive, "260314_Settle", sections=["01 Model"],
-                 files={"AGENTS.md": "# workspace\n\nkeep\u2028this\n",
-                        "CLAUDE.md": POINTER + "\n"})
-    conform(fixture_drive, "260314_Settle")
-    _m = drive_map(fixture_drive)
-    text = text_of(fixture_drive / "260314_Settle" / "AGENTS.md")
-    assert agents_block_current(text, _m)
+def test_a_current_block_with_separators_in_its_content_is_current(fixture_drive):
+    """A separator outside the block cannot discriminate the doctor's splitter.
+    Put one in map-derived block content, then prove real drift is still found."""
+    import json
+
+    map_path = fixture_drive / "_tools" / "testdrive-map.json"
+    data = json.loads(map_path.read_text(encoding="utf-8"))
+    data["controlPlane"]["analysisDir"] = "06 Research/Code\u2028Notes"
+    map_path.write_text(json.dumps(data), encoding="utf-8")
+    project = make_project(fixture_drive, "260314_Settle", sections=["01 Model"],
+                           files={"AGENTS.md": "# workspace\n\nkeep\u2028this\n",
+                                  "CLAUDE.md": POINTER + "\n"})
+    conform(fixture_drive, project.name)
+    path = project / "AGENTS.md"
+    current = path.read_bytes()
+    assert "`06 Research/Code\u2028Notes/`".encode() in current
+    report, _inv, m = project_report_for(fixture_drive, project.name)
+    assert agents_block_current(current.decode("utf-8"), m)
+    assert "AGENTS.md" not in report.missing_control_plane
+    conform(fixture_drive, project.name)
+    assert path.read_bytes() == current
+
+    path.write_bytes(current.replace(b"## Working style", b"## Obsolete style"))
+    report, _inv, m = project_report_for(fixture_drive, project.name)
+    assert not agents_block_current(text_of(path), m)
+    assert "AGENTS.md" in report.missing_control_plane
+    conform(fixture_drive, project.name)
+    assert path.read_bytes() == current
 
 
 

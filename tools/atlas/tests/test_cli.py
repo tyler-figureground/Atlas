@@ -1223,7 +1223,10 @@ def test_a_bad_console_drive_is_a_usage_error_not_a_traceback(tmp_path, capsys):
     """#67: `Atlas.bat --drive G:/typo` raised UsageError outside main's try:
     a raw traceback and exit 1, which the CLI reserves for findings."""
     assert main(["--drive", str(tmp_path / "typo")]) == 2
-    assert "no _tools/*-map.json" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    assert "no _tools/*-map.json" in captured.err
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
 
 
 def test_refs_with_a_malformed_map_is_an_error_not_a_traceback(fixture_drive, capsys, monkeypatch):
@@ -1232,4 +1235,32 @@ def test_refs_with_a_malformed_map_is_an_error_not_a_traceback(fixture_drive, ca
     monkeypatch.delenv(REFERENCE_SETS_ENV, raising=False)
     (fixture_drive / "_tools" / "testdrive-map.json").write_text("{half", encoding="utf-8")
     assert main(["refs", "--drive", str(fixture_drive)]) == 2
-    assert "not valid JSON" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    assert "not valid JSON" in captured.err
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+
+
+@pytest.mark.parametrize("command", ["console", "refs"])
+def test_initialization_errors_exit_cleanly_in_cli_process(fixture_drive, command, monkeypatch):
+    import subprocess
+    import sys
+
+    from atlas.cli import REFERENCE_SETS_ENV
+
+    monkeypatch.delenv(REFERENCE_SETS_ENV, raising=False)
+    if command == "console":
+        args = ["--drive", str(fixture_drive / "typo")]
+        diagnostic = "no _tools/*-map.json"
+    else:
+        (fixture_drive / "_tools" / "testdrive-map.json").write_text("{half", encoding="utf-8")
+        args = ["refs", "--drive", str(fixture_drive)]
+        diagnostic = "not valid JSON"
+    result = subprocess.run(
+        [sys.executable, "-m", "atlas.cli", *args],
+        capture_output=True, text=True, encoding="utf-8", timeout=30,
+    )
+    assert result.returncode == 2
+    assert diagnostic in result.stderr
+    assert result.stdout == ""
+    assert "Traceback" not in result.stderr

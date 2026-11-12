@@ -541,7 +541,12 @@ def carried_by(text: str, host: str) -> bool:
 
 
 def _agents_block_span(lines: list[str]) -> tuple[int, int] | None:
-    marks = [line.strip() for line in lines]
+    # Only horizontal ASCII padding belongs to a marker line. Unicode
+    # separators are user text, not line endings or disposable whitespace.
+    marks = [line.strip(" \t") for line in lines]
+    if any((AGENTS_BEGIN in mark or AGENTS_END in mark)
+           and mark not in (AGENTS_BEGIN, AGENTS_END) for mark in marks):
+        raise AgentsBlockError("Atlas markers in AGENTS.md are broken; fix them by hand")
     begins = [i for i, mark in enumerate(marks) if mark == AGENTS_BEGIN]
     ends = [i for i, mark in enumerate(marks) if mark == AGENTS_END]
     if not begins and not ends:
@@ -572,12 +577,12 @@ def with_agents_block(lines: list[str], m: DriveMap) -> list[str]:
     if span is not None:
         start, end = span
         return lines[:start] + block + lines[end + 1:]
-    first = next((i for i, line in enumerate(lines) if line.strip()), None)
+    first = next((i for i, line in enumerate(lines) if line.strip(" \t")), None)
     if first is not None and lines[first].startswith("# "):
         head, rest = lines[:first + 1], lines[first + 1:]
     else:
         head, rest = [], list(lines)
-    while rest and not rest[0].strip():
+    while rest and not rest[0].strip(" \t"):
         rest = rest[1:]
     out = head + ([""] if head else []) + block
     return out + ([""] + rest if rest else [])

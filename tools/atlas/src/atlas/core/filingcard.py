@@ -61,7 +61,11 @@ def card_lines(section: Section) -> list[str]:
 
 
 def _span(lines: list[str]) -> tuple[int, int] | None:
-    marks = [line.strip() for line in lines]
+    # Match the agent-block policy: separators are text, never padding.
+    marks = [line.strip(" \t") for line in lines]
+    if any((CARD_BEGIN in mark or CARD_END in mark)
+           and mark not in (CARD_BEGIN, CARD_END) for mark in marks):
+        raise CardBlockError("Atlas card markers in README.md are broken; fix them by hand")
     begins = [i for i, mark in enumerate(marks) if mark == CARD_BEGIN]
     ends = [i for i, mark in enumerate(marks) if mark == CARD_END]
     if not begins and not ends:
@@ -92,12 +96,12 @@ def with_card_block(lines: list[str], section: Section) -> list[str]:
     if span is not None:
         start, end = span
         return lines[:start] + block + lines[end + 1:]
-    first = next((i for i, line in enumerate(lines) if line.strip()), None)
+    first = next((i for i, line in enumerate(lines) if line.strip(" \t")), None)
     if first is not None and lines[first].startswith("# "):
         head, rest = lines[:first + 1], lines[first + 1:]
     else:
         head, rest = [], list(lines)
-    while rest and not rest[0].strip():
+    while rest and not rest[0].strip(" \t"):
         rest = rest[1:]
     out = head + ([""] if head else []) + block
     return out + ([""] + rest if rest else [])
