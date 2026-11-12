@@ -444,7 +444,7 @@ links.
 
 | # | Work | Done when |
 |---|---|---|
-| 6.1 | Off-map count in the Tyler digest, per project, only when non-zero | digest shows it |
+| 6.1 | Off-map count in the Tyler digest, per project, only when non-zero | done 2026-11-11 (#93): shared doctor deep scan; complete zero counts hidden, unreadable/depth-capped warnings retained; CLI JSON carries count and warnings. Repository implementation only, not deployed |
 | 6.2 | Re-run this walk (`walk.py`-style, read-only) quarterly; diff against this report's section 1; any new document type gets a row and a home before it gets a hand-made folder | next report dated 2027-02 |
 | 6.3 | Hand-made folders are the signal: when two projects improvise the same name, it goes to the map | rule in `docs/adr/0025` |
 

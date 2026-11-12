@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+
+import pytest
 
 from atlas.cli import main
 from atlas.core.scan import scan_drive
@@ -61,6 +64,94 @@ def _project(drive: Path, name: str, *, tyler: str | None, tasks: str | None) ->
     if tasks is not None:
         (tasks_dir / "TASKS.md").write_text(tasks, encoding="utf-8")
     return drive / name
+
+
+def test_digest_reports_off_map_folders_per_project(fixture_drive):
+    project = _project(fixture_drive, "261002_1 Main St-Test", tyler=TYLER_MD, tasks=TASKS_MD)
+    (project / "06 Research/Hand made/Nested").mkdir(parents=True)
+    (project / "01 Model/Other").mkdir(parents=True)
+    _project(fixture_drive, "261003_2 Oak Ave-Empty", tyler="", tasks="")
+
+    text = render(collect(scan_drive(fixture_drive)))
+    main, empty = text.split("## 261003_2 Oak Ave-Empty")
+    assert "2 off-map folders" in main.split("## 261002_1 Main St-Test")[1]
+    assert "off-map" not in empty
+
+
+@pytest.mark.parametrize("with_drift", [False, True])
+def test_digest_keeps_unreadable_scan_warning(fixture_drive, monkeypatch, capsys, with_drift):
+    project = _project(fixture_drive, "261002_1 Main St-Test", tyler="", tasks="")
+    locked = project / "06 Research"
+    locked.mkdir()
+    if with_drift:
+        (project / "01 Model/Other").mkdir(parents=True)
+    inventory = scan_drive(fixture_drive)
+    scandir = os.scandir
+
+    def fail_locked(path):
+        if Path(path).name == "06 Research":
+            raise PermissionError("test access denied")
+        return scandir(path)
+
+    monkeypatch.setattr(os, "scandir", fail_locked)
+    text = render(collect(inventory))
+    assert "Off-map scan incomplete" in text
+    assert "unreadable: 06 Research" in text
+    assert "PermissionError" in text
+    if with_drift:
+        assert "at least 1 off-map folder" in text
+    else:
+        assert "0 off-map" not in text
+    assert main(["tyler", "--drive", str(fixture_drive), "--json"]) == 0
+    finding = json.loads(capsys.readouterr().out)["projects"][0]["off_map"]
+    assert finding["count"] == int(with_drift)
+    assert "PermissionError" in finding["unreadable"][0]
+
+
+def test_digest_keeps_depth_capped_warning_with_zero_drift(fixture_drive, monkeypatch, capsys):
+    project = _project(fixture_drive, "261002_1 Main St-Test", tyler="", tasks="")
+    (project / "06 Research/Code/More").mkdir(parents=True)
+    monkeypatch.setattr("atlas.core.deep.DEEP_MAX_DEPTH", 2)
+    text = render(collect(scan_drive(fixture_drive)))
+    assert "Off-map scan incomplete" in text
+    assert "depth-capped: 06 Research/Code" in text
+    assert "0 off-map" not in text
+    assert main(["tyler", "--drive", str(fixture_drive), "--json"]) == 0
+    finding = json.loads(capsys.readouterr().out)["projects"][0]["off_map"]
+    assert finding == {"count": 0, "unreadable": [], "depth_capped": ["06 Research/Code"]}
+
+
+def test_cli_off_map_counts_and_exclusions(fixture_drive, capsys, monkeypatch):
+    import io
+
+    project = _project(fixture_drive, "261002_1 Main St-Test", tyler="", tasks="")
+    for folder in (
+        "06 Research/Hand made/Nested", "01 Model/Other",
+        "06 Research/Code/Anything", "06 Research/.app/Nested",
+        "06 Research/_sources/Nested", "06 Research/261101_exchange/Nested",
+        "01 Model/Model_backup/Nested", "01 Model/Revit_temp/Nested",
+    ):
+        (project / folder).mkdir(parents=True)
+    payload = project / "06 Research/Hand made/payload.pdf"
+    payload.write_bytes(b"not opened")
+    _project(fixture_drive, "261003_2 Oak Ave-Empty", tyler="", tasks="")
+    original_open = io.open
+
+    def guard_content(path, *args, **kwargs):
+        if isinstance(path, (str, os.PathLike)) and Path(path).name == "payload.pdf":
+            pytest.fail("folder drift must not read file content")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(io, "open", guard_content)
+    assert main(["tyler", "--drive", str(fixture_drive), "--json"]) == 0
+    rows = json.loads(capsys.readouterr().out)["projects"]
+    assert rows[0]["off_map"] == {"count": 2, "unreadable": [], "depth_capped": []}
+    assert rows[1]["off_map"] == {"count": 0, "unreadable": [], "depth_capped": []}
+    assert main(["tyler", "--drive", str(fixture_drive)]) == 0
+    assert "2 off-map folders" in capsys.readouterr().out
+    assert not digest_path(fixture_drive).exists()
+    assert main(["tyler", "--drive", str(fixture_drive), "--write"]) == 0
+    assert "2 off-map folders" in digest_path(fixture_drive).read_text(encoding="utf-8")
 
 
 def test_collect_errands_and_decisions(fixture_drive):
