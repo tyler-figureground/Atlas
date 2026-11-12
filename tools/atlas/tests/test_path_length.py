@@ -137,7 +137,7 @@ def test_the_multi_action_preview_carries_the_warning():
     from atlas.tui.app import _path_warning
 
     assert _path_warning(Action(kind="relocate", src="a", dst="b", path_length=300)) == \
-        "  [path 300 > 260]"
+        "  [path 300 >= 260]"
     assert _path_warning(Action(kind="relocate", src="a", dst="b", path_length=100)) == ""
 
 

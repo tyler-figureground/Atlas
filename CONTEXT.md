@@ -265,10 +265,10 @@ narrow one affordable on a keystroke.
 
 **Path Length Warning**
 The longest absolute path an Action would create, measured while the Plan is still
-a preview. Atlas warns above 260 characters and never refuses, and never applies
-the extended-length prefix on the write side - routing around the limit would let
-Atlas create a path Explorer and Revit cannot open, which is the opposite of
-warning about it.
+a preview. Atlas warns at 260 characters or more; shorter paths can still fail
+Windows' separate directory-creation limits. Exact-name destinations preserve
+trailing spaces/dots but never use a prefix to bypass the legacy destination
+limits (ADR 0006, issue #95).
 
 ## Atlas Project Tree Seam
 

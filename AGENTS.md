@@ -53,6 +53,7 @@ Evidence reports live in `docs/research/`. Read the relevant one **before** star
 | `atlas-file-management-oss.md` | Which open-source file-management projects Atlas should adopt, port, shell out to, or skip; a tool that writes on its own bypasses Atlas's Plan, preview and undo. | Its **Implementation backlog**. Tickets 26-28. ADR 0009. |
 | `atlas-tree-widget-evidence.md` | Textual trees: plain `Tree`, never `DirectoryTree`; lazy loading; two silent-corruption traps. | ADR 0007, ticket 05. |
 | `atlas-drive-tree-read-cost.md` | Reading a tree over Google Drive File Stream: enumeration is the cost, watching is not a staleness signal, `Path.rglob` is banned. | ADR 0007, tickets 06, 11. |
+| `atlas-windows-path-boundaries.md` | Legacy directory creation vs file boundaries, exact-name destinations, UNC length normalization and stale-partial cleanup. | ADR 0006 correction; issue #95. |
 | `atlas-drive-latency-measurement.md` | The measured drive: 7,956 folders, 18,536 files, 4.24s full walk; two live MAX_PATH failures. | Ticket 12, ADR 0006. |
 | `project-folder-usage-and-agent-output.md` | How projects actually use their folders; proposes `.agent/runs/`, AHJ section, fuller `06` seed, agent filing contract. | Its **Implementation plan** and **Open questions**. |
 | `correspondence-folder-structure.md` | Exchange filed by party, AHJ by stage; no source endorses a top-level IN / OUT split. | ADRs 0021, 0022. |

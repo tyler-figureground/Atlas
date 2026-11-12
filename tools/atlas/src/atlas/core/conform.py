@@ -59,6 +59,7 @@ from .scan import (
     list_entries,
     ends_in_space_or_dot,
     long_path,
+    path_length,
     scan_drive,
     tally_files,
     walk,
@@ -136,7 +137,7 @@ class Action:
 
     @property
     def path_warning(self) -> bool:
-        return self.path_length > WINDOWS_MAX_PATH
+        return self.path_length >= WINDOWS_MAX_PATH
 
 
 @dataclass(frozen=True)
@@ -187,17 +188,17 @@ def _path_length(project: Path | None, action: Action) -> int:
     """Longest absolute path the action would leave behind, or 0 if unmeasured."""
     if project is None:
         return 0
-    # Absolute, always: a relative --drive measured 40 where Windows sees 220.
-    project = Path(os.path.abspath(project))
+    # path_length resolves relative destinations without Win32 abspath trimming
+    # an exact trailing space/dot from the project root itself.
     dst = action.dst.replace("\\", "/").rstrip("/")
     if action.kind == BACKFILL:
-        return len(str(project / dst))
+        return path_length(project / dst)
     if action.kind == SWEEP:
-        return len(str(project / dst / Path(action.src).name))
+        return path_length(project / dst / Path(action.src).name)
     src = project / action.src
     if not _isdir(src):
-        return len(str(project / dst))
-    return len(str(project / dst)) + deepest_tail(src)
+        return path_length(project / dst)
+    return path_length(project / dst) + deepest_tail(src)
 
 
 def build_plan(report: ProjectReport, m: DriveMap, project: Path | None = None) -> Plan:
@@ -1074,19 +1075,22 @@ def _same_folder(src: Path, dst: Path) -> bool:
 # than reported gone (#59). The destination stays unprefixed: Atlas never
 # routes a write around the limit, or the Path Length Warning would lie
 # (ADR 0006, ticket 19).
-def _dest(path: Path) -> str:
+def _dest(path: Path, *, directory: bool = False) -> str:
     """A write target, named exactly. A name ending in a space or dot is
     prefixed so Win32 does not silently strip it - otherwise the Move Manifest
     would record a name that is not on disk and undo could not find it. Only
-    under MAX_PATH: past it the write is refused, never routed around the
-    limit (ADR 0006)."""
+    below the legacy boundary: 248 for directory destinations (8.3 filename
+    headroom), 260 for files including the terminating NUL. Already-prefixed
+    inputs obey the same checks. Ordinary targets stay unprefixed, leaving
+    refusal to Windows rather than bypassing it (ADR 0006, issue #95)."""
     raw = os.fspath(path)
     exact = long_path(raw)
-    if exact == raw or not ends_in_space_or_dot(raw):
+    prefixed = raw.startswith(("\\\\?\\", "\\\\.\\", "//?/", "//./"))
+    if not prefixed and (exact == raw or not ends_in_space_or_dot(raw)):
         return raw
-    if len(exact) - len("\\\\?\\") >= WINDOWS_MAX_PATH:
+    if path_length(exact) >= (WINDOWS_MAX_PATH - 12 if directory else WINDOWS_MAX_PATH):
         raise OSError(errno.ENAMETOOLONG,
-                      "name ends in a space or dot and the path is past Windows' limit; "
+                      "exact destination path is at or past Windows' limit; "
                       "move it by hand", raw)
     return exact
 
@@ -1134,9 +1138,9 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
     if _same_folder(src, dst) and action.src != action.dst:
         # Case-only rename on a case-insensitive mount: two-step via temp.
         tmp = src.with_name(src.name + ".atlas-tmp")
-        os.rename(long_path(src), _dest(tmp))  # never a prefixed write past the limit
+        os.rename(long_path(src), _dest(tmp, directory=True))  # never a prefixed write past the limit
         try:
-            os.rename(long_path(tmp), _dest(dst))
+            os.rename(long_path(tmp), _dest(dst, directory=True))
         except OSError as error:
             # Never strand the folder under its temp name: put it back first.
             try:
@@ -1150,8 +1154,8 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
 
     if not _exists(dst):
-        os.makedirs(_dest(dst.parent), exist_ok=True)
-        os.rename(long_path(src), _dest(dst))
+        os.makedirs(_dest(dst.parent, directory=True), exist_ok=True)
+        os.rename(long_path(src), _dest(dst, directory=True))
         return replace(action, status=DONE,
                        moved=(Move(src=action.src, dst=action.dst, is_dir=True),))
 
@@ -1177,7 +1181,7 @@ def _apply_move(project: Path, action: Action, merge_into_existing: bool,
                 left += 1
                 continue
             is_dir = _isdir(child)
-            os.rename(long_path(child), _dest(target))
+            os.rename(long_path(child), _dest(target, directory=is_dir))
             manifest.append(Move(src=child_key(action.src, name),
                                  dst=child_key(action.dst, name), is_dir=is_dir))
         emptied = left == 0 and _remove_if_file_empty(src)
@@ -1201,7 +1205,7 @@ def _apply_sweep(project: Path, action: Action) -> Action:
         return replace(action, status=SKIPPED, note="source gone")
     dst_rel = action.dst.replace("\\", "/").rstrip("/")
     dst_dir = project / dst_rel
-    os.makedirs(_dest(dst_dir), exist_ok=True)
+    os.makedirs(_dest(dst_dir, directory=True), exist_ok=True)
     target = dst_dir / src.name
     if _exists(target):
         return replace(action, status=CONFLICT, note="name exists at target")

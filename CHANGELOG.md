@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Windows path boundaries and stale run cleanup agree with their limits (#95).** Conform warns at 260 characters, including the refusal boundary. Exact-name directory destinations cannot bypass the 248-character legacy creation boundary; files retain the 260-character boundary. UNC names no longer lose two usable characters, already-prefixed inputs obey the same checks, and trailing spaces/dots stay exact. Stale archive partials are enumerated and checked through long-path-aware reads; fresh partials and other runs' files remain untouched.
 - **Conform keeps recovery evidence after partial failures (#94).** Multi-project `--revert` records expected project failures without losing earlier manifests or abandoning later projects. Failed or conflicted actions retain folders created before the failure; stranded agent-file case renames retain their Move Manifest, and conflicted moves reach the drive log. Post-write metadata probe failures preserve earlier and current Move Manifests, retain confirmed creations, and report unreadable creation state as unknown. Creation-only actions explicitly refuse undo instead of reporting an empty success. A vanished project's `--only` exclusions remain skipped. Archive undo now shares one completion path while preserving its index, manifest and empty-folder pruning behavior.
 
 ## [Atlas 0.32.0] - 2026-11-09

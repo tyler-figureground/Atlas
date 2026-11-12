@@ -162,9 +162,9 @@ def _publish_posix(partial: Path, archive: Path) -> None:
 
 def _sweep_stale_partials(archive_root: Path, run_name: str) -> None:
     now = time.time()
-    for leftover in archive_root.glob(f"{glob.escape(run_name)}.zip*.partial"):
+    for leftover in Path(long_path(archive_root)).glob(f"{glob.escape(run_name)}.zip*.partial"):
         try:
-            if now - leftover.stat().st_mtime > STALE_PARTIAL_SECONDS:
+            if now - os.stat(long_path(leftover)).st_mtime > STALE_PARTIAL_SECONDS:
                 os.remove(long_path(leftover))
         except OSError:
             pass    # gone already, or held open: the next sweep retries

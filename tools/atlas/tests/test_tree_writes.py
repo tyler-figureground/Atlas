@@ -551,7 +551,7 @@ def test_conform_plan_shows_the_path_warning_to_a_person(fixture_drive, capsys):
     assert main(["conform", "--drive", str(fixture_drive),
                  "--project", "260320_Warned"]) == 1
     out = capsys.readouterr().out
-    assert "> 260]" in out, out
+    assert ">= 260]" in out, out
 
 
 def undo_setup(drive, name):

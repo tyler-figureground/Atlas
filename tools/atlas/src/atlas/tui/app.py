@@ -223,7 +223,7 @@ def reveal_path(path: Path) -> None:
 def _path_warning(action) -> str:
     """The MAX_PATH warning for one line of a multi-action preview. ADR 0006
     makes the warning the only safeguard, so the modal must carry it too."""
-    return f"  [path {action.path_length} > 260]" if action.path_warning else ""
+    return f"  [path {action.path_length} >= 260]" if action.path_warning else ""
 
 
 @dataclass(frozen=True)
@@ -2963,7 +2963,7 @@ class AtlasApp(App):
         ]
         if action.path_warning:
             # ADR 0006: the warning is the only safeguard, so the modal carries it.
-            lines.append(f"  [path {action.path_length} > 260]")
+            lines.append(f"  [path {action.path_length} >= 260]")
         if plan.warnings:
             lines.append("")
             lines.extend(f"  {warning}" for warning in plan.warnings)
