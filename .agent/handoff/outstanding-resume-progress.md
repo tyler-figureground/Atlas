@@ -14,7 +14,7 @@
 2. #94 complete: merged PR #99, SHA `3bc0944`. Full 1670, focused 143, lint and CI green. Two review rounds; final P2 fixed and coordinator-inspected.
 3. #95 complete: merged PR #100, SHA `00e297b`. Full suite 1728, independent verification 279, lint and CI green, review PASS (coordinator evidence).
 4. #96 complete: merged PR #101, SHA `11dd258`. Full suite 1743, independent verification 94, lint/CI PASS (coordinator evidence).
-5. #97 current and last in `agent-outstanding-text`: text preservation and remaining CLI/doctor regressions. Approved existing API/CLI seams with temporary fixtures; sequential red-first fixes. Commit only; no push, PR or merge. After coordinator integration, the outstanding implementation queue is empty.
+5. #97 implemented in PR #102 (`73c72e9`): text preservation and remaining CLI/doctor regressions. Full 1873 and independent 326 tests passed; lint passed; independent review PASS. This cursor update changes documentation only. PR #102's live checks and merge state are the integration authority; once merged, all five outstanding implementation issues are complete.
 6. Leave parked tickets 27/28, quarterly walk, human site work, release/deployment and old branch alone.
 
 ## #94 implementation and evidence
@@ -79,7 +79,7 @@
 
 ## Next action
 
-#96 integrated as PR #101 / `11dd258`, full 1743, independent 94, lint/CI PASS. #97 is current and last; after its integration the outstanding implementation queue is empty. Coordinator owns review/integration; no push, PR or merge from this session. No third review of #94; both existing review reports preserved. Leave release/deployment, old branch, parked tickets and human work alone. No primary-checkout or studio-drive writes.
+Check PR #102's live merge state before doing any work: all implementation is finished and independently reviewed. Once #102 merges, #93-97 and PRs #98-102 complete this handoff; do not recreate them. Coordinator waits for exact-head Lint/Atlas success before merging and removes only this session's merged branches/worktrees. Historical per-worker notes below describe their local-only phases, not current integration state. No third review of #94; both existing review reports preserved. Leave release/deployment, old branch, parked tickets and human work alone. No studio-drive writes. Local primary checkout may lag origin/main because implementation occurred only in isolated worktrees.
 
 ## #95 implementation and final evidence
 
