@@ -1,28 +1,38 @@
-# Atlas 0.33.0 release / deploy checkpoint
+# Atlas 0.33.0 deployment receipt
 
-## Authority and boundary
+## Status and authority
 
-User authorized production deployment and laptop update. This worker prepares and commits release sources only in `agent-release-0.33.0`; coordinator owns independent review, integration and deployment. No push, pull request, merge, drive writes or laptop tool installation in this session.
+User authorized deployment and laptop update to latest Atlas. **Deployment and laptop update completed and verified 2026-11-12.** No project conform, backfill, archive, or contact writes were run. The production map and root instructions were not modified.
 
-Starting state supplied by user: laptop Atlas 0.27.0; drive launcher pin 0.32.0; latest main `2fdbdfd`. Fetch confirmed base matches origin/main (ahead 0 / behind 0).
+- Release PR #103 merged at `81754049597bc17c0f0998dfef9334275d41cf5e`; release source `32704653ad6c4403422204290e8c49970d4d13d0`.
+- Independent release review PASS; exact-head Atlas and Lint continuous integration checks succeeded before production deployment.
+- Source launcher pin update accompanies this receipt, following release/deploy/pin ordering. Its pull request is the authority for final integration status.
+- Previous versions: laptop 0.27.0; shared-drive launcher 0.32.0. Both now report `atlas 0.33.0`.
 
-## Plan / evidence
+## Artifact and backup
 
-- Release version: 0.33.0; changelog dated 2026-11-12, existing Unreleased notes preserved under that release; empty Unreleased retained.
-- `uv lock` completed without upgrade flags; only studio-atlas changed from 0.32.0 to 0.33.0. Dependencies unchanged.
-- Exact CI (continuous integration) command: `uv run --locked --with pytest-timeout pytest -q --timeout=120` in `tools/atlas`, Windows with `UV_PYTHON=3.12` (CPython 3.12.13): **1873 passed in 326.12s**, no skips. This is local Windows evidence, not an Ubuntu CI run. Release sources and this checkpoint are committed together; identify the commit with `git log -1 -- .agent/handoff/atlas-0.33.0-deploy.md`.
-- Repo lint: `./scripts/lint.sh` passed initially with ShellCheck unavailable. Supplemental run with ephemeral `shellcheck-py` exposed checkout CRLF errors (SC1017), not release changes. Rerun with the four hook files temporarily normalized to CI-equivalent LF passed every check, including ShellCheck; exact original hook bytes restored afterward. Counts: 23 JSON files, 47 skills, 264 Markdown files, 4 shell scripts, 26 metadata-hook cases, 18 reference-hook cases, 17 deliverable skills. No hook source changes.
-- `uv build` passed, producing wheel and source archive. ZIP integrity clean; inspected wheel METADATA: Name `studio-atlas`, Version `0.33.0`, Requires-Python `>=3.12`; WHEEL tag `py3-none-any`.
-- Wheel: `C:\Users\Tyler\Documents\GitHub\Atlas\.claude\worktrees\agent-release-0.33.0\tools\atlas\dist\studio_atlas-0.33.0-py3-none-any.whl`
-- Wheel SHA-256: `fc705cf7ef1576c610ba1825f230901af09a741440cfe8f9fa500d9194e99452`.
-- Launcher pin intentionally stays 0.32.0, following separate release / post-deploy pin pull requests #90/#91.
+- Deployed wheel: `G:\Shared drives\ARCHITECTURE\_tools\atlas\studio_atlas-0.33.0-py3-none-any.whl`
+- SHA-256: `fc705cf7ef1576c610ba1825f230901af09a741440cfe8f9fa500d9194e99452`
+- Backup and machine-readable deployment/verification receipt: `G:\Shared drives\ARCHITECTURE\_tools\logs\atlas-0.33.0-deploy-20261112-164324\receipt.json`
+- Before changing production files, backed up all nine `_tools` launchers, `architecture-map.json`, `HOW-TO.md`, and drive-root `README.md` under that directory's `before` tree. Byte readbacks and SHA-256 recorded; preimages rechecked before deployment.
+- Wheel copied and hash verified before launcher activation. Same-version artifact overwrite refused unless bytes identical. All repository launchers compared/copied; the Atlas pin changed to 0.33.0.
+- HOW-TO install example now names 0.33.0 and describes nonzero/incomplete off-map digest counts. Other historical HOW-TO content left unchanged.
+- Prior wheels retained for rollback. Configuration backup is precautionary; map hash unchanged after deployment.
 
-## Remaining coordinator tasks
+## Verification
 
-1. Independent review and integration of release source commit; verify integrated source and checks before deployment.
-2. Follow `tools/atlas/README.md` deployment checklist. Back up drive `_tools` launchers, map and instructions into `_tools/logs/atlas-0.33.0-deploy-<YYYYMMDD-HHMMSS>/` before writes.
-3. Copy approved 0.33.0 wheel to drive `_tools/atlas/`; record and compare SHA-256 after copying. Do not overwrite an existing different wheel under the same version.
-4. Deploy launchers with production Atlas.bat pin set to 0.33.0 only after wheel placement. Do not blindly copy this source tree's still-0.32.0 Atlas.bat over the new pin.
-5. Verify deployed launcher reports `atlas 0.33.0`; run production-map `atlas lint`, checking for no new errors. Update drive HOW-TO.md for changed commands as needed.
-6. Update laptop from reported 0.27.0 to approved 0.33.0 artifact; verify resolved executable/install provenance and version. Coordinate other seats before writing Organization/null-Client records (0.30.0 compatibility note).
-7. After successful deployment, prepare separate launcher-pin source pull request (pattern #90/#91), recording deployment/backup/hash and laptop verification evidence. No project conform/backfill is implied by this release preparation.
+- This release session's full Windows/Python 3.12 suite: `uv run --locked --with pytest-timeout pytest -q --timeout=120`: **1873 passed**, no skips (326.12s).
+- Repo lint passed. Supplemental ShellCheck run used temporary LF-normalized hook bytes matching CI; exact original checkout bytes restored, no hook changes. Remote Lint also passed.
+- `uv build` succeeded. Wheel METADATA confirms studio-atlas 0.33.0, Python >=3.12 and py3-none-any; ZIP and all RECORD hashes/sizes verified by independent reviewer. All 63 packaged source/template files match release source modulo Git checkout CRLF.
+- Actual drive `Atlas.bat --version`: `atlas 0.33.0`, exit 0.
+- Actual drive `Atlas.bat lint --drive <root>`: exit 0; map v4.6 with sole preexisting DUP-CHILD Photos warning. Same warning observed through pinned 0.32.0 before deployment; no new errors.
+- Laptop updated with `uv tool install --force` from the deployed wheel. Resolved executable: `C:\Users\Tyler\.local\bin\atlas.exe`.
+- Laptop `atlas --version`: `atlas 0.33.0`; `atlas --help` and production-map lint succeed. All **63 installed package files** match the deployed wheel byte-for-byte.
+- Installation provenance confirmed in `C:\Users\Tyler\AppData\Roaming\uv\tools\studio-atlas\uv-receipt.toml`: the drive's 0.33.0 wheel, not editable source or a transient worktree.
+- Detailed command outputs and verification timestamp recorded in drive receipt, status `verified-drive-and-laptop`.
+
+## Final integration / rollback
+
+Complete the launcher-pin pull request after independent review and exact-head CI; then remove this session's merged branches/worktrees and temporary deployment scripts. No additional deployment or project mutation is needed.
+
+If rollback is explicitly requested, the backup preserves original launchers/instructions and the prior 0.32.0 drive wheel remains available. The laptop's former 0.27.0 installation provenance was recorded before replacement, but its wheel is not present in the checked drive/repository locations; restoration to 0.27.0 is not established. Do not blindly replay a backup over later human edits; compare receipt hashes first. Other studio machines were not globally reinstalled; the shared launcher resolves the newly pinned wheel when run.
