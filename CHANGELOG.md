@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [Atlas 0.33.0] - 2026-11-12
+
 ### Added
 
 - **Tyler digest reports off-map folders per project (#93).** Nonzero counts use the same enumeration-only deep scan and exclusions as doctor. Unreadable and depth-capped paths stay visible even when no drift was found; partial counts say "at least". `atlas tyler --json` includes each project's `off_map` count and scan warnings. No project files are changed.
