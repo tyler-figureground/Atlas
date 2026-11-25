@@ -272,6 +272,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 print(f"    warning: {len(p.off_map)} folder(s) not on the map:")
                 for line in p.off_map:
                     print(f"      off-map: {line}")
+            if p.design_style_unset:
+                print("    warning: PROJECT.md design_style is blank - ask Tyler "
+                      "for the project's design style; never guess")
             if p.permits is not None:
                 for line in p.permits.misnamed:
                     print(f"    warning: round folder not R<n>_YYMMDD: {line}")

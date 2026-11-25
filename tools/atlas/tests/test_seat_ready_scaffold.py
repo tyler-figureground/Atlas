@@ -314,6 +314,7 @@ OLD_DOSSIER = (
     b"# Machine contract - older scaffold, no revit block.\r\n"
     b'project: "Old Job"\r\n'
     b"jurisdiction: Napa County\r\n"
+    b"design_style: Craftsman\r\n"
     b"basis: []\r\n"
     b"---\r\n"
     b"\r\n"

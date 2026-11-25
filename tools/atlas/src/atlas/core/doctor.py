@@ -21,7 +21,13 @@ from .meetings import MeetingScan, scan_dict, scan_meetings
 from .permits import PermitScan, scan_permits
 from .mapfile import DriveMap
 from .mcpjson import has_pyvoid_server
-from .projectmd import agents_block_current, is_claude_pointer, with_revit_block
+from .projectmd import (
+    DESIGN_STYLE_KEY,
+    agents_block_current,
+    front_matter_scalar,
+    is_claude_pointer,
+    with_contract_backfill,
+)
 from .filingcard import card_current, card_path, card_sections
 from .scan import DriveInventory, ProjectInventory, long_path, tally_files
 
@@ -95,6 +101,10 @@ class ProjectReport:
     # is then empty and ``sections_present`` means nothing: an unreadable project
     # never reads as an empty one (#13, ADR 0004).
     root_readable: bool = True
+    # PROJECT.md's required `design_style` is absent or blank (Tyler,
+    # 2026-11-25). Report-only like the warnings above: conform cannot fill
+    # it - an agent asks Tyler - so it is never `actionable` or the status.
+    design_style_unset: bool = False
 
     @property
     def actionable(self) -> bool:
@@ -249,9 +259,11 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
     # Control plane: report what Conform would backfill. PROJECT.md counts as
     # missing when absent OR present without the YAML machine contract - the
     # prose-only file is exactly what Conform-Project.ps1 prepends into - OR
-    # with closed front matter that has no `revit:` block (Pyvoid #1546). A file
+    # with closed front matter missing the `revit:` block (Pyvoid #1546) or the
+    # `design_style` key (Tyler, 2026-11-25). A file
     # that is there and cannot be read is unreadable, never missing.
     missing: list[str] = []
+    design_style_unset = False
     if m.project_file:
         if m.project_file not in root_names:
             missing.append(m.project_file)
@@ -270,8 +282,12 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
                     text = None
                 head = raw.decode("utf-8-sig", errors="replace")[:64]
                 if (not head.lstrip().startswith("---")
-                        or (text is not None and with_revit_block(text) is not None)):
+                        or (text is not None and with_contract_backfill(text) is not None)):
                     missing.append(m.project_file)
+                # Required, and only Tyler can fill it: a person-has-to-ask
+                # warning, never a conform action or the status.
+                if text is not None:
+                    design_style_unset = front_matter_scalar(text, DESIGN_STYLE_KEY) == ""
     if m.decisions_dir and m.decisions_dir not in root_names:
         missing.append(m.decisions_dir)
     # Agent files, AGENTS.md first so conform migrates before it points: AGENTS.md
@@ -443,6 +459,7 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
         budgets=budgets,
         permits=permits,
         off_map=tuple(off_map) if off_map is not None else None,
+        design_style_unset=design_style_unset,
     )
 
 
@@ -549,6 +566,7 @@ def report_to_dict(report: DriveReport) -> dict:
                             if p.budgets is not None else None),
                 # Folder and register hygiene only; `atlas permits` reports the
                 # applications themselves (ADR 0024).
+                "design_style_unset": p.design_style_unset,
                 "permits": ({"misnamed": list(p.permits.misnamed),
                              "findings": list(p.permits.findings),
                              "unreadable": list(p.permits.unreadable)}

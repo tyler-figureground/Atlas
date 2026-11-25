@@ -116,3 +116,19 @@ ahj_profile_vested_on:  # ISO date the project vested under that profile (applic
 - **Who writes, who reads.** `/project-dossier` will write and mirror both keys (Identity table, next to Jurisdiction); Atlas carries them through byte-for-byte as non-Atlas keys. Pyvoid registers both as `pointer` keys in its dossier key registry and validates the shape through `ahj_profile_pin`; Norma reads the same pin to pick the local profile and report drift.
 
 **Consequences.** The front-matter contract gains two additive keys; no existing key, value vocabulary or reader changes. The profile id vocabulary (the file stems under Pyvoid's `jurisdictions/`) becomes part of the cross-repo coupling surface: renaming a profile id is a breaking change for every pinned project and must move with an alias or migration. The `/project-dossier` template and Identity table update that writes these keys is follow-up work after acceptance, not part of this amendment.
+
+## Amendment - `design_style` is required and only Tyler sets it (2026-11-25)
+
+Status: **accepted**. Decided by Tyler on 2026-11-25 (Pyvoid #5247, Pyvoid PR #5702).
+
+**Context.** Pyvoid's family style-selection guide picks a family library style folder per project. Nothing in the dossier said which architectural style a project is, so an agent either asked every time or guessed from photos or the use case - and a guess silently fills a house with the wrong families.
+
+**Decision.** Add one top-level key, `design_style`, mirrored by an Identity row `Design style`.
+
+- **Value.** One line of free text naming the project's architectural design style - for example `Craftsman`, `Traditional`, `Modern`, `Commercial`. A mix is valid when it carries its reason: `Modern; Craftsman at the addition to match the existing house`. No closed vocabulary.
+- **Required, no default.** Every project must carry it. There is no studio-wide default. Blank still means unknown, but for this key unknown is a gap to close: an agent that finds it blank or missing asks Tyler and never infers it.
+- **Atlas scaffolds, never fills.** New-project intake and conform's stub write the key blank, the unfilled marker, under a full-line `# design_style: REQUIRED ...` comment (bare key, no inline comment, inside the existing UTF-8 / no-BOM / CRLF byte contract), plus a blank `Design style` Identity row. Conform backfills the blank key and its comment into an older dossier's front matter that lacks it, by the same rules and the same refusals as the `revit:` block backfill; it never adds the Identity row to an existing table, and never touches a `design_style` already present, of any shape or value. Atlas carries the key through byte-for-byte as a non-Atlas key.
+- **Doctor warns while it is blank.** `atlas doctor` reports `warning: PROJECT.md design_style is blank - ask Tyler ...` and `design_style_unset: true` in `--json`. The warning is report-only, like the deep-pass warnings: it never changes the project's status, `actionable` or the exit code, because conform cannot fix it.
+- **Who writes, who reads.** `/project-dossier` writes the key and its row from Tyler's answer (skill rule 9). Pyvoid reads it (`mcp_server/pyvoid_mcp/jdp/project_dossier.py`) to pick the family library style folder, and stops to ask when it is blank.
+
+**Consequences.** One additive key; no existing key or reader changes. Every existing project shows the warning until Tyler names its style, which is the intended prompt. Renaming the key is a breaking change in both repos and moves together. If a closed vocabulary for style names becomes necessary for folder matching, that is a later amendment.

@@ -43,7 +43,7 @@ FEES = {"name": "Fee sheets", "target": "10 Legal/Invoices", "match": {"extensio
 
 SECTIONS = ["01 Model", "06 Research", "08 OUT", "11 Meetings"]
 CONTROL_PLANE = {
-    "PROJECT.md": "---\nproject: x\nrevit:\n---\n",
+    "PROJECT.md": "---\nproject: x\ndesign_style:\nrevit:\n---\n",
     "CLAUDE.md": "# workspace\n",
     "decisions/README.md": "# Decisions\n",
     "06 Research/Code/.keep": "",
@@ -511,7 +511,7 @@ def test_report_json_keeps_its_shape_with_rules(fixture_drive):
         "name", "status", "sections_present", "missing_control_plane",
         "drift", "relocations", "sweeps", "receipts", "unfiled", "ignored",
         "unreadable", "unreadable_deep", "overlong", "depth_capped", "items",
-        "meetings", "budgets", "permits", "off_map",
+        "meetings", "budgets", "permits", "off_map", "design_style_unset",
     }
 
 

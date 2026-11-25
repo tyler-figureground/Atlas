@@ -13,7 +13,7 @@ def project_report(drive, name):
 
 def full_control_plane(drive, files=None):
     base = {
-        "PROJECT.md": "---\nproject: x\nrevit:\n---\n",
+        "PROJECT.md": "---\nproject: x\ndesign_style:\nrevit:\n---\n",
         "decisions/README.md": "# Decisions\n",
         "06 Research/Code/.keep": "",
     }
@@ -122,7 +122,7 @@ def test_report_json_shape(fixture_drive):
         "name", "status", "sections_present", "missing_control_plane",
         "drift", "relocations", "sweeps", "receipts", "unfiled", "ignored",
         "unreadable", "unreadable_deep", "overlong", "depth_capped", "items",
-        "meetings", "budgets", "permits", "off_map",
+        "meetings", "budgets", "permits", "off_map", "design_style_unset",
     }
     # Deep-pass warnings are null, not empty, when the deep pass did not run.
     assert proj["meetings"] is None and proj["budgets"] is None

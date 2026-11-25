@@ -49,7 +49,7 @@ from .projectmd import (
     is_legacy_claude,
     meaningful_lines,
     with_agents_block,
-    with_revit_block,
+    with_contract_backfill,
     write_crlf_no_bom,
 )
 from .scan import (
@@ -787,7 +787,7 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
         if read is None:
             return replace(action, status=CONFLICT, note="not UTF-8; left unchanged")
         if _HAS_FRONT_MATTER.match(read[1]):
-            return _backfill_revit_block(path, action, *read)
+            return _backfill_contract_keys(path, action, *read)
         return replace(
             action,
             status=CONFLICT,
@@ -827,16 +827,21 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
     return replace(action, status=SKIPPED, note=f"unknown control-plane item '{target}'")
 
 
-def _backfill_revit_block(path: Path, action: Action, raw: bytes, text: str) -> Action:
-    """Insert the blank `revit:` block into a dossier that has none (Pyvoid
-    #1546). An existing block, of any shape, is Pyvoid's and stays untouched."""
-    lines = with_revit_block(text)
+def _backfill_contract_keys(path: Path, action: Action, raw: bytes, text: str) -> Action:
+    """Insert the blank `design_style` key (Tyler, 2026-11-25) and the blank
+    `revit:` block (Pyvoid #1546) into a dossier missing either. An existing
+    key, of any shape or value, stays untouched: Atlas never fills in a design
+    style, and the revit block is Pyvoid's."""
+    lines = with_contract_backfill(text)
     if lines is None:
         return replace(action, status=SKIPPED, note="machine contract already present")
     if path.read_bytes() != raw:
         return replace(action, status=SKIPPED, note="changed during apply; rerun")
+    added = set(lines) - set(dossier_lines(text))
+    names = [label for key, label in (("design_style:", "design_style key"),
+                                      ("revit:", "revit block")) if key in added]
     write_crlf_no_bom(path, lines)
-    return replace(action, status=DONE, note="blank revit block added")
+    return replace(action, status=DONE, note=f"blank {' and '.join(names)} added")
 
 
 def _backfill_template(project: Path, template: TemplateFile, action: Action) -> Action:

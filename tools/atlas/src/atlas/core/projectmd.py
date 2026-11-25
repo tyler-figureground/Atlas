@@ -39,6 +39,18 @@ FRONT_MATTER_HEAD = (
 REVIT_KEY = "revit"
 REVIT_KEYS = ("model", "local", "version", "worksets", "sheet_collection", "library_containers")
 REVIT_BLOCK = (f"{REVIT_KEY}:", *(f"  {key}:" for key in REVIT_KEYS))
+# The project's architectural design style (Tyler, 2026-11-25; ADR 0001
+# amendment). Required, with no studio default: Atlas scaffolds it blank - the
+# unfilled marker - under a full-line comment that says so, and Doctor warns
+# while it stays blank. Atlas never writes a value; /project-dossier asks Tyler.
+DESIGN_STYLE_KEY = "design_style"
+DESIGN_STYLE_LINES = (
+    "# design_style: REQUIRED - the project's architectural design style, e.g.",
+    "# Craftsman, Traditional, Modern, Commercial. Mixed is fine with a reason",
+    '# ("Modern; Craftsman at the addition to match the existing house").',
+    "# No default: blank means nobody has asked yet - ask Tyler, never guess.",
+    f"{DESIGN_STYLE_KEY}:",
+)
 # A root key line of a block-mapping front matter: plain, or quoted without
 # escapes. Atlas has no YAML parser, so it inserts the revit block only into
 # front matter made of these lines plus indented (or `- `) continuations; any
@@ -53,6 +65,7 @@ _LINE_BREAK = re.compile(r"\r\n|\r|\n")
 _YAML_ONLY_BREAK = re.compile("[\x85  ]")
 
 FRONT_MATTER_KEYS = (
+    *DESIGN_STYLE_LINES,
     "jurisdiction:",
     "edition:",
     "occupancy_group:",
@@ -130,19 +143,53 @@ def _block_root_keys(front: list[str]) -> list[str] | None:
     return keys
 
 
-def with_revit_block(text: str) -> list[str] | None:
-    """The dossier with the blank `revit:` block inserted before the closing
-    `---` (Pyvoid #1546), or None when it already has one, has no closed
-    front matter, or has front matter whose shape could hide one. Every other
-    line is kept as it was."""
+def with_contract_backfill(text: str) -> list[str] | None:
+    """The dossier with each missing scaffolded key inserted, blank, before the
+    closing `---`: the `design_style` key (Tyler, 2026-11-25) and the `revit:`
+    block (Pyvoid #1546). None when both are there, there is no closed front
+    matter, or the front matter's shape could hide either. A key already
+    present, of any shape or value, is never touched; every other line is
+    kept as it was."""
     lines = dossier_lines(text)
     close = front_matter_close(lines)
     if close is None:
         return None
     keys = _block_root_keys(lines[1:close])
-    if keys is None or REVIT_KEY in keys:
+    if keys is None:
         return None
-    return lines[:close] + list(REVIT_BLOCK) + lines[close:]
+    added: list[str] = []
+    if DESIGN_STYLE_KEY not in keys:
+        added += DESIGN_STYLE_LINES
+    if REVIT_KEY not in keys:
+        added += REVIT_BLOCK
+    if not added:
+        return None
+    return lines[:close] + added + lines[close:]
+
+
+def front_matter_scalar(text: str, key: str) -> str | None:
+    """A root key's value as written, quotes and trailing comment removed.
+
+    "" when the key is absent or blank - for a required key, both mean
+    unfilled. None when there is no closed front matter or its shape is one
+    this reader cannot vouch for: unknown, never blank. A block scalar or
+    nested value reads as its indicator text, which is not blank."""
+    lines = dossier_lines(text)
+    close = front_matter_close(lines)
+    if close is None or _block_root_keys(lines[1:close]) is None:
+        return None
+    for line in lines[1:close]:
+        if not line or line[0] in " \t#-":
+            continue
+        match = _ROOT_KEY_LINE.match(line)
+        if match is None or next(g for g in match.groups() if g is not None) != key:
+            continue
+        rest = line[match.end():].strip()
+        if rest[:1] in ("'", '"'):
+            end = rest.find(rest[0], 1)
+            return rest[1:end].strip() if end > 0 else rest[1:].strip()
+        return re.split(r"(?:^|[ \t])#", rest, maxsplit=1)[0].strip()
+    return ""
 
 
 # json.dumps escapes C0 but writes these raw. Raw, U+2028/U+2029/U+0085 split a
@@ -208,6 +255,7 @@ def blank_intake_identity_rows(project: str) -> list[str]:
         f"| Project | {_table(project)} |",
         "| Address / BBL | |",
         "| Project Use Case | |",
+        "| Design style | |",
         "| Client | |",
         "| Billing Contact | |",
         "| Billing Email | |",
@@ -296,6 +344,7 @@ def project_md_lines(
         f"| Project | {_table(name)} |",
         f"| Address / BBL | {_table(full_address)} |",
         f"| Project Use Case | {_table(intake.project_use_case.display)} |",
+        "| Design style | |",
         f"| Client | {_table(intake.client_contact.full_name if intake.client_contact else '')} |",
         f"| Billing Contact | {_table(intake.billing_contact.full_name)} |",
         f"| Billing Email | {_table(intake.billing_contact.email)} |",
