@@ -151,6 +151,16 @@ def with_contract_backfill(text: str) -> list[str] | None:
     present, of any shape or value, is never touched; every other line is
     kept as it was."""
     lines = dossier_lines(text)
+    found = _contract_additions(lines)
+    if found is None:
+        return None
+    close, added, _keys = found
+    return lines[:close] + added + lines[close:]
+
+
+def _contract_additions(lines: list[str]) -> tuple[int, list[str], tuple[str, ...]] | None:
+    """Where the backfill inserts (the closing `---` index), the lines it
+    inserts, and the root keys those lines add; None when nothing to add."""
     close = front_matter_close(lines)
     if close is None:
         return None
@@ -158,13 +168,41 @@ def with_contract_backfill(text: str) -> list[str] | None:
     if keys is None:
         return None
     added: list[str] = []
+    names: list[str] = []
     if DESIGN_STYLE_KEY not in keys:
         added += DESIGN_STYLE_LINES
+        names.append(DESIGN_STYLE_KEY)
     if REVIT_KEY not in keys:
         added += REVIT_BLOCK
+        names.append(REVIT_KEY)
     if not added:
         return None
-    return lines[:close] + added + lines[close:]
+    return close, added, tuple(names)
+
+
+_BOM = b"\xef\xbb\xbf"
+
+
+def contract_backfill_bytes(raw: bytes) -> tuple[bytes, tuple[str, ...]] | None:
+    """``with_contract_backfill`` as an insertion into the file's own bytes.
+
+    Only the new lines are added, each ended with the line break that ends the
+    line before the closing `---`; the file keeps its BOM or lack of one, every
+    existing line ending, and its final newline or lack of one. Returns the new
+    bytes and the root keys inserted, or None when there is nothing to add.
+    Raises UnicodeDecodeError for a file that is not UTF-8."""
+    text = raw.decode("utf-8-sig")
+    found = _contract_additions(dossier_lines(text))
+    if found is None:
+        return None
+    close, added, names = found
+    # Line ``close`` starts right after the close-th line break (close >= 1).
+    brk = list(_LINE_BREAK.finditer(text))[close - 1]
+    eol = brk.group()
+    insert = "".join(line + eol for line in added)
+    new_text = text[:brk.end()] + insert + text[brk.end():]
+    bom = _BOM if raw.startswith(_BOM) else b""
+    return bom + new_text.encode("utf-8"), names
 
 
 def front_matter_scalar(text: str, key: str) -> str | None:
@@ -190,6 +228,21 @@ def front_matter_scalar(text: str, key: str) -> str | None:
             return rest[1:end].strip() if end > 0 else rest[1:].strip()
         return re.split(r"(?:^|[ \t])#", rest, maxsplit=1)[0].strip()
     return ""
+
+
+# YAML 1.1/1.2 core-schema spellings of null. Unquoted, each loads as None -
+# the same "nobody has filled this in" as a blank value.
+_YAML_NULLS = frozenset({"~", "null", "Null", "NULL"})
+
+
+def design_style_unset(text: str) -> bool:
+    """True when the required `design_style` is absent, blank, quoted-empty,
+    or a YAML null (`~`, `null`, `Null`, `NULL`; quoted too, since no real
+    style is spelled that way and a false warning only prompts a question).
+    False when it holds a value
+    or the front matter cannot be read with confidence (unknown, never unset)."""
+    value = front_matter_scalar(text, DESIGN_STYLE_KEY)
+    return value is not None and (value == "" or value in _YAML_NULLS)
 
 
 # json.dumps escapes C0 but writes these raw. Raw, U+2028/U+2029/U+0085 split a

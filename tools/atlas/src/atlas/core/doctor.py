@@ -22,9 +22,8 @@ from .permits import PermitScan, scan_permits
 from .mapfile import DriveMap
 from .mcpjson import has_pyvoid_server
 from .projectmd import (
-    DESIGN_STYLE_KEY,
     agents_block_current,
-    front_matter_scalar,
+    design_style_unset as _design_style_unset,
     is_claude_pointer,
     with_contract_backfill,
 )
@@ -287,7 +286,7 @@ def report_project(inv: ProjectInventory, m: DriveMap, *,
                 # Required, and only Tyler can fill it: a person-has-to-ask
                 # warning, never a conform action or the status.
                 if text is not None:
-                    design_style_unset = front_matter_scalar(text, DESIGN_STYLE_KEY) == ""
+                    design_style_unset = _design_style_unset(text)
     if m.decisions_dir and m.decisions_dir not in root_names:
         missing.append(m.decisions_dir)
     # Agent files, AGENTS.md first so conform migrates before it points: AGENTS.md

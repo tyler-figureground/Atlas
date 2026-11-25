@@ -26,7 +26,7 @@ from atlas.core.doctor import report_project
 from atlas.core.mapfile import find_map, load_map
 from atlas.core.ops import new_project
 from atlas.core.project_data import load_project_record
-from atlas.core.projectmd import DESIGN_STYLE_LINES, front_matter_scalar
+from atlas.core.projectmd import DESIGN_STYLE_LINES, design_style_unset, front_matter_scalar
 from atlas.core.scan import scan_drive
 
 from conftest import agent_files, make_intake, make_project
@@ -130,6 +130,49 @@ def test_backfill_adds_both_missing_keys_in_one_pass(fixture_drive):
     assert front["design_style"] is None and set(front["revit"]) >= {"model", "version"}
 
 
+BOM = b"\xef\xbb\xbf"
+
+
+@pytest.mark.parametrize("eol, bom, final", [
+    (b"\n", b"", True),            # LF, no BOM
+    (b"\n", BOM, True),            # LF with BOM
+    (b"\r\n", BOM, True),          # CRLF with BOM
+    (b"\r\n", b"", False),         # no trailing newline
+    (b"\n", b"", False),
+    (b"\r\n", b"", True),          # the studio's own bytes: unchanged behavior
+])
+def test_backfill_inserts_only_the_new_lines_in_the_files_own_bytes(
+        fixture_drive, eol, bom, final):
+    body = OLDER.replace(b"\r\n", eol)
+    if not final:
+        body = body.rstrip(eol)
+    original = bom + body
+    project = make_project(fixture_drive, "230305_Bytes Job", sections=["01 Model"])
+    (project / "PROJECT.md").write_bytes(original)
+    _, applied = _conform(fixture_drive, project.name)
+
+    assert _project_md_action(applied).status == DONE
+    inserted = DESIGN_STYLE_BYTES.replace(b"\r\n", eol)
+    close = b"basis: []" + eol + b"---" + eol
+    assert (project / "PROJECT.md").read_bytes() == original.replace(
+        close, b"basis: []" + eol + inserted + b"---" + eol)
+
+
+@pytest.mark.parametrize("raw, note", [
+    (OLDER + b"design_style:\r\n", "blank design_style key added"),
+    (OLDER.replace(b"revit:\r\n  model:\r\n", b"") + b"revit:\r\n",
+     "blank design_style key and revit block added"),
+])
+def test_backfill_note_names_what_was_inserted(fixture_drive, raw, note):
+    # A bare key line in the prose body is not the front matter's key, and must
+    # not hide what the backfill actually inserted from the note.
+    project = make_project(fixture_drive, "230306_Note Job", sections=["01 Model"])
+    (project / "PROJECT.md").write_bytes(raw)
+    _, applied = _conform(fixture_drive, project.name)
+
+    assert _project_md_action(applied).note == note
+
+
 @pytest.mark.parametrize("line", [
     b"design_style: Craftsman\r\n",
     b'design_style: "Modern; Craftsman at the addition to match the existing house"\r\n',
@@ -163,6 +206,10 @@ def _doctor_project(drive: Path, name: str, design_line: str):
     "design_style:   # REQUIRED - ask Tyler\n",
     "design_style: ''\n",
     'design_style: ""  # blank\n',
+    "design_style: ~\n",                               # YAML null
+    "design_style: null\n",
+    "design_style: Null\n",
+    "design_style: NULL  # unset\n",
     "",                                                # absent
 ])
 def test_doctor_flags_a_blank_or_absent_design_style(fixture_drive, design_line):
@@ -216,9 +263,25 @@ def test_a_project_without_a_readable_contract_is_not_flagged(fixture_drive):
     ("---\n# design_style: Modern\n---\n", ""),             # a comment, not the key
     ("no front matter\ndesign_style: Modern\n", None),
     ("---\n{design_style: Modern}\n---\n", None),           # shape it cannot vouch for
+    ("---\ndesign_style: ~\n---\n", "~"),                   # raw text; callers judge null
 ])
 def test_front_matter_scalar(text, expected):
     assert front_matter_scalar(text, "design_style") == expected
+
+
+@pytest.mark.parametrize("text, expected", [
+    ("---\ndesign_style:\n---\n", True),
+    ("---\nproject: x\n---\n", True),
+    ("---\ndesign_style: ''\n---\n", True),
+    ("---\ndesign_style: ~\n---\n", True),
+    ("---\ndesign_style: null # todo\n---\n", True),
+    ("---\ndesign_style: NULL\n---\n", True),
+    ("---\ndesign_style: Modern\n---\n", False),
+    ("---\ndesign_style: Nullish Modern\n---\n", False),
+    ("no front matter\n", False),                           # unknown, never unset
+])
+def test_design_style_unset(text, expected):
+    assert design_style_unset(text) is expected
 
 
 # ---- the dossier skill --------------------------------------------------------
