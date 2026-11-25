@@ -35,6 +35,8 @@ from .mcpjson import machine_mcp_server, write_mcp_json
 from .ops import OpsError, append_log, mkdir_below
 from .project_data import _rename_with_retry
 from .projectmd import (
+    DESIGN_STYLE_KEY,
+    REVIT_KEY,
     dossier_lines,
     FRONT_MATTER_HEAD,
     AgentsBlockError,
@@ -43,13 +45,13 @@ from .projectmd import (
     blank_intake_identity_rows,
     carried_by,
     claude_md_lines,
+    contract_backfill_bytes,
     create_crlf_no_bom,
     decisions_readme_lines,
     is_claude_pointer,
     is_legacy_claude,
     meaningful_lines,
     with_agents_block,
-    with_revit_block,
     write_crlf_no_bom,
 )
 from .scan import (
@@ -787,7 +789,7 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
         if read is None:
             return replace(action, status=CONFLICT, note="not UTF-8; left unchanged")
         if _HAS_FRONT_MATTER.match(read[1]):
-            return _backfill_revit_block(path, action, *read)
+            return _backfill_contract_keys(path, action, read[0])
         return replace(
             action,
             status=CONFLICT,
@@ -827,16 +829,22 @@ def _apply_backfill(project: Path, m: DriveMap, action: Action) -> Action:
     return replace(action, status=SKIPPED, note=f"unknown control-plane item '{target}'")
 
 
-def _backfill_revit_block(path: Path, action: Action, raw: bytes, text: str) -> Action:
-    """Insert the blank `revit:` block into a dossier that has none (Pyvoid
-    #1546). An existing block, of any shape, is Pyvoid's and stays untouched."""
-    lines = with_revit_block(text)
-    if lines is None:
+def _backfill_contract_keys(path: Path, action: Action, raw: bytes) -> Action:
+    """Insert the blank `design_style` key (Tyler, 2026-11-25) and the blank
+    `revit:` block (Pyvoid #1546) into a dossier missing either. An existing
+    key, of any shape or value, stays untouched: Atlas never fills in a design
+    style, and the revit block is Pyvoid's. The insertion keeps the file's own
+    bytes: its BOM or none, its line endings and its final newline or none."""
+    found = contract_backfill_bytes(raw)
+    if found is None:
         return replace(action, status=SKIPPED, note="machine contract already present")
+    new, keys = found
     if path.read_bytes() != raw:
         return replace(action, status=SKIPPED, note="changed during apply; rerun")
-    write_crlf_no_bom(path, lines)
-    return replace(action, status=DONE, note="blank revit block added")
+    labels = {DESIGN_STYLE_KEY: "design_style key", REVIT_KEY: "revit block"}
+    path.write_bytes(new)
+    return replace(action, status=DONE,
+                   note=f"blank {' and '.join(labels[k] for k in keys)} added")
 
 
 def _backfill_template(project: Path, template: TemplateFile, action: Action) -> Action:

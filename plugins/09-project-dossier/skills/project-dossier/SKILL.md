@@ -35,6 +35,7 @@ The dossier is the **facts layer**. The **reasoning layer** — why a choice was
 6. **Contact snapshots are project history.** Atlas records Billing Contact and Client Contact directory IDs plus creation-time details. Preserve those snapshots during unrelated updates. A later shared-directory edit does not silently rewrite an existing project; change a project contact only from an explicit user correction.
 7. **Project Use Case is not occupancy.** Renovation, Addition, Feasibility, and related intake labels describe the engagement. Never copy them into `occupancy_group` or infer an IBC use group from them.
 8. **No tasks, no session logs.** Open items, action lists and next steps go in `00 Tasks/TASKS.md` - the project's production task list, which Atlas creates from the studio template (Tyler's personal errands go in `00 Tasks/TYLER.md`). What an agent session did goes in its run folder's `RUN.md` under `.agent/runs/`. Neither belongs in the dossier: both grow without bound and bury the facts other skills read. Before editing `PROJECT.md`, copy it to `.agent/backups/`, never beside it at the project root.
+9. **Design style is required, and only Tyler sets it.** Every project names its architectural design style in `design_style` (e.g. Craftsman, Traditional, Modern, Commercial). A mix is fine with the reason in the value: `Modern; Craftsman at the addition to match the existing house`. There is no studio default. When it is blank or missing, ask Tyler - never infer it from photos, the address, the use case or another project. Record his answer with source `Tyler, YYYY-MM-DD`. Pyvoid's family style selection reads it to pick the family library's style folder.
 
 ## Reference set
 
@@ -52,6 +53,7 @@ The YAML block at the top of `PROJECT.md` is the contract every architect skill 
 | `description` | free text | Identity → Descriptor | optional folder qualifier |
 | `project_use_case` | canonical label or custom Other label | Identity → Project Use Case | engagement classification; not IBC occupancy |
 | `project_use_case_category` | canonical label | Identity → Project Use Case | preserves `Other` when the display value is custom |
+| `design_style` | free text, one line | Identity → Design style | **required** (rule 9): architectural design style, e.g. Craftsman, Traditional, Modern, Commercial; a mix with its reason is fine. No default: blank means not yet asked, so ask Tyler. Atlas scaffolds it blank and Doctor warns until it is filled; Atlas never writes a value. Pyvoid's family style selection reads it |
 | `billing_contact_*` | flat contact snapshot fields | Identity → Billing rows | suffixes: `id`, `name`, `email`, `phone`, `company`, `address` |
 | `client_contact_*` | flat contact snapshot fields | Identity → Client rows | same suffixes; client may differ from billing |
 | `jurisdiction` | `nyc` \| `california` \| `other` | Identity → Jurisdiction | **drives Norma's corpus + edition** |
@@ -95,7 +97,7 @@ Atlas (the studio drive tool) creates the dossier at project intake and edits th
 ## On `init`
 
 1. If `PROJECT.md` already exists, say so and switch to `update` mode.
-2. Ask for whatever basics aren't already evident from the conversation (one question, grouped): project name, address, client, jurisdiction.
+2. Ask for whatever basics aren't already evident from the conversation (one question, grouped): project name, address, client, jurisdiction, design style. Design style comes from Tyler only (rule 9).
 3. Write `PROJECT.md` from the template below, filling what you know, leaving the rest blank. **Write the front-matter and the human tables together** — every fact you fill goes in both the machine contract (top) and its mirror row, with source + date on the table side.
 4. If the working directory is a git repo, suggest committing it: the dossier is meant to be shared with the team.
 
@@ -104,7 +106,8 @@ Atlas (the studio drive tool) creates the dossier at project intake and edits th
 1. Read `PROJECT.md` — both the front-matter and the tables — and, where it exists, `06 Research & Existing Conditions/Client Program/PROGRAM.md`.
 2. Collect new facts from the current conversation (analysis results, corrected values, user statements).
 3. Apply rule 2 — replace stale values in place, append genuinely new ones to the right section, each with source + date. When a fact maps to a front-matter key, **update the key and its mirror row in the same pass** (rule 5). If the file has no front-matter yet (an older dossier), add the block from the template while you're there.
-4. Show a short diff-style summary of what changed.
+4. If `design_style` is blank or missing, ask Tyler for it (rule 9) and write the key and its Identity row together; never fill it yourself. An older dossier without the key or row gets both added.
+5. Show a short diff-style summary of what changed.
 
 ## Template
 
@@ -126,6 +129,7 @@ address_postal_code:         # ZIP or ZIP+4, quoted: "02134"
 description:                 # optional folder qualifier
 project_use_case:            # display label; custom value when category is Other
 project_use_case_category:   # Renovation | Addition | Renovation + Addition | Ground Up | Feasibility | Existing Conditions | Code Compliance | Other
+design_style:                # REQUIRED: Craftsman, Traditional, Modern, Commercial, ...; mix OK with reason. Blank = ask Tyler, never guess
 billing_contact_id:          # shared Atlas contact UUID
 billing_contact_name:
 billing_contact_email:
@@ -174,6 +178,7 @@ basis: []                    # unconfirmed drawn values: {fact, value, source, r
 | Project | |
 | Address / BBL | |
 | Project Use Case | |
+| Design style | |
 | Client | |
 | Billing Contact | |
 | Billing Email | |
@@ -255,4 +260,5 @@ Analysis skills in this marketplace check for `PROJECT.md` before fetching (don'
 | Front-matter and a table disagree | The table (sourced + dated) wins — reconcile the front-matter to it; note the fix |
 | Facts conflict (dossier says X, user says Y) | Ask once; the answer wins; update with new source + date |
 | No project context at all, user just ran `/project-dossier` | Show usage and ask if they want `init` |
+| `design_style` blank, Tyler not reachable | Leave it blank and say so; never guess. A skill that needs the style (e.g. Pyvoid's family selection) stops and asks |
 | Multiple projects in one directory | One dossier per directory — suggest separate working directories |

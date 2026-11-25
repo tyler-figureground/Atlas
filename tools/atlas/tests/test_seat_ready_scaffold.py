@@ -314,6 +314,7 @@ OLD_DOSSIER = (
     b"# Machine contract - older scaffold, no revit block.\r\n"
     b'project: "Old Job"\r\n'
     b"jurisdiction: Napa County\r\n"
+    b"design_style: Craftsman\r\n"
     b"basis: []\r\n"
     b"---\r\n"
     b"\r\n"
@@ -367,18 +368,17 @@ def test_backfilled_dossier_still_loads(fixture_drive):
     assert record.intake.project_name == "Strip Me"
 
 
-def test_backfill_writes_the_byte_contract_from_lf_and_bom_input(fixture_drive):
+def test_backfill_keeps_lf_bom_and_missing_final_newline(fixture_drive):
+    # A backfill inserts lines; it never rewrites the file's own bytes. An LF
+    # dossier with a BOM and no final newline keeps all three.
     lf = b"\xef\xbb\xbf" + OLD_DOSSIER.replace(b"\r\n", b"\n").rstrip(b"\n")
     project = _write_dossier(fixture_drive, "230216_Lf Job", lf)
     _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
 
     assert _action(applied, "PROJECT.md").status == DONE
     raw = (project / "PROJECT.md").read_bytes()
-    assert not raw.startswith(b"\xef\xbb\xbf")
-    assert b"\n" not in raw.replace(b"\r\n", b"")
-    assert raw.endswith(b"\r\n")
-    assert REVIT_LINES + b"---\r\n" in raw
-    assert raw.replace(REVIT_LINES, b"") == OLD_DOSSIER
+    lf_revit = REVIT_LINES.replace(b"\r\n", b"\n")
+    assert raw == lf.replace(b"basis: []\n---\n", b"basis: []\n" + lf_revit + b"---\n")
 
 
 @pytest.mark.parametrize("revit", [
@@ -445,7 +445,9 @@ def test_bare_cr_and_lf_dossiers_backfill_once(fixture_drive, ending):
     _report, _plan, applied = _dossier_conform(fixture_drive, project.name)
 
     assert _action(applied, "PROJECT.md").status == DONE
-    assert (project / "PROJECT.md").read_bytes().replace(REVIT_LINES, b"") == OLD_DOSSIER
+    # The inserted block takes the file's own ending; nothing else changes.
+    after = (project / "PROJECT.md").read_bytes()
+    assert after.replace(REVIT_LINES.replace(b"\r\n", ending), b"") == raw
     report2, _plan2, _applied2 = _dossier_conform(fixture_drive, project.name)
     assert "PROJECT.md" not in report2.missing_control_plane
 
